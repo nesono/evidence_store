@@ -48,6 +48,8 @@ Common optional fields:
 |---|---|---|
 | `started_at` | datetime (UTC) | When the test started |
 | `duration_s` | float | Duration in seconds |
+| `invocation_id` | string | Bazel invocation ID — groups all test results from a single `bazel test` call |
+| `result_was_cached` | bool | Whether the result was served from cache (e.g. Bazel remote cache hit) rather than executed |
 | `log_uri` | URI | Link to full log in external storage |
 | `tags` | string[] | Free-form labels for filtering |
 
