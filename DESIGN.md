@@ -32,6 +32,7 @@ Every ingested record MUST contain:
 | `repo` | string | Repository identifier (e.g. `myorg/firmware`, `myorg/tools`). Scopes `rcs_ref` and `procedure_ref` to a specific repository. |
 | `finished_at` | datetime (UTC) | When the test finished |
 | `rcs_ref` | string | Revision control identifier (commit hash, tag, etc.) within `repo` |
+| `branch` | string | Branch name the test was run against (e.g. `main`, `feature/foo`) |
 | `result` | enum | `PASS`, `FAIL`, `ERROR`, `SKIPPED` |
 | `evidence_type` | string | Discriminator for the schema variant (see 2.2) |
 | `procedure_ref` | string | Reference to the test procedure: a Bazel target (e.g. `//pkg:my_test`) or a repo-relative file path (e.g. `tests/integration/smoke.py`) |
@@ -143,6 +144,7 @@ CREATE TABLE evidence (
     repo           TEXT NOT NULL,        -- repository identifier
     finished_at    TIMESTAMPTZ NOT NULL,
     rcs_ref        TEXT NOT NULL,
+    branch         TEXT NOT NULL,
     result         evidence_result NOT NULL,
     evidence_type  TEXT NOT NULL,
     procedure_ref  TEXT NOT NULL,        -- bazel target or repo-relative path
