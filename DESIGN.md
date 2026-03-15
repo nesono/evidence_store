@@ -39,6 +39,15 @@ Every ingested record MUST contain:
 | `source` | string | Provenance of the run: a URL to the CI build logs (e.g. Jenkins build URL) **or** the username of the developer who triggered the test locally |
 | `ingested_at` | datetime (UTC) | When the record was stored (system-generated) |
 
+**Result enum semantics:**
+
+| Value | Meaning |
+|---|---|
+| `PASS` | The test executed successfully and all assertions held. Constitutes positive evidence for the predicate under test. |
+| `FAIL` | The test executed to completion but one or more assertions did not hold. Constitutes negative evidence — the predicate was not satisfied. |
+| `ERROR` | The test infrastructure failed before the test could produce a meaningful result (e.g. build failure, environment setup crash, hardware unavailable). No evidence — positive or negative — was created for the predicate. |
+| `SKIPPED` | The test was deliberately not executed (e.g. filtered out by tag, disabled by configuration, not applicable to the current target). No evidence was created. |
+
 ### 2.2 Extended Fields (optional, type-dependent)
 
 Extended fields live in a semi-structured `metadata` JSONB object. The store does not reject unknown fields — it preserves them opaquely, so new fields can be added at any time without migration.
