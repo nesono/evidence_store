@@ -14,7 +14,7 @@ This document describes the backend for an **Evidence Store**: a system that ing
 | Requirement | Rationale |
 |---|---|
 | Evolving schema | Fields will be added over time without breaking existing records |
-| Multiple schema types | Unit tests, integration tests, simulation, target tests, HiL, manual tests each carry different metadata |
+| Multiple schema types | Different collection methods (Bazel, manual, etc.) carry different metadata |
 | Short-term data at scale | Most evidence is transient; only selected records need long-term retention |
 | Result inheritance | Impact analysis can declare that evidence from version A remains valid for version B |
 
@@ -33,7 +33,7 @@ Every ingested record MUST contain:
 | `branch` | string | Branch name the test was run against (e.g. `main`, `feature/foo`) |
 | `rcs_ref` | string | Revision control identifier (commit hash, tag, etc.) within `repo` |
 | `procedure_ref` | string | Reference to the test procedure: a Bazel target (e.g. `//pkg:my_test`) or a repo-relative file path (e.g. `tests/integration/smoke.py`) |
-| `evidence_type` | string | Discriminator for the schema variant (see 2.2) |
+| `evidence_type` | string | Collection method that determines the metadata schema (see 2.2) |
 | `source` | string | Provenance of the run: a URL to the CI build logs (e.g. Jenkins build URL) **or** the username of the developer who triggered the test locally |
 | `result` | enum | `PASS`, `FAIL`, `ERROR`, `SKIPPED` |
 | `finished_at` | datetime (UTC) | When the test finished |
@@ -52,22 +52,35 @@ Every ingested record MUST contain:
 
 Extended fields live in a semi-structured `metadata` JSONB object. The store does not reject unknown fields — it preserves them opaquely, so new fields can be added at any time without migration.
 
-Common optional fields:
+The `evidence_type` reflects **how the evidence was collected** (which determines the metadata shape), not what kind of test it is. A Bazel-run unit test and a Bazel-run HiL system test produce the same output format — they share the same `evidence_type`. The test category (unit, integration, system, etc.) is a property of the test procedure itself, expressible via `tags` or derivable from `procedure_ref`.
+
+Common optional fields (any type):
 
 | Field | Type | Description |
 |---|---|---|
 | `started_at` | datetime (UTC) | When the test started |
 | `duration_s` | float | Duration in seconds |
-| `invocation_id` | string | Bazel invocation ID — groups all test results from a single `bazel test` call |
-| `result_was_cached` | bool | Whether the result was served from cache (e.g. Bazel remote cache hit) rather than executed |
 | `log_uri` | URI | Link to full log in external storage |
 | `tags` | string[] | Free-form labels for filtering |
+| `target_hw_type` | string | Hardware target type (e.g. `hil`, `pil`, `vehicle`) |
+| `vehicle_id` | string | Vehicle identifier |
+| `hw_generation` | string | Hardware generation identifier |
 
-Type-specific fields (examples):
+**`bazel`** type — additional fields:
 
-**`target_test` / `hil_test`** — `target_hw_type`, `vehicle_id`, `hw_generation`, `weather_conditions`, `video_uris`, `attachments`
+| Field | Type | Description |
+|---|---|---|
+| `invocation_id` | string | Bazel invocation ID — groups all test results from a single `bazel test` call |
+| `result_was_cached` | bool | Whether the result was served from cache rather than executed |
 
-**`manual_test`** — `observations`, `photo_uris`
+**`manual`** type — additional fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `observations` | string | Free-text observations from the tester |
+| `photo_uris` | URI[] | Links to photos or screenshots |
+| `weather_conditions` | string | Weather conditions during the test |
+| `video_uris` | URI[] | Links to video recordings |
 
 ### 2.3 Result Inheritance
 
@@ -222,7 +235,7 @@ Content-Type: application/json
   "finished_at": "2026-03-08T14:23:00Z",
   "rcs_ref": "abc123def",
   "result": "PASS",
-  "evidence_type": "unit_test",
+  "evidence_type": "bazel",
   "procedure_ref": "//pkg:my_test",
   "source": "https://jenkins.example.com/job/nightly/42",
   "metadata": {
@@ -242,7 +255,7 @@ Developer workstation example:
   "finished_at": "2026-03-08T16:05:12Z",
   "rcs_ref": "e7f2a91",
   "result": "FAIL",
-  "evidence_type": "unit_test",
+  "evidence_type": "bazel",
   "procedure_ref": "//pkg:my_test",
   "source": "jdoe",
   "metadata": {
@@ -425,6 +438,6 @@ Retention becomes `DROP TABLE evidence_2025_q1` — instantaneous, no row-by-row
 |---|---|---|
 | 1 | Should inheritance declarations expire, or are they permanent until manually revoked? | Affects retention logic |
 | 2 | Is there a need for real-time streaming of ingested evidence (e.g. WebSocket/SSE for dashboards)? | Affects architecture (adds event bus) |
-| 3 | Should the store enforce a known list of `evidence_type` values, or accept any string? | Strictness vs. flexibility trade-off |
+| 3 | Should the store enforce a known list of `evidence_type` values (currently `bazel`, `manual`), or accept any string? | Strictness vs. flexibility trade-off |
 | 4 | What is the expected peak ingestion rate (records/sec)? | Determines whether batch ingestion alone suffices or a queue (Kafka/NATS) is needed in front |
 | 5 | Are there compliance requirements for evidence immutability (e.g. records must never be mutated after ingestion)? | Affects update/delete API surface |
