@@ -30,13 +30,13 @@ Every ingested record MUST contain:
 |---|---|---|
 | `id` | UUID | System-generated unique identifier |
 | `repo` | string | Repository identifier (e.g. `myorg/firmware`, `myorg/tools`). Scopes `rcs_ref` and `procedure_ref` to a specific repository. |
-| `finished_at` | datetime (UTC) | When the test finished |
-| `rcs_ref` | string | Revision control identifier (commit hash, tag, etc.) within `repo` |
 | `branch` | string | Branch name the test was run against (e.g. `main`, `feature/foo`) |
-| `result` | enum | `PASS`, `FAIL`, `ERROR`, `SKIPPED` |
-| `evidence_type` | string | Discriminator for the schema variant (see 2.2) |
+| `rcs_ref` | string | Revision control identifier (commit hash, tag, etc.) within `repo` |
 | `procedure_ref` | string | Reference to the test procedure: a Bazel target (e.g. `//pkg:my_test`) or a repo-relative file path (e.g. `tests/integration/smoke.py`) |
+| `evidence_type` | string | Discriminator for the schema variant (see 2.2) |
 | `source` | string | Provenance of the run: a URL to the CI build logs (e.g. Jenkins build URL) **or** the username of the developer who triggered the test locally |
+| `result` | enum | `PASS`, `FAIL`, `ERROR`, `SKIPPED` |
+| `finished_at` | datetime (UTC) | When the test finished |
 | `ingested_at` | datetime (UTC) | When the record was stored (system-generated) |
 
 **Result enum semantics:**
@@ -46,7 +46,7 @@ Every ingested record MUST contain:
 | `PASS` | The test executed successfully and all assertions held. Constitutes positive evidence for the predicate under test. |
 | `FAIL` | The test executed to completion but one or more assertions did not hold. Constitutes negative evidence — the predicate was not satisfied. |
 | `ERROR` | The test infrastructure failed before the test could produce a meaningful result (e.g. build failure, environment setup crash, hardware unavailable). No evidence — positive or negative — was created for the predicate. |
-| `SKIPPED` | The test was deliberately not executed (e.g. filtered out by tag, disabled by configuration, not applicable to the current target). No evidence was created. |
+| `SKIPPED` | The test was deliberately not executed (e.g. filtered out by tag, disabled by configuration, not applicable to the current target). No evidence was created. Cached tests should not show up as SKIPPED. |
 
 ### 2.2 Extended Fields (optional, type-dependent)
 
