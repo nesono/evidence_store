@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/iss/evidence-store/internal/config"
-	"github.com/iss/evidence-store/internal/model"
-	"github.com/iss/evidence-store/internal/store"
-	"github.com/iss/evidence-store/internal/validate"
+	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/internal/validate"
 )
 
 type EvidenceHandler struct {

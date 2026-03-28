@@ -1,6 +1,6 @@
 package validate
 
-import "github.com/iss/evidence-store/internal/model"
+import "github.com/nesono/evidence-store/internal/model"
 
 func InheritanceCreate(c *model.InheritanceCreate) []string {
 	var errs []string

@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/iss/evidence-store/internal/model"
-	"github.com/iss/evidence-store/internal/store"
-	"github.com/iss/evidence-store/internal/validate"
+	"github.com/nesono/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/internal/validate"
 )
 
 type InheritanceHandler struct {

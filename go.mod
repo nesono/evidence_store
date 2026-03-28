@@ -1,4 +1,4 @@
-module github.com/iss/evidence-store
+module github.com/nesono/evidence-store
 
 go 1.25.4
 

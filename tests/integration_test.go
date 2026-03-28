@@ -19,10 +19,10 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/iss/evidence-store/internal/config"
-	"github.com/iss/evidence-store/internal/migrate"
-	"github.com/iss/evidence-store/internal/model"
-	"github.com/iss/evidence-store/internal/server"
+	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/migrate"
+	"github.com/nesono/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/server"
 )
 
 var testServer *httptest.Server

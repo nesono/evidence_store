@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/iss/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/model"
 )
 
 var evidenceTypeRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)

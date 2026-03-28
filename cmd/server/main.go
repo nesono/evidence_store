@@ -12,9 +12,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/iss/evidence-store/internal/config"
-	"github.com/iss/evidence-store/internal/migrate"
-	"github.com/iss/evidence-store/internal/server"
+	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/migrate"
+	"github.com/nesono/evidence-store/internal/server"
 )
 
 func main() {

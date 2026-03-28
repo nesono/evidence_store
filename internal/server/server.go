@@ -10,9 +10,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/iss/evidence-store/internal/api"
-	"github.com/iss/evidence-store/internal/config"
-	"github.com/iss/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/internal/api"
+	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/store"
 )
 
 type Server struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/iss/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/model"
 )
 
 type InheritanceStore struct {
