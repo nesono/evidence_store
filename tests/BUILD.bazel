@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "tests_test",
+    srcs = ["integration_test.go"],
+    data = ["//migrations"],
+    tags = [
+        "exclusive",
+        "requires-docker",
+    ],
+    deps = [
+        "//internal/config",
+        "//internal/migrate",
+        "//internal/model",
+        "//internal/server",
+        "@com_github_google_uuid//:uuid",
+        "@com_github_jackc_pgx_v5//pgxpool",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@com_github_testcontainers_testcontainers_go//:testcontainers-go",
+        "@com_github_testcontainers_testcontainers_go//wait",
+    ],
+)

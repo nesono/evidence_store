@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "validate",
+    srcs = [
+        "evidence.go",
+        "inheritance.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/validate",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/model"],
+)
+
+go_test(
+    name = "validate_test",
+    srcs = ["validate_test.go"],
+    embed = [":validate"],
+    deps = [
+        "//internal/model",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

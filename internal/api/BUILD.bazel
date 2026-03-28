@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "api",
+    srcs = [
+        "evidence.go",
+        "inheritance.go",
+        "response.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/api",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "//internal/model",
+        "//internal/store",
+        "//internal/validate",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_google_uuid//:uuid",
+        "@com_github_jackc_pgx_v5//:pgx",
+    ],
+)
