@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="//pkg:error_test" tests="2" failures="0" errors="1" time="1.0">
+  <testcase name="TestOk" classname="pkg.Err" time="0.3"/>
+  <testcase name="TestBoom" classname="pkg.Err" time="0.7">
+    <error message="segfault" type="RuntimeError">SIGSEGV</error>
+  </testcase>
+</testsuite>

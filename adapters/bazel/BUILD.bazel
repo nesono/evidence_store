@@ -1,0 +1,2 @@
+# Root BUILD file for the evidence-bazel adapter.
+# The CLI binary is at //cmd/evidence-bazel.

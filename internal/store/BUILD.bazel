@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "store",
+    srcs = [
+        "evidence.go",
+        "inheritance.go",
+        "pagination.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/store",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/model",
+        "@com_github_google_uuid//:uuid",
+        "@com_github_jackc_pgx_v5//:pgx",
+        "@com_github_jackc_pgx_v5//pgxpool",
+    ],
+)
+
+go_test(
+    name = "store_test",
+    srcs = ["pagination_test.go"],
+    embed = [":store"],
+    deps = [
+        "@com_github_google_uuid//:uuid",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

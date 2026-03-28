@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="//pkg:skip_test" tests="2" failures="0" errors="0" time="0.0">
+  <testcase name="TestA" classname="pkg.Skip" time="0.0">
+    <skipped message="disabled"/>
+  </testcase>
+  <testcase name="TestB" classname="pkg.Skip" time="0.0">
+    <skipped message="disabled"/>
+  </testcase>
+</testsuite>
