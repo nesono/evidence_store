@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x
 
 BASE_URL="${EVIDENCE_BASE_URL:-http://localhost:8000}"
 
