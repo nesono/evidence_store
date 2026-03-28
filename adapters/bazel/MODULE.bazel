@@ -1,0 +1,4 @@
+module(
+    name = "evidence_bazel",
+    version = "0.1.0",
+)

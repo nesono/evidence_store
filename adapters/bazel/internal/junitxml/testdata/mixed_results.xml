@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="//pkg:mixed_test" tests="4" failures="1" errors="0" time="2.0">
+  <testcase name="TestPass" classname="pkg.Mixed" time="0.5"/>
+  <testcase name="TestFail" classname="pkg.Mixed" time="0.8">
+    <failure message="assertion failed" type="AssertionError">expected 1 got 2</failure>
+  </testcase>
+  <testcase name="TestPass2" classname="pkg.Mixed" time="0.3"/>
+  <testcase name="TestSkip" classname="pkg.Mixed" time="0.0">
+    <skipped message="not applicable"/>
+  </testcase>
+</testsuite>
