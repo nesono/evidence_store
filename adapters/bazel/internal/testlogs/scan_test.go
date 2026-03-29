@@ -73,6 +73,39 @@ func TestScan(t *testing.T) {
 	}
 }
 
+func TestResultFromLog(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected string
+		ok       bool
+	}{
+		{"pass", "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //pkg:test\n-----------------------------------------------------------------------------\nPASS\n", "PASS", true},
+		{"fail", "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //pkg:test\n-----------------------------------------------------------------------------\nFAIL\n", "FAIL", true},
+		{"empty", "", "", false},
+		{"unknown", "some random output\n", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			logPath := filepath.Join(dir, "test.log")
+			require.NoError(t, os.WriteFile(logPath, []byte(tt.content), 0644))
+
+			result, ok := ResultFromLog(logPath)
+			assert.Equal(t, tt.ok, ok)
+			if ok {
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestResultFromLogMissing(t *testing.T) {
+	_, ok := ResultFromLog("/nonexistent/test.log")
+	assert.False(t, ok)
+}
+
 func mkTestXML(t *testing.T, base, rel string) {
 	t.Helper()
 	full := filepath.Join(base, rel)

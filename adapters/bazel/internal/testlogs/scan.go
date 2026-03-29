@@ -1,6 +1,7 @@
 package testlogs
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 type TestLogEntry struct {
 	BazelTarget string // e.g., //pkg:my_test
 	XMLPath     string // absolute path to test.xml
+	LogPath     string // absolute path to test.log (may not exist)
 	WasCached   bool   // derived from test.cache_status sibling
 }
 
@@ -43,9 +45,12 @@ func Scan(testlogsDir string) ([]TestLogEntry, error) {
 
 		cached := checkCacheStatus(filepath.Dir(path))
 
+		logPath := filepath.Join(filepath.Dir(path), "test.log")
+
 		entries = append(entries, TestLogEntry{
 			BazelTarget: target,
 			XMLPath:     path,
+			LogPath:     logPath,
 			WasCached:   cached,
 		})
 
@@ -90,6 +95,35 @@ func pathToTarget(rel string) (string, error) {
 	}
 
 	return fmt.Sprintf("//%s:%s", pkg, targetName), nil
+}
+
+// ResultFromLog parses test.log to determine the test result.
+// Bazel writes "PASS" or "FAIL" as the last non-empty line in test.log.
+// Returns result string and whether it was successfully determined.
+func ResultFromLog(logPath string) (string, bool) {
+	f, err := os.Open(logPath)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+
+	var lastLine string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			lastLine = line
+		}
+	}
+
+	switch lastLine {
+	case "PASS":
+		return "PASS", true
+	case "FAIL", "FAILURES!!!":
+		return "FAIL", true
+	default:
+		return "", false
+	}
 }
 
 // checkCacheStatus reads test.cache_status in dir and returns true if the result was cached.

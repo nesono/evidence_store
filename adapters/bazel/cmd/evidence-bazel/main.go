@@ -84,6 +84,9 @@ func main() {
 	var parseErrors int
 
 	for _, entry := range entries {
+		var result string
+		var durationS float64
+
 		f, err := os.Open(entry.XMLPath)
 		if err != nil {
 			slog.Error("failed to open test.xml", "path", entry.XMLPath, "error", err)
@@ -99,10 +102,22 @@ func main() {
 			continue
 		}
 
-		result, durationS := junitxml.AggregateResult(ts)
+		if ts != nil {
+			// XML had real test data.
+			result, durationS = junitxml.AggregateResult(ts)
+		} else {
+			// Empty XML stub (e.g. rules_go) — fall back to test.log.
+			if logResult, ok := testlogs.ResultFromLog(entry.LogPath); ok {
+				result = logResult
+			} else {
+				slog.Warn("empty test.xml and could not parse test.log", "target", entry.BazelTarget)
+				parseErrors++
+				continue
+			}
+		}
 
 		metadata := map[string]any{
-			"duration_s":       durationS,
+			"duration_s":        durationS,
 			"result_was_cached": entry.WasCached,
 		}
 		if *invocationID != "" {

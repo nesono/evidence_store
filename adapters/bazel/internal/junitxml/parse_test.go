@@ -75,3 +75,13 @@ func TestParseAllSkipped(t *testing.T) {
 	result, _ := AggregateResult(ts)
 	assert.Equal(t, "SKIPPED", result)
 }
+
+func TestParseEmptyStub(t *testing.T) {
+	f, err := os.Open("testdata/empty_stub.xml")
+	require.NoError(t, err)
+	defer f.Close()
+
+	ts, err := Parse(f)
+	require.NoError(t, err)
+	assert.Nil(t, ts, "empty <testsuites> stub should return nil")
+}
