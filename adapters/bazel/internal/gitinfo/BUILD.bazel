@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gitinfo",
+    srcs = ["gitinfo.go"],
+    importpath = "github.com/nesono/evidence-store/adapters/bazel/internal/gitinfo",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "gitinfo_test",
+    srcs = ["gitinfo_test.go"],
+    embed = [":gitinfo"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)

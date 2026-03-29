@@ -22,6 +22,12 @@ func Scan(testlogsDir string) ([]TestLogEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
 	}
+	// Resolve symlinks so filepath.Walk descends into the real directory.
+	// Bazel creates bazel-testlogs as a symlink; Walk won't traverse it otherwise.
+	absDir, err = filepath.EvalSymlinks(absDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve symlinks: %w", err)
+	}
 
 	var entries []TestLogEntry
 

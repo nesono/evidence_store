@@ -1,4 +1,4 @@
-module github.com/iss/evidence-store/adapters/bazel
+module github.com/nesono/evidence-store/adapters/bazel
 
 go 1.25.4
 

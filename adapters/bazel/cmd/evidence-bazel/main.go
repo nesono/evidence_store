@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iss/evidence-store/adapters/bazel/internal/client"
-	"github.com/iss/evidence-store/adapters/bazel/internal/gitinfo"
-	"github.com/iss/evidence-store/adapters/bazel/internal/junitxml"
-	"github.com/iss/evidence-store/adapters/bazel/internal/testlogs"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/client"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/gitinfo"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/junitxml"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/testlogs"
 )
 
 func main() {

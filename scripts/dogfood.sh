@@ -13,13 +13,11 @@ EXTRA_ARGS=("$@")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ADAPTER_DIR="$REPO_ROOT/adapters/bazel"
-ADAPTER_BIN="$REPO_ROOT/.bin/evidence-bazel"
-
-# Build the adapter.
+# Build the adapter with Bazel.
 echo "==> Building evidence-bazel adapter..."
-mkdir -p "$REPO_ROOT/.bin"
-(cd "$ADAPTER_DIR" && go build -o "$ADAPTER_BIN" ./cmd/evidence-bazel)
+bazel build //adapters/bazel/cmd/evidence-bazel
+
+ADAPTER_BIN="$(bazel cquery --output=files //adapters/bazel/cmd/evidence-bazel 2>/dev/null)"
 
 # Run Bazel tests.
 echo "==> Running bazel test //..."
@@ -33,4 +31,4 @@ echo "==> Ingesting test results..."
 "$ADAPTER_BIN" \
     --api-url "$API_URL" \
     --testlogs-dir "$TESTLOGS_DIR" \
-    "${EXTRA_ARGS[@]}"
+    "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"

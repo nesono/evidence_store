@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "evidence-bazel_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/nesono/evidence-store/adapters/bazel/cmd/evidence-bazel",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//adapters/bazel/internal/client",
+        "//adapters/bazel/internal/gitinfo",
+        "//adapters/bazel/internal/junitxml",
+        "//adapters/bazel/internal/testlogs",
+    ],
+)
+
+go_binary(
+    name = "evidence-bazel",
+    embed = [":evidence-bazel_lib"],
+    visibility = ["//visibility:public"],
+)

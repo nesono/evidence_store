@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "testlogs",
+    srcs = ["scan.go"],
+    importpath = "github.com/nesono/evidence-store/adapters/bazel/internal/testlogs",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "testlogs_test",
+    srcs = ["scan_test.go"],
+    embed = [":testlogs"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
