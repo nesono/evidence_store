@@ -1,4 +1,1 @@
 /bazel-*
-MODULE.bazel.lock
-.bin/
-evidence-bazel
