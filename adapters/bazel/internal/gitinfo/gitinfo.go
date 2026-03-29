@@ -52,11 +52,7 @@ func DetectSource() string {
 			return fmt.Sprintf("%s/%s/actions/runs/%s", server, repo, runID)
 		}
 	}
-	// Local dev: git user.name
-	if name, err := gitOutput("config", "user.name"); err == nil && name != "" {
-		return name
-	}
-	// Final fallback
+	// Local dev: OS username
 	if u := os.Getenv("USER"); u != "" {
 		return u
 	}

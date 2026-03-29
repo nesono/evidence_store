@@ -49,6 +49,7 @@ type Skipped struct {
 }
 
 // Parse reads JUnit XML from r. Handles both <testsuites> root and bare <testsuite> root.
+// Returns nil (not an error) for empty XML stubs like <testsuites></testsuites>.
 func Parse(r io.Reader) (*TestSuites, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -57,7 +58,11 @@ func Parse(r io.Reader) (*TestSuites, error) {
 
 	// Try <testsuites> first.
 	var suites TestSuites
-	if err := xml.Unmarshal(data, &suites); err == nil && len(suites.Suites) > 0 {
+	if err := xml.Unmarshal(data, &suites); err == nil {
+		if len(suites.Suites) == 0 {
+			// Empty stub (e.g. rules_go produces <testsuites></testsuites>).
+			return nil, nil
+		}
 		return &suites, nil
 	}
 

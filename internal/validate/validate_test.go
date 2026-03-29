@@ -74,13 +74,13 @@ func TestEvidenceTypeValidation(t *testing.T) {
 	}
 
 	invalid := []string{
-		"BAZEL",           // uppercase
-		"bazel-test",      // hyphen
-		"1bazel",          // starts with digit
-		"bazel test",      // space
-		"bazel.test",      // dot
-		"a!b",             // special char
-		"",                // empty (caught as required)
+		"BAZEL",      // uppercase
+		"bazel-test", // hyphen
+		"1bazel",     // starts with digit
+		"bazel test", // space
+		"bazel.test", // dot
+		"a!b",        // special char
+		"",           // empty (caught as required)
 	}
 	for _, et := range invalid {
 		e := validEvidence()
