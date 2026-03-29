@@ -13,8 +13,26 @@
 .badge-fail    { background: #d32f2f; color: #fff; }
 .badge-error   { background: #e67e22; color: #fff; }
 .badge-skipped { background: #888;    color: #fff; }
+.badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
 
-/* Filter form layout */
+/* Compact filter form */
+#filter-form label {
+    font-size: 0.8em;
+    margin-bottom: 0;
+}
+
+#filter-form input,
+#filter-form select {
+    padding: 0.3em 0.5em;
+    font-size: 0.85em;
+    height: auto;
+}
+
+#filter-form .grid {
+    gap: 0.5em;
+    margin-bottom: 0.3em;
+}
+
 #filter-form fieldset {
     border: none;
     padding: 0;
@@ -22,21 +40,27 @@
 }
 
 #filter-form fieldset legend {
-    font-size: 0.875em;
+    font-size: 0.8em;
     font-weight: 600;
-    margin-bottom: 0.25em;
+    margin-bottom: 0.15em;
 }
 
 #filter-form fieldset label {
     display: inline-flex;
     align-items: center;
     gap: 0.3em;
-    margin-right: 0.8em;
-    font-size: 0.875em;
+    margin-right: 0.6em;
+    font-size: 0.8em;
 }
 
-#filter-form fieldset input[type="checkbox"] {
+#filter-form fieldset input[type="checkbox"],
+#filter-form input[type="checkbox"] {
+    -webkit-appearance: checkbox;
+    appearance: checkbox;
     margin: 0;
+    width: 0.9em !important;
+    height: 0.9em !important;
+    aspect-ratio: 1;
 }
 
 .filter-actions {
@@ -46,6 +70,8 @@
 
 .filter-actions button {
     width: auto;
+    padding: 0.3em 1em;
+    font-size: 0.85em;
 }
 
 /* Results */

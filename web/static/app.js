@@ -128,22 +128,21 @@ function resultBadge(result) {
   return `<span class="badge badge-${cls}">${result || "?"}</span>`;
 }
 
-function relativeTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+function renderTags(metadata) {
+  if (!metadata || !metadata.tags || metadata.tags.length === 0) return "";
+  return metadata.tags.map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(" ");
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function renderTable(records) {
   const tbody = document.getElementById("results-body");
   if (!records || records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No records found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
     return;
   }
   tbody.innerHTML = records.map(r => `
@@ -155,7 +154,8 @@ function renderTable(records) {
       <td class="commit-ref">${esc((r.rcs_ref || "").slice(0, 10))}</td>
       <td>${esc(r.evidence_type)}</td>
       <td>${esc(r.source)}</td>
-      <td title="${r.finished_at}">${relativeTime(r.finished_at)}</td>
+      <td>${formatTime(r.finished_at)}</td>
+      <td>${renderTags(r.metadata)}</td>
     </tr>
   `).join("");
 }
@@ -215,7 +215,7 @@ function esc(str) {
 
 async function doSearch(filters, cursor) {
   const tbody = document.getElementById("results-body");
-  tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Loading...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading...</td></tr>`;
 
   try {
     const data = await fetchEvidence(filters, cursor);
@@ -223,7 +223,7 @@ async function doSearch(filters, cursor) {
     renderSummary(data.records ? data.records.length : 0, !!data.next_cursor);
     renderPagination(data.next_cursor || null);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Error: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Error: ${esc(err.message)}</td></tr>`;
     renderSummary(0, false);
     renderPagination(null);
   }
@@ -245,7 +245,7 @@ document.getElementById("clear-filters").addEventListener("click", () => {
   cursorStack = [];
   writeFiltersToURL({});
   document.getElementById("results-body").innerHTML =
-    `<tr><td colspan="8" class="empty-state">Enter filters and click Search</td></tr>`;
+    `<tr><td colspan="9" class="empty-state">Enter filters and click Search</td></tr>`;
   document.getElementById("results-summary").textContent = "";
   renderPagination(null);
 });
