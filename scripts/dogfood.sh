@@ -19,9 +19,10 @@ bazel build //adapters/bazel/cmd/evidence-bazel
 
 ADAPTER_BIN="$(bazel cquery --output=files //adapters/bazel/cmd/evidence-bazel 2>/dev/null)"
 
-# Run Bazel tests.
-echo "==> Running bazel test //..."
-bazel test //... || true  # continue even if tests fail — we want to ingest failures too
+# Run Bazel tests with a shared invocation ID.
+INVOCATION_ID="$(uuidgen)"
+echo "==> Running bazel test //... (invocation: $INVOCATION_ID)"
+bazel test //... --invocation_id="$INVOCATION_ID" || true  # continue even if tests fail
 
 # Determine testlogs path.
 TESTLOGS_DIR="$(bazel info bazel-testlogs)"
@@ -31,4 +32,5 @@ echo "==> Ingesting test results..."
 "$ADAPTER_BIN" \
     --api-url "$API_URL" \
     --testlogs-dir "$TESTLOGS_DIR" \
+    --invocation-id "$INVOCATION_ID" \
     "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
