@@ -48,7 +48,8 @@ function populateFormFromFilters(filters) {
   for (const f of DATETIME_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
     if (input && filters[f]) {
-      input.value = filters[f].replace("Z", "").replace(/\+.*$/, "");
+      const d = new Date(filters[f]);
+      input.value = isNaN(d.getTime()) ? filters[f] : formatTime(d.toISOString());
     }
   }
   const resultChecks = form.querySelectorAll('[name="result"]');
@@ -70,8 +71,11 @@ function readFormFilters() {
     if (v) filters[f] = v;
   }
   for (const f of DATETIME_FIELDS) {
-    const v = form.querySelector(`[name="${f}"]`).value;
-    if (v) filters[f] = new Date(v).toISOString();
+    const v = form.querySelector(`[name="${f}"]`).value.trim();
+    if (v) {
+      const d = new Date(v);
+      filters[f] = isNaN(d.getTime()) ? v : d.toISOString();
+    }
   }
   const results = Array.from(form.querySelectorAll('[name="result"]:checked')).map(cb => cb.value);
   if (results.length > 0) filters.result = results.join(",");
