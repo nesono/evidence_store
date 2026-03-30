@@ -417,6 +417,10 @@ function readCustomFields() {
   return fields;
 }
 
+document.getElementById("fill-now").addEventListener("click", () => {
+  document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
+});
+
 document.getElementById("add-form").addEventListener("submit", (e) => {
   e.preventDefault();
   submitEvidence(false);

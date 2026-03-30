@@ -54,8 +54,10 @@
                         <label><input type="radio" name="result" value="SKIPPED"> SKIPPED</label>
                     </fieldset>
                     <label>Finished at
-                        <input type="text" name="finished_at" placeholder="2026-03-30 14:00">
-                        <small>Defaults to now if empty</small>
+                        <span class="input-with-button">
+                            <input type="text" name="finished_at" placeholder="2026-03-30 14:00">
+                            <button type="button" id="fill-now" class="secondary outline" title="Fill with current time">Now</button>
+                        </span>
                     </label>
                     <label>Tags
                         <input type="text" name="tags" placeholder="manual,regression">

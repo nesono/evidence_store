@@ -217,6 +217,26 @@
     height: 0.9em !important;
 }
 
+/* Input with inline button */
+.input-with-button {
+    display: flex;
+    gap: 0.3em;
+    align-items: center;
+}
+
+.input-with-button input {
+    flex: 1;
+    margin-bottom: 0 !important;
+}
+
+.input-with-button button {
+    padding: 0.3em 0.6em;
+    font-size: 0.8em;
+    white-space: nowrap;
+    width: auto;
+    margin-bottom: 0 !important;
+}
+
 /* Custom metadata fields */
 .custom-fields {
     border: 1px solid var(--pico-muted-border-color);
