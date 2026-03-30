@@ -13,6 +13,7 @@ import (
 	"github.com/nesono/evidence-store/internal/api"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/web"
 )
 
 type Server struct {
@@ -52,6 +53,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 		r.Post("/inheritance", inheritanceAPI.Create)
 		r.Get("/inheritance", inheritanceAPI.List)
 	})
+
+	r.Handle("/*", web.StaticHandler())
 
 	return &Server{
 		httpServer: &http.Server{

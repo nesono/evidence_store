@@ -1,0 +1,175 @@
+/* Result badges */
+.badge {
+    display: inline-block;
+    padding: 0.15em 0.5em;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.badge-pass    { background: #2d9e2d; color: #fff; }
+.badge-fail    { background: #d32f2f; color: #fff; }
+.badge-error   { background: #e67e22; color: #fff; }
+.badge-skipped { background: #888;    color: #fff; }
+.badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
+
+/* Compact filter form */
+#filter-form label {
+    font-size: 0.8em;
+    margin-bottom: 0;
+}
+
+#filter-form input,
+#filter-form select {
+    padding: 0.3em 0.5em;
+    font-size: 0.85em;
+    height: auto;
+}
+
+#filter-form .grid {
+    gap: 0.5em;
+    margin-bottom: 0.3em;
+}
+
+#filter-form fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+#filter-form fieldset legend {
+    font-size: 0.8em;
+    font-weight: 600;
+    margin-bottom: 0.15em;
+}
+
+#filter-form fieldset label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    margin-right: 0.6em;
+    font-size: 0.8em;
+}
+
+#filter-form fieldset input[type="checkbox"],
+#filter-form input[type="checkbox"] {
+    -webkit-appearance: checkbox;
+    appearance: checkbox;
+    margin: 0;
+    width: 0.9em !important;
+    height: 0.9em !important;
+    aspect-ratio: 1;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5em;
+}
+
+.filter-actions button {
+    width: auto;
+    padding: 0.3em 1em;
+    font-size: 0.85em;
+}
+
+/* Results */
+#results-summary {
+    font-size: 0.9em;
+    margin-bottom: 0.5em;
+    color: var(--pico-muted-color);
+}
+
+#results-table {
+    font-size: 0.875em;
+}
+
+#results-table tbody tr {
+    cursor: pointer;
+}
+
+#results-table tbody tr:hover {
+    background: var(--pico-primary-focus);
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--pico-muted-color);
+    padding: 2em !important;
+}
+
+.commit-ref {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.inherited-row {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+/* Pagination */
+#pagination {
+    display: flex;
+    gap: 0.5em;
+    justify-content: center;
+    margin-top: 1em;
+}
+
+#pagination button {
+    width: auto;
+}
+
+/* Detail dialog */
+#detail-dialog article {
+    max-width: 700px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4em 1em;
+    font-size: 0.9em;
+}
+
+.detail-grid dt {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.detail-grid dd {
+    margin: 0;
+    word-break: break-all;
+}
+
+.metadata-block {
+    margin-top: 1em;
+}
+
+.metadata-block pre {
+    font-size: 0.85em;
+    max-height: 300px;
+    overflow: auto;
+}
+
+/* Health indicator */
+.health-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.3em;
+    vertical-align: middle;
+}
+
+.health-ok   { background: #2d9e2d; }
+.health-fail { background: #d32f2f; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    #results-table th:nth-child(n+5),
+    #results-table td:nth-child(n+5) {
+        display: none;
+    }
+}
