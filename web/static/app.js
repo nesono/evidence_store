@@ -299,6 +299,92 @@ window.addEventListener("popstate", () => {
   doSearch(filters, filters.cursor || null);
 });
 
+// --- Tabs ---
+
+document.querySelectorAll(".nav-tab").forEach(tab => {
+  tab.addEventListener("click", (e) => {
+    e.preventDefault();
+    const target = tab.dataset.tab;
+    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    document.querySelectorAll(".tab-content").forEach(s => s.hidden = true);
+    document.getElementById(`tab-${target}`).hidden = false;
+  });
+});
+
+// --- Add Evidence ---
+
+async function submitEvidence(andAnother) {
+  const form = document.getElementById("add-form");
+  const feedback = document.getElementById("add-feedback");
+
+  if (!form.checkValidity()) { form.reportValidity(); return; }
+
+  const finishedAt = form.finished_at.value
+    ? new Date(form.finished_at.value).toISOString()
+    : new Date().toISOString();
+
+  const metadata = {};
+  const tags = form.tags.value.trim();
+  if (tags) metadata.tags = tags.split(",").map(t => t.trim()).filter(Boolean);
+  const notes = form.notes.value.trim();
+  if (notes) metadata.notes = notes;
+
+  const record = {
+    repo: form.repo.value.trim(),
+    branch: form.branch.value.trim(),
+    rcs_ref: form.rcs_ref.value.trim(),
+    procedure_ref: form.procedure_ref.value.trim(),
+    evidence_type: form.evidence_type.value.trim(),
+    source: form.source.value.trim(),
+    result: form.querySelector('[name="result"]:checked').value,
+    finished_at: finishedAt,
+  };
+  if (Object.keys(metadata).length > 0) record.metadata = metadata;
+
+  feedback.innerHTML = "";
+  const btn = form.querySelector('button[type="submit"]');
+  btn.setAttribute("aria-busy", "true");
+
+  try {
+    const resp = await fetch(`${API_BASE}/evidence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      const msg = data.errors ? data.errors.map(e => e.message || e).join(", ") : (data.error || JSON.stringify(data));
+      feedback.innerHTML = `<p class="feedback-error">${esc(msg)}</p>`;
+      return;
+    }
+    if (andAnother) {
+      feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code></p>`;
+      form.querySelector('[name="result"]:checked').checked = false;
+      form.notes.value = "";
+    } else {
+      feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code> &mdash; switching to search...</p>`;
+      setTimeout(() => {
+        document.querySelector('[data-tab="search"]').click();
+        feedback.innerHTML = "";
+      }, 1000);
+    }
+  } catch (err) {
+    feedback.innerHTML = `<p class="feedback-error">Network error: ${esc(err.message)}</p>`;
+  } finally {
+    btn.removeAttribute("aria-busy");
+  }
+}
+
+document.getElementById("add-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitEvidence(false);
+});
+
+document.getElementById("add-another").addEventListener("click", () => {
+  submitEvidence(true);
+});
+
 // --- Init ---
 
 (async function init() {

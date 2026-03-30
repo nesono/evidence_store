@@ -166,6 +166,67 @@
 .health-ok   { background: #2d9e2d; }
 .health-fail { background: #d32f2f; }
 
+/* Nav tabs */
+.nav-tab {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.nav-tab.active {
+    font-weight: 600;
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+/* Add form */
+#add-form label small {
+    color: var(--pico-muted-color);
+}
+
+#add-form textarea {
+    font-size: 0.85em;
+    padding: 0.4em 0.5em;
+}
+
+#add-form fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+#add-form fieldset legend {
+    font-size: 0.8em;
+    font-weight: 600;
+    margin-bottom: 0.15em;
+}
+
+#add-form fieldset label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    margin-right: 0.6em;
+    font-size: 0.8em;
+}
+
+#add-form fieldset input[type="radio"] {
+    -webkit-appearance: radio;
+    appearance: radio;
+    margin: 0;
+    width: 0.9em !important;
+    height: 0.9em !important;
+}
+
+.feedback-ok {
+    color: #2d9e2d;
+    font-size: 0.9em;
+}
+
+.feedback-error {
+    color: #d32f2f;
+    font-size: 0.9em;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     #results-table th:nth-child(n+5),

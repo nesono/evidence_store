@@ -11,11 +11,68 @@
     <header class="container">
         <nav>
             <ul><li><strong>Evidence Store</strong></li></ul>
-            <ul><li id="health-status"></li></ul>
+            <ul>
+                <li><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
+                <li><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
+                <li id="health-status"></li>
+            </ul>
         </nav>
     </header>
 
     <main class="container">
+        <section id="tab-add" class="tab-content" hidden>
+            <h4>Add Manual Test Result</h4>
+            <form id="add-form">
+                <div class="grid">
+                    <label>Repo <small>(required)</small>
+                        <input type="text" name="repo" placeholder="org/repo" required>
+                    </label>
+                    <label>Branch
+                        <input type="text" name="branch" placeholder="main">
+                    </label>
+                    <label>Commit <small>(required)</small>
+                        <input type="text" name="rcs_ref" placeholder="abc123..." required>
+                    </label>
+                </div>
+                <div class="grid">
+                    <label>Procedure <small>(required)</small>
+                        <input type="text" name="procedure_ref" placeholder="manual/login-flow" required>
+                    </label>
+                    <label>Evidence type <small>(required)</small>
+                        <input type="text" name="evidence_type" value="manual" required>
+                    </label>
+                    <label>Source <small>(required)</small>
+                        <input type="text" name="source" placeholder="your name" required>
+                    </label>
+                </div>
+                <div class="grid">
+                    <fieldset>
+                        <legend>Result <small>(required)</small></legend>
+                        <label><input type="radio" name="result" value="PASS" required> PASS</label>
+                        <label><input type="radio" name="result" value="FAIL"> FAIL</label>
+                        <label><input type="radio" name="result" value="ERROR"> ERROR</label>
+                        <label><input type="radio" name="result" value="SKIPPED"> SKIPPED</label>
+                    </fieldset>
+                    <label>Finished at
+                        <input type="datetime-local" name="finished_at">
+                        <small>Defaults to now if empty</small>
+                    </label>
+                    <label>Tags
+                        <input type="text" name="tags" placeholder="manual,regression">
+                    </label>
+                </div>
+                <label>Notes
+                    <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>
+                </label>
+                <div class="filter-actions">
+                    <button type="submit">Submit</button>
+                    <button type="button" class="secondary" id="add-another">Submit &amp; Add Another</button>
+                </div>
+            </form>
+            <div id="add-feedback"></div>
+        </section>
+
+        <section id="tab-search" class="tab-content">
         <details id="filter-panel" open>
             <summary>Filters</summary>
             <form id="filter-form">
@@ -79,6 +136,8 @@
             <button id="prev-page" class="secondary" disabled>Previous</button>
             <button id="next-page" class="secondary" disabled>Next</button>
         </div>
+
+        </section>
 
         <dialog id="detail-dialog">
             <article>
