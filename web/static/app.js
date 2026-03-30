@@ -320,9 +320,18 @@ async function submitEvidence(andAnother) {
 
   if (!form.checkValidity()) { form.reportValidity(); return; }
 
-  const finishedAt = form.finished_at.value
-    ? new Date(form.finished_at.value).toISOString()
-    : new Date().toISOString();
+  let finishedAt;
+  const rawFinished = form.finished_at.value.trim();
+  if (rawFinished) {
+    const d = new Date(rawFinished);
+    if (isNaN(d.getTime())) {
+      feedback.innerHTML = `<p class="feedback-error">Invalid date format. Use YYYY-MM-DD HH:MM</p>`;
+      return;
+    }
+    finishedAt = d.toISOString();
+  } else {
+    finishedAt = new Date().toISOString();
+  }
 
   const metadata = {};
   const tags = form.tags.value.trim();
