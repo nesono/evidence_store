@@ -15,20 +15,25 @@
 .badge-skipped { background: #888;    color: #fff; }
 .badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
 
-/* Compact filter form */
-#filter-form label {
+/* Compact forms */
+#filter-form label,
+#add-form label {
     font-size: 0.8em;
     margin-bottom: 0;
 }
 
 #filter-form input,
-#filter-form select {
+#filter-form select,
+#add-form input,
+#add-form select,
+#add-form textarea {
     padding: 0.3em 0.5em;
     font-size: 0.85em;
     height: auto;
 }
 
-#filter-form .grid {
+#filter-form .grid,
+#add-form .grid {
     gap: 0.5em;
     margin-bottom: 0.3em;
 }
