@@ -430,6 +430,7 @@ document.getElementById("add-another").addEventListener("click", () => {
 
 (async function init() {
   checkHealth();
+  document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
   const filters = readFiltersFromURL();
   populateFormFromFilters(filters);
 
