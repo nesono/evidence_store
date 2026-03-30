@@ -217,6 +217,44 @@
     height: 0.9em !important;
 }
 
+/* Custom metadata fields */
+.custom-fields {
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    padding: 0.5em 0.8em;
+}
+
+.custom-fields legend {
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.custom-field-row {
+    grid-template-columns: 1fr 2fr auto;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+    align-items: center;
+}
+
+.custom-field-row input {
+    margin-bottom: 0 !important;
+}
+
+.cf-remove {
+    padding: 0.2em 0.5em !important;
+    font-size: 1em;
+    line-height: 1;
+    width: auto !important;
+    border: none !important;
+}
+
+#add-custom-field {
+    font-size: 0.8em;
+    padding: 0.2em 0.6em;
+    width: auto;
+    margin-top: 0.3em;
+}
+
 .feedback-ok {
     color: #2d9e2d;
     font-size: 0.9em;

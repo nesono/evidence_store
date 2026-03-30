@@ -329,6 +329,7 @@ async function submitEvidence(andAnother) {
   if (tags) metadata.tags = tags.split(",").map(t => t.trim()).filter(Boolean);
   const notes = form.notes.value.trim();
   if (notes) metadata.notes = notes;
+  Object.assign(metadata, readCustomFields());
 
   const record = {
     repo: form.repo.value.trim(),
@@ -362,6 +363,7 @@ async function submitEvidence(andAnother) {
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code></p>`;
       form.querySelector('[name="result"]:checked').checked = false;
       form.notes.value = "";
+      document.getElementById("custom-fields-list").innerHTML = "";
     } else {
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code> &mdash; switching to search...</p>`;
       setTimeout(() => {
@@ -374,6 +376,32 @@ async function submitEvidence(andAnother) {
   } finally {
     btn.removeAttribute("aria-busy");
   }
+}
+
+// --- Custom metadata fields ---
+
+document.getElementById("add-custom-field").addEventListener("click", () => {
+  const list = document.getElementById("custom-fields-list");
+  const row = document.createElement("div");
+  row.className = "custom-field-row grid";
+  row.innerHTML = `
+    <input type="text" placeholder="key" class="cf-key">
+    <input type="text" placeholder="value" class="cf-value">
+    <button type="button" class="secondary outline cf-remove">&times;</button>
+  `;
+  row.querySelector(".cf-remove").addEventListener("click", () => row.remove());
+  list.appendChild(row);
+  row.querySelector(".cf-key").focus();
+});
+
+function readCustomFields() {
+  const fields = {};
+  document.querySelectorAll(".custom-field-row").forEach(row => {
+    const key = row.querySelector(".cf-key").value.trim();
+    const val = row.querySelector(".cf-value").value.trim();
+    if (key) fields[key] = val;
+  });
+  return fields;
 }
 
 document.getElementById("add-form").addEventListener("submit", (e) => {
