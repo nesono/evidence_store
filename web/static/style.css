@@ -15,20 +15,25 @@
 .badge-skipped { background: #888;    color: #fff; }
 .badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
 
-/* Compact filter form */
-#filter-form label {
+/* Compact forms */
+#filter-form label,
+#add-form label {
     font-size: 0.8em;
     margin-bottom: 0;
 }
 
 #filter-form input,
-#filter-form select {
+#filter-form select,
+#add-form input,
+#add-form select,
+#add-form textarea {
     padding: 0.3em 0.5em;
     font-size: 0.85em;
     height: auto;
 }
 
-#filter-form .grid {
+#filter-form .grid,
+#add-form .grid {
     gap: 0.5em;
     margin-bottom: 0.3em;
 }
@@ -165,6 +170,125 @@
 
 .health-ok   { background: #2d9e2d; }
 .health-fail { background: #d32f2f; }
+
+/* Nav tabs */
+.nav-tab {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.nav-tab.active {
+    font-weight: 600;
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+/* Add form */
+#add-form label small {
+    color: var(--pico-muted-color);
+}
+
+#add-form textarea {
+    font-size: 0.85em;
+    padding: 0.4em 0.5em;
+}
+
+#add-form fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+#add-form fieldset legend {
+    font-size: 0.8em;
+    font-weight: 600;
+    margin-bottom: 0.15em;
+}
+
+#add-form fieldset label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    margin-right: 0.6em;
+    font-size: 0.8em;
+}
+
+#add-form fieldset input[type="radio"] {
+    -webkit-appearance: radio;
+    appearance: radio;
+    margin: 0;
+    width: 0.9em !important;
+    height: 0.9em !important;
+}
+
+/* Input with inline button */
+.input-with-button {
+    display: flex;
+    gap: 0.3em;
+    align-items: center;
+}
+
+.input-with-button input {
+    flex: 1;
+    margin-bottom: 0 !important;
+}
+
+.input-with-button button {
+    padding: 0.3em 0.6em;
+    font-size: 0.8em;
+    white-space: nowrap;
+    width: auto;
+    margin-bottom: 0 !important;
+}
+
+/* Custom metadata fields */
+.custom-fields {
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    padding: 0.5em 0.8em;
+}
+
+.custom-fields legend {
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.custom-field-row {
+    grid-template-columns: 1fr 2fr auto;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+    align-items: center;
+}
+
+.custom-field-row input {
+    margin-bottom: 0 !important;
+}
+
+.cf-remove {
+    padding: 0.2em 0.5em !important;
+    font-size: 1em;
+    line-height: 1;
+    width: auto !important;
+    border: none !important;
+}
+
+#add-custom-field {
+    font-size: 0.8em;
+    padding: 0.2em 0.6em;
+    width: auto;
+    margin-top: 0.3em;
+}
+
+.feedback-ok {
+    color: #2d9e2d;
+    font-size: 0.9em;
+}
+
+.feedback-error {
+    color: #d32f2f;
+    font-size: 0.9em;
+}
 
 /* Responsive */
 @media (max-width: 768px) {
