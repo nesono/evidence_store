@@ -22,6 +22,17 @@
     <main class="container">
         <section id="tab-add" class="tab-content" hidden>
             <h4>Add Manual Test Result</h4>
+            <div id="template-bar">
+                <label>Template
+                    <span class="input-with-button">
+                        <select id="template-select">
+                            <option value="">-- No template --</option>
+                        </select>
+                        <button type="button" class="secondary outline" id="template-manage" title="Manage templates">Manage</button>
+                        <button type="button" class="secondary outline" id="template-save-current" title="Save current form as template">Save as Template</button>
+                    </span>
+                </label>
+            </div>
             <form id="add-form">
                 <div class="grid">
                     <label>Repo <small>(required)</small>
@@ -145,6 +156,16 @@
         </div>
 
         </section>
+
+        <dialog id="template-dialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" id="close-template-dialog"></button>
+                    <h3 id="template-dialog-title">Manage Templates</h3>
+                </header>
+                <div id="template-dialog-content"></div>
+            </article>
+        </dialog>
 
         <dialog id="detail-dialog">
             <article>
