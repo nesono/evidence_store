@@ -14,7 +14,9 @@ import (
 
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/migrate"
+	"github.com/nesono/evidence-store/internal/retention"
 	"github.com/nesono/evidence-store/internal/server"
+	"github.com/nesono/evidence-store/internal/store"
 )
 
 func main() {
@@ -51,6 +53,24 @@ func main() {
 	slog.Info("database connected")
 
 	srv := server.New(cfg, pool)
+
+	// Start retention worker if configured.
+	if retentionPath := os.Getenv("EVIDENCE_RETENTION_CONFIG"); retentionPath != "" {
+		retCfg, err := retention.LoadConfig(retentionPath)
+		if err != nil {
+			slog.Error("failed to load retention config", "error", err, "path", retentionPath)
+			os.Exit(1)
+		}
+		evidenceStore := store.NewEvidenceStore(pool)
+		inheritanceStore := store.NewInheritanceStore(pool)
+		worker, err := retention.NewWorker(retCfg, evidenceStore, inheritanceStore, slog.Default())
+		if err != nil {
+			slog.Error("failed to create retention worker", "error", err)
+			os.Exit(1)
+		}
+		go worker.Start(ctx)
+		slog.Info("retention worker configured", "config", retentionPath, "interval", retCfg.Interval)
+	}
 
 	// Graceful shutdown on SIGINT/SIGTERM.
 	quit := make(chan os.Signal, 1)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,9 +24,16 @@ import (
 	"github.com/nesono/evidence-store/internal/migrate"
 	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/server"
+	"github.com/nesono/evidence-store/internal/store"
 )
 
-var testServer *httptest.Server
+var (
+	testServer           *httptest.Server
+	testPool             *pgxpool.Pool
+	testEvidenceStore    *store.EvidenceStore
+	testInheritanceStore *store.InheritanceStore
+	testLogger           = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+)
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
@@ -68,6 +76,10 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	testPool = pool
+	testEvidenceStore = store.NewEvidenceStore(pool)
+	testInheritanceStore = store.NewInheritanceStore(pool)
 
 	cfg := &config.Config{
 		DatabaseURL:     dbURL,

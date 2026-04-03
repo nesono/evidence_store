@@ -90,6 +90,26 @@ func (s *InheritanceStore) List(ctx context.Context, filter model.InheritanceFil
 	return results, rows.Err()
 }
 
+// AllSourceRefs returns the set of all (repo, source_rcs_ref) pairs from active inheritance declarations.
+// The returned map keys are "repo\x00source_rcs_ref" for efficient lookup.
+func (s *InheritanceStore) AllSourceRefs(ctx context.Context) (map[string]struct{}, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT repo, source_rcs_ref FROM inheritance_declaration`)
+	if err != nil {
+		return nil, fmt.Errorf("query inheritance source refs: %w", err)
+	}
+	defer rows.Close()
+
+	refs := make(map[string]struct{})
+	for rows.Next() {
+		var repo, ref string
+		if err := rows.Scan(&repo, &ref); err != nil {
+			return nil, fmt.Errorf("scan inheritance source ref: %w", err)
+		}
+		refs[repo+"\x00"+ref] = struct{}{}
+	}
+	return refs, rows.Err()
+}
+
 // FindForTarget returns all inheritance declarations for a given repo + target rcs_ref.
 func (s *InheritanceStore) FindForTarget(ctx context.Context, repo, targetRCSRef string) ([]model.InheritanceDeclaration, error) {
 	return s.List(ctx, model.InheritanceFilter{
