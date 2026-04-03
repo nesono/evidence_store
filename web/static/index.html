@@ -94,15 +94,16 @@
         <details id="filter-panel" open>
             <summary>Filters</summary>
             <form id="filter-form">
+                <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
                 <div class="grid">
-                    <label>Repo <input type="text" name="repo" placeholder="org/repo"></label>
-                    <label>Branch <input type="text" name="branch" placeholder="main"></label>
+                    <label>Repo <input type="text" name="repo" placeholder="org/repo or ~^org/.*"></label>
+                    <label>Branch <input type="text" name="branch" placeholder="main or ~^release/.*"></label>
                     <label>Commit <input type="text" name="rcs_ref" placeholder="abc123..."></label>
                 </div>
                 <div class="grid">
-                    <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel"></label>
+                    <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$"></label>
                     <label>Source <input type="text" name="source" placeholder="CI URL or user"></label>
-                    <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target"></label>
+                    <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                 </div>
                 <div class="grid">
                     <fieldset>
@@ -116,8 +117,11 @@
                     <label>Before <input type="text" name="finished_before" placeholder="2026-12-31 23:59"></label>
                 </div>
                 <div class="grid">
-                    <label>Tags <input type="text" name="tags" placeholder="ci,nightly"></label>
+                    <label>Tags <input type="text" name="tags" placeholder="ci,nightly or ~^reg.*"></label>
+                    <label>Notes <input type="text" name="notes" placeholder="keyword or ~pattern"></label>
                     <label>Limit <input type="number" name="limit" min="1" max="1000" placeholder="100"></label>
+                </div>
+                <div class="grid">
                     <label style="align-self:end"><input type="checkbox" name="include_inherited" checked> Include inherited</label>
                 </div>
                 <div class="filter-actions">

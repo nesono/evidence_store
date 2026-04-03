@@ -69,6 +69,7 @@ type EvidenceFilter struct {
 	FinishedAfter  *time.Time
 	FinishedBefore *time.Time
 	Tags           []string
+	Notes          *string
 }
 
 type BatchRequest struct {

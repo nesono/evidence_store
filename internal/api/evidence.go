@@ -187,6 +187,9 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("tags"); v != "" {
 		filter.Tags = strings.Split(v, ",")
 	}
+	if v := q.Get("notes"); v != "" {
+		filter.Notes = &v
+	}
 
 	limit := h.cfg.DefaultPageSize
 	if v := q.Get("limit"); v != "" {
