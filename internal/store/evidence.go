@@ -209,6 +209,78 @@ func scanEvidenceRow(rows pgx.Rows) (*model.Evidence, error) {
 	return &e, nil
 }
 
+// DeleteBatch deletes evidence records by IDs and returns the number of rows deleted.
+func (s *EvidenceStore) DeleteBatch(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM evidence WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return 0, fmt.Errorf("delete evidence batch: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ScanAll iterates over all evidence records ordered by finished_at ASC in batches,
+// calling fn for each batch. Stops if fn returns an error.
+func (s *EvidenceStore) ScanAll(ctx context.Context, batchSize int, fn func([]model.Evidence) error) error {
+	var lastFinishedAt *string
+	var lastID *uuid.UUID
+
+	for {
+		var where string
+		var args []any
+
+		if lastFinishedAt != nil && lastID != nil {
+			where = " WHERE (finished_at, id) > ($1, $2)"
+			args = []any{*lastFinishedAt, *lastID}
+		}
+
+		query := fmt.Sprintf(
+			"SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata FROM evidence%s ORDER BY finished_at ASC, id ASC LIMIT %d",
+			where, batchSize,
+		)
+
+		rows, err := s.pool.Query(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("scan evidence: %w", err)
+		}
+
+		var batch []model.Evidence
+		for rows.Next() {
+			ev, err := scanEvidenceRow(rows)
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			batch = append(batch, *ev)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("scan evidence rows: %w", err)
+		}
+
+		if len(batch) == 0 {
+			break
+		}
+
+		if err := fn(batch); err != nil {
+			return err
+		}
+
+		last := batch[len(batch)-1]
+		ts := last.FinishedAt.Format("2006-01-02T15:04:05.999999Z07:00")
+		lastFinishedAt = &ts
+		lastID = &last.ID
+
+		if len(batch) < batchSize {
+			break
+		}
+	}
+
+	return nil
+}
+
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
