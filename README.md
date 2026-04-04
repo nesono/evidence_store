@@ -1,6 +1,8 @@
 # Evidence Store
 
-A backend service for ingesting, storing, and querying test evidence from heterogeneous sources.
+A backend service for ingesting, storing, and querying test evidence from heterogeneous sources (Bazel test logs, CI pipelines, manual test runs, HiL/PiL/vehicle tests).
+
+Evidence Store provides a unified API to collect and query test results across different tools and workflows. It supports batch ingestion, cursor-based pagination, evidence inheritance across commits, configurable retention policies, and a web UI for manual test entry and search with regex filtering.
 
 ## Quick Start
 
@@ -116,7 +118,32 @@ curl "http://localhost:8000/api/v1/evidence?finished_after=2026-01-01T00:00:00Z"
 curl "http://localhost:8000/api/v1/evidence?limit=10&cursor=<next_cursor>"
 ```
 
-**Query parameters:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `limit`, `cursor`, `include_inherited`.
+**Query parameters:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `notes`, `limit`, `cursor`, `include_inherited`.
+
+### Regex filtering
+
+Text filter fields support regex matching via a `~` prefix. Without the prefix, filters use exact matching (backwards-compatible).
+
+```bash
+# Exact match (default)
+curl "http://localhost:8000/api/v1/evidence?branch=main"
+
+# Regex match — all release branches
+curl "http://localhost:8000/api/v1/evidence?branch=~^release/.*"
+
+# Regex on multiple fields — bazel-* types on org repos
+curl "http://localhost:8000/api/v1/evidence?evidence_type=~^bazel&repo=~^myorg/"
+
+# Regex on tags — match any tag starting with "nightly-"
+curl "http://localhost:8000/api/v1/evidence?tags=~^nightly-"
+
+# Regex on notes
+curl "http://localhost:8000/api/v1/evidence?notes=~device.*XYZ"
+```
+
+**Supported fields:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `tags`, `notes`.
+
+The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-POSIX-REGEXP) (the `~` operator). This supports the POSIX Extended Regular Expression syntax including character classes (`[a-z]`, `[[:digit:]]`), alternation (`a|b`), quantifiers (`*`, `+`, `?`, `{n,m}`), and anchors (`^`, `$`). Matching is case-sensitive.
 
 ## Development
 
