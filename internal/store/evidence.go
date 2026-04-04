@@ -105,27 +105,32 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		return s
 	}
 
-	if v := params.Filter.Repo; v != nil {
-		where = append(where, fmt.Sprintf("repo = %s", arg(*v)))
+	textFilter := func(column string, v *string) {
+		if v == nil {
+			return
+		}
+		val := *v
+		if strings.HasPrefix(val, "~") {
+			where = append(where, fmt.Sprintf("%s ~ %s", column, arg(val[1:])))
+		} else {
+			where = append(where, fmt.Sprintf("%s = %s", column, arg(val)))
+		}
 	}
-	if v := params.Filter.RCSRef; v != nil {
-		where = append(where, fmt.Sprintf("rcs_ref = %s", arg(*v)))
-	}
-	if v := params.Filter.Branch; v != nil {
-		where = append(where, fmt.Sprintf("branch = %s", arg(*v)))
-	}
-	if v := params.Filter.EvidenceType; v != nil {
-		where = append(where, fmt.Sprintf("evidence_type = %s", arg(*v)))
-	}
-	if v := params.Filter.Source; v != nil {
-		where = append(where, fmt.Sprintf("source = %s", arg(*v)))
-	}
+
+	textFilter("repo", params.Filter.Repo)
+	textFilter("rcs_ref", params.Filter.RCSRef)
+	textFilter("branch", params.Filter.Branch)
+	textFilter("evidence_type", params.Filter.EvidenceType)
+	textFilter("source", params.Filter.Source)
 	if v := params.Filter.ProcedureRef; v != nil {
-		if strings.HasSuffix(*v, "*") {
-			prefix := strings.TrimSuffix(*v, "*")
+		val := *v
+		if strings.HasPrefix(val, "~") {
+			where = append(where, fmt.Sprintf("procedure_ref ~ %s", arg(val[1:])))
+		} else if strings.HasSuffix(val, "*") {
+			prefix := strings.TrimSuffix(val, "*")
 			where = append(where, fmt.Sprintf("procedure_ref LIKE %s", arg(prefix+"%")))
 		} else {
-			where = append(where, fmt.Sprintf("procedure_ref = %s", arg(*v)))
+			where = append(where, fmt.Sprintf("procedure_ref = %s", arg(val)))
 		}
 	}
 	if len(params.Filter.Result) > 0 {
@@ -142,7 +147,23 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		where = append(where, fmt.Sprintf("finished_at < %s", arg(*v)))
 	}
 	if len(params.Filter.Tags) > 0 {
-		where = append(where, fmt.Sprintf("metadata->'tags' @> %s", arg(mustJSON(params.Filter.Tags))))
+		// If the first tag starts with ~, treat all tags as regex patterns.
+		if strings.HasPrefix(params.Filter.Tags[0], "~") {
+			for _, t := range params.Filter.Tags {
+				pattern := strings.TrimPrefix(t, "~")
+				where = append(where, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements_text(metadata->'tags') tag WHERE tag ~ %s)", arg(pattern)))
+			}
+		} else {
+			where = append(where, fmt.Sprintf("metadata->'tags' @> %s", arg(mustJSON(params.Filter.Tags))))
+		}
+	}
+	if v := params.Filter.Notes; v != nil {
+		val := *v
+		if strings.HasPrefix(val, "~") {
+			where = append(where, fmt.Sprintf("metadata->>'notes' ~ %s", arg(val[1:])))
+		} else {
+			where = append(where, fmt.Sprintf("metadata->>'notes' = %s", arg(val)))
+		}
 	}
 	if params.Cursor != nil {
 		where = append(where, fmt.Sprintf("(ingested_at, id) > (%s, %s)", arg(params.Cursor.IngestedAt), arg(params.Cursor.ID)))

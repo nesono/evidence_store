@@ -15,6 +15,21 @@
 .badge-skipped { background: #888;    color: #fff; }
 .badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
 
+/* Regex hint */
+.regex-hint {
+    display: block;
+    color: var(--pico-muted-color);
+    font-size: 0.75em;
+    margin-bottom: 0.3em;
+}
+
+.regex-hint code {
+    background: var(--pico-muted-border-color);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.95em;
+}
+
 /* Compact forms */
 #filter-form label,
 #add-form label {

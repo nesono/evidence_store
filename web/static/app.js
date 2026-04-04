@@ -1,7 +1,7 @@
 const API_BASE = "/api/v1";
 
 const TEXT_FIELDS = [
-  "repo", "branch", "rcs_ref", "evidence_type", "source", "procedure_ref", "tags",
+  "repo", "branch", "rcs_ref", "evidence_type", "source", "procedure_ref", "tags", "notes",
 ];
 const DATETIME_FIELDS = ["finished_after", "finished_before"];
 
