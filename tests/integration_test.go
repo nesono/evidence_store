@@ -134,7 +134,7 @@ func makeEvidence(repo, branch, rcsRef, procedureRef, source string, result mode
 		EvidenceType: "bazel",
 		Source:       source,
 		Result:       result,
-		FinishedAt:   time.Now().UTC().Truncate(time.Microsecond),
+		FinishedAt:   model.FlexibleTime{Time: time.Now().UTC().Truncate(time.Microsecond)},
 	}
 }
 
@@ -291,9 +291,9 @@ func TestListEvidenceFilterByTimeRange(t *testing.T) {
 
 	now := time.Now().UTC()
 	ev1 := makeEvidence(repo, "main", "ggg777", "//pkg:test", "ci", model.ResultPass)
-	ev1.FinishedAt = now.Add(-2 * time.Hour)
+	ev1.FinishedAt = model.FlexibleTime{Time: now.Add(-2 * time.Hour)}
 	ev2 := makeEvidence(repo, "main", "ggg777", "//pkg:test2", "ci", model.ResultPass)
-	ev2.FinishedAt = now.Add(-30 * time.Minute)
+	ev2.FinishedAt = model.FlexibleTime{Time: now.Add(-30 * time.Minute)}
 
 	for _, ev := range []model.EvidenceCreate{ev1, ev2} {
 		resp := postJSON(t, "/api/v1/evidence", ev)

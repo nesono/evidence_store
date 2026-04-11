@@ -31,7 +31,7 @@ func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*m
 		INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-	`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt, metadata)
+	`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
 
 	return scanEvidence(row)
 }
@@ -54,7 +54,7 @@ func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.Evidenc
 			INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-		`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt, metadata)
+		`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
 
 		ev, err := scanEvidence(row)
 		if err != nil {
@@ -215,6 +215,8 @@ func scanEvidence(row pgx.Row) (*model.Evidence, error) {
 	if err != nil {
 		return nil, err
 	}
+	e.FinishedAt = e.FinishedAt.UTC()
+	e.IngestedAt = e.IngestedAt.UTC()
 	return &e, nil
 }
 
@@ -227,6 +229,8 @@ func scanEvidenceRow(rows pgx.Rows) (*model.Evidence, error) {
 	if err != nil {
 		return nil, err
 	}
+	e.FinishedAt = e.FinishedAt.UTC()
+	e.IngestedAt = e.IngestedAt.UTC()
 	return &e, nil
 }
 

@@ -35,7 +35,7 @@ func EvidenceCreate(e *model.EvidenceCreate) []string {
 	if !e.Result.Valid() {
 		errs = append(errs, fmt.Sprintf("result %q is invalid, must be one of PASS, FAIL, ERROR, SKIPPED", e.Result))
 	}
-	if e.FinishedAt.IsZero() {
+	if e.FinishedAt.Time.IsZero() {
 		errs = append(errs, "finished_at is required")
 	}
 

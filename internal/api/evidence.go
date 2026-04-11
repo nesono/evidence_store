@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -169,7 +168,7 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := q.Get("finished_after"); v != "" {
-		t, err := time.Parse(time.RFC3339, v)
+		t, err := model.ParseFlexibleTime(v)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid finished_after: "+err.Error())
 			return
@@ -177,7 +176,7 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.FinishedAfter = &t
 	}
 	if v := q.Get("finished_before"); v != "" {
-		t, err := time.Parse(time.RFC3339, v)
+		t, err := model.ParseFlexibleTime(v)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid finished_before: "+err.Error())
 			return
