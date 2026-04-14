@@ -48,8 +48,8 @@ function populateFormFromFilters(filters) {
   for (const f of DATETIME_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
     if (input && filters[f]) {
-      const d = new Date(filters[f]);
-      input.value = isNaN(d.getTime()) ? filters[f] : formatTime(d.toISOString());
+      const d = parseUserDateTime(filters[f]);
+      input.value = d ? formatTime(d.toISOString()) : filters[f];
     }
   }
   const resultChecks = form.querySelectorAll('[name="result"]');
@@ -73,8 +73,8 @@ function readFormFilters() {
   for (const f of DATETIME_FIELDS) {
     const v = form.querySelector(`[name="${f}"]`).value.trim();
     if (v) {
-      const d = new Date(v);
-      filters[f] = isNaN(d.getTime()) ? v : d.toISOString();
+      const d = parseUserDateTime(v);
+      filters[f] = d ? d.toISOString() : v;
     }
   }
   const results = Array.from(form.querySelectorAll('[name="result"]:checked')).map(cb => cb.value);
@@ -140,7 +140,22 @@ function renderTags(metadata) {
 function formatTime(iso) {
   const d = new Date(iso);
   const pad = n => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+// Parse a user-entered datetime string. Zoneless values are treated as UTC.
+function parseUserDateTime(str) {
+  str = str.trim();
+  if (!str) return null;
+  // If the string has a timezone suffix (Z or +/-HH:MM), parse directly.
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Zoneless — treat as UTC by appending Z (normalize separators first).
+  const normalized = str.replace(" ", "T");
+  const d = new Date(normalized + "Z");
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function renderTable(records) {
@@ -327,9 +342,9 @@ async function submitEvidence(andAnother) {
   let finishedAt;
   const rawFinished = form.finished_at.value.trim();
   if (rawFinished) {
-    const d = new Date(rawFinished);
-    if (isNaN(d.getTime())) {
-      feedback.innerHTML = `<p class="feedback-error">Invalid date format. Use YYYY-MM-DD HH:MM</p>`;
+    const d = parseUserDateTime(rawFinished);
+    if (!d) {
+      feedback.innerHTML = `<p class="feedback-error">Invalid date format. Use YYYY-MM-DD HH:MM (UTC)</p>`;
       return;
     }
     finishedAt = d.toISOString();

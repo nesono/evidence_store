@@ -64,10 +64,10 @@
                         <label><input type="radio" name="result" value="ERROR"> ERROR</label>
                         <label><input type="radio" name="result" value="SKIPPED"> SKIPPED</label>
                     </fieldset>
-                    <label>Finished at
+                    <label>Finished at <small>(UTC)</small>
                         <span class="input-with-button">
-                            <input type="text" name="finished_at" placeholder="2026-03-30 14:00">
-                            <button type="button" id="fill-now" class="secondary outline" title="Fill with current time">Now</button>
+                            <input type="text" name="finished_at" placeholder="2026-03-30 14:00 (UTC)">
+                            <button type="button" id="fill-now" class="secondary outline" title="Fill with current time (UTC)">Now</button>
                         </span>
                     </label>
                     <label>Tags
@@ -113,8 +113,8 @@
                         <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
                         <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
                     </fieldset>
-                    <label>After <input type="text" name="finished_after" placeholder="2026-01-01 00:00"></label>
-                    <label>Before <input type="text" name="finished_before" placeholder="2026-12-31 23:59"></label>
+                    <label>After <small>(UTC)</small> <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)"></label>
+                    <label>Before <small>(UTC)</small> <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)"></label>
                 </div>
                 <div class="grid">
                     <label>Tags <input type="text" name="tags" placeholder="ci,nightly or ~^reg.*"></label>

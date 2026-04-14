@@ -17,7 +17,7 @@ func validEvidence() *model.EvidenceCreate {
 		EvidenceType: "bazel",
 		Source:       "ci-bot",
 		Result:       model.ResultPass,
-		FinishedAt:   time.Now(),
+		FinishedAt:   model.FlexibleTime{Time: time.Now()},
 	}
 }
 
@@ -38,7 +38,7 @@ func TestEvidenceCreateMissingFields(t *testing.T) {
 		{"missing procedure_ref", func(e *model.EvidenceCreate) { e.ProcedureRef = "" }, "procedure_ref is required"},
 		{"missing evidence_type", func(e *model.EvidenceCreate) { e.EvidenceType = "" }, "evidence_type is required"},
 		{"missing source", func(e *model.EvidenceCreate) { e.Source = "" }, "source is required"},
-		{"missing finished_at", func(e *model.EvidenceCreate) { e.FinishedAt = time.Time{} }, "finished_at is required"},
+		{"missing finished_at", func(e *model.EvidenceCreate) { e.FinishedAt = model.FlexibleTime{} }, "finished_at is required"},
 	}
 
 	for _, tt := range tests {

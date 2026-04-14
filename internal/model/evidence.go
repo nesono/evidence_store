@@ -3,10 +3,60 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// FlexibleTime accepts multiple datetime formats during JSON unmarshalling
+// and normalizes them to UTC. Supported formats:
+//   - RFC3339 / RFC3339Nano (with timezone)
+//   - "2006-01-02T15:04:05" (zoneless, treated as UTC)
+//   - "2006-01-02 15:04:05" (zoneless, treated as UTC)
+//   - "2006-01-02 15:04"    (zoneless, treated as UTC)
+//   - "2006-01-02"          (date only, 00:00:00 UTC)
+type FlexibleTime struct {
+	time.Time
+}
+
+var flexibleTimeLayouts = []string{
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
+	"2006-01-02 15:04",
+	"2006-01-02",
+}
+
+// ParseFlexibleTime parses a datetime string in any of the supported formats
+// and returns the result normalized to UTC.
+func ParseFlexibleTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	for _, layout := range flexibleTimeLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized datetime %q (expected RFC3339 or YYYY-MM-DD[ HH:MM[:SS]])", s)
+}
+
+func (ft *FlexibleTime) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	t, err := ParseFlexibleTime(s)
+	if err != nil {
+		return err
+	}
+	ft.Time = t
+	return nil
+}
+
+func (ft FlexibleTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ft.Time.UTC())
+}
 
 type EvidenceResult string
 
@@ -47,7 +97,7 @@ type EvidenceCreate struct {
 	EvidenceType string          `json:"evidence_type"`
 	Source       string          `json:"source"`
 	Result       EvidenceResult  `json:"result"`
-	FinishedAt   time.Time       `json:"finished_at"`
+	FinishedAt   FlexibleTime    `json:"finished_at"`
 	Metadata     json.RawMessage `json:"metadata,omitempty"`
 }
 

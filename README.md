@@ -99,6 +99,8 @@ curl -X POST http://localhost:8000/api/v1/evidence \
 
 Result must be one of: `PASS`, `FAIL`, `ERROR`, `SKIPPED`.
 
+`finished_at` accepts RFC3339 (`2026-01-01T00:00:00Z`, `2026-01-01T12:00:00+02:00`) as well as shorter forms (`2026-01-01 14:00`, `2026-01-01`). Values without a timezone are interpreted as **UTC**. All timestamps are normalized to UTC on storage.
+
 ### Querying evidence
 
 ```bash
