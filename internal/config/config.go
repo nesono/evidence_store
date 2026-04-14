@@ -4,7 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
+
+// APIKey represents a configured API key with its access role.
+type APIKey struct {
+	Key      string
+	ReadOnly bool
+}
 
 type Config struct {
 	DatabaseURL     string
@@ -13,6 +20,7 @@ type Config struct {
 	MaxPageSize     int
 	MaxBatchSize    int
 	LogLevel        string
+	APIKeys         []APIKey
 }
 
 func Load() (*Config, error) {
@@ -29,7 +37,40 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("EVIDENCE_DATABASE_URL is required")
 	}
 
+	if raw := os.Getenv("EVIDENCE_API_KEYS"); raw != "" {
+		keys, err := ParseAPIKeys(raw)
+		if err != nil {
+			return nil, fmt.Errorf("EVIDENCE_API_KEYS: %w", err)
+		}
+		cfg.APIKeys = keys
+	}
+
 	return cfg, nil
+}
+
+// ParseAPIKeys parses a comma-separated list of "role:key" entries.
+// Valid roles are "rw" (read-write) and "ro" (read-only).
+func ParseAPIKeys(raw string) ([]APIKey, error) {
+	var keys []APIKey
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		role, key, ok := strings.Cut(entry, ":")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("invalid key entry %q: expected role:key (e.g. rw:my-secret)", entry)
+		}
+		switch role {
+		case "rw":
+			keys = append(keys, APIKey{Key: key, ReadOnly: false})
+		case "ro":
+			keys = append(keys, APIKey{Key: key, ReadOnly: true})
+		default:
+			return nil, fmt.Errorf("invalid role %q in entry %q: must be rw or ro", role, entry)
+		}
+	}
+	return keys, nil
 }
 
 func envOrDefault(key, fallback string) string {

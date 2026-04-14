@@ -87,6 +87,53 @@ function readFormFilters() {
   return filters;
 }
 
+// --- Auth ---
+
+const API_KEY_STORAGE = "evidence_api_key";
+
+function getStoredAPIKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || "";
+}
+
+function setStoredAPIKey(key) {
+  if (key) {
+    localStorage.setItem(API_KEY_STORAGE, key);
+  } else {
+    localStorage.removeItem(API_KEY_STORAGE);
+  }
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const btn = document.getElementById("auth-logout");
+  if (btn) btn.hidden = !getStoredAPIKey();
+}
+
+function promptForAPIKey(msg) {
+  const key = prompt(msg || "Enter your API key:");
+  if (key !== null) {
+    setStoredAPIKey(key.trim());
+  }
+  return getStoredAPIKey();
+}
+
+// Wrapper around fetch that attaches Authorization header and handles 401.
+async function apiFetch(url, options = {}) {
+  const key = getStoredAPIKey();
+  if (key) {
+    options.headers = { ...options.headers, Authorization: `Bearer ${key}` };
+  }
+  const resp = await fetch(url, options);
+  if (resp.status === 401) {
+    const newKey = promptForAPIKey("Authentication required. Enter your API key:");
+    if (newKey) {
+      options.headers = { ...options.headers, Authorization: `Bearer ${newKey}` };
+      return fetch(url, options);
+    }
+  }
+  return resp;
+}
+
 // --- API ---
 
 async function fetchEvidence(filters, cursor) {
@@ -100,13 +147,13 @@ async function fetchEvidence(filters, cursor) {
   if (cursor) params.set("cursor", cursor);
   if (!params.has("limit")) params.set("limit", "50");
 
-  const resp = await fetch(`${API_BASE}/evidence?${params}`);
+  const resp = await apiFetch(`${API_BASE}/evidence?${params}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
   return resp.json();
 }
 
 async function fetchEvidenceById(id) {
-  const resp = await fetch(`${API_BASE}/evidence/${id}`);
+  const resp = await apiFetch(`${API_BASE}/evidence/${id}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
   return resp.json();
 }
@@ -376,7 +423,7 @@ async function submitEvidence(andAnother) {
   btn.setAttribute("aria-busy", "true");
 
   try {
-    const resp = await fetch(`${API_BASE}/evidence`, {
+    const resp = await apiFetch(`${API_BASE}/evidence`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(record),
@@ -751,10 +798,21 @@ function importTemplates(file) {
   reader.readAsText(file);
 }
 
+// --- Auth UI ---
+
+document.getElementById("auth-logout")?.addEventListener("click", () => {
+  setStoredAPIKey("");
+});
+
+document.getElementById("auth-login")?.addEventListener("click", () => {
+  promptForAPIKey("Enter your API key:");
+});
+
 // --- Init ---
 
 (async function init() {
   checkHealth();
+  updateAuthUI();
   refreshTemplateDropdown();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
   const filters = readFiltersFromURL();
