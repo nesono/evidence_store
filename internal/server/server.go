@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nesono/evidence-store/internal/api"
+	"github.com/nesono/evidence-store/internal/auth"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/store"
 	"github.com/nesono/evidence-store/web"
@@ -45,6 +46,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(auth.Middleware(cfg.APIKeys))
+
 		r.Post("/evidence", evidenceAPI.Create)
 		r.Post("/evidence/batch", evidenceAPI.CreateBatch)
 		r.Get("/evidence", evidenceAPI.List)

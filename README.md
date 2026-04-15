@@ -23,6 +23,35 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_DEFAULT_PAGE_SIZE` | `100` | Default page size |
 | `EVIDENCE_MAX_PAGE_SIZE` | `1000` | Max page size |
 | `EVIDENCE_MAX_BATCH_SIZE` | `1000` | Max records per batch |
+| `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
+
+### Authentication
+
+Set `EVIDENCE_API_KEYS` to enable API key authentication for all `/api/v1/*` endpoints. The `/healthz` endpoint and static web UI files are always public.
+
+Each key entry has the format `role:key` where role is `rw` (read-write) or `ro` (read-only):
+
+```bash
+# Single read-write key
+export EVIDENCE_API_KEYS="rw:my-secret-key"
+
+# Multiple keys with different roles
+export EVIDENCE_API_KEYS="rw:ingest-key-for-ci,ro:dashboard-viewer-key"
+```
+
+- **`rw`** keys can read and write (GET + POST).
+- **`ro`** keys can only read (GET). POST requests return `403 Forbidden`.
+- Requests without a valid key return `401 Unauthorized`.
+- When `EVIDENCE_API_KEYS` is empty or unset, authentication is disabled (open access).
+
+Clients authenticate by sending the key as a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer my-secret-key" \
+  http://localhost:8000/api/v1/evidence
+```
+
+The Bazel adapter supports this via `--api-key` or `EVIDENCE_STORE_API_KEY`. The web UI prompts for a key on first 401 and stores it in `localStorage`.
 
 ## Bazel Adapter
 
