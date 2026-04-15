@@ -94,6 +94,32 @@ Or use the dogfood script that does both:
 | `--api-key` | `$EVIDENCE_STORE_API_KEY` | API key |
 | `--dry-run` | `false` | Print records instead of posting |
 
+### Watch Mode (Automatic Ingestion)
+
+The adapter can run as a background watcher that automatically uploads test results after every `bazel test` — no changes to your build workflow needed.
+
+```bash
+# One-time setup: create .evidence/config.yaml in your workspace
+mkdir -p .evidence
+cat > .evidence/config.yaml <<EOF
+api_url: https://evidence.mycompany.com
+tags: [local, dev]
+EOF
+
+# Start the watcher (runs in background)
+bazel run //adapters/bazel/cmd/evidence-bazel -- watch start
+
+# Check status
+bazel run //adapters/bazel/cmd/evidence-bazel -- watch status
+
+# Stop
+bazel run //adapters/bazel/cmd/evidence-bazel -- watch stop
+```
+
+The watcher polls `bazel-testlogs/` every 5 seconds, waits for Bazel to finish (lock released), then uploads only new/changed results. It reads config from `.evidence/config.yaml` and environment variables (`EVIDENCE_STORE_URL`, `EVIDENCE_STORE_API_KEY`). Logs go to `.evidence/watch.log`.
+
+Use `--foreground` with `watch start` to run in the foreground (useful for debugging).
+
 ## API
 
 Base URL: `/api/v1`

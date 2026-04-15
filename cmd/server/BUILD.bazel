@@ -8,7 +8,9 @@ go_library(
     deps = [
         "//internal/config",
         "//internal/migrate",
+        "//internal/retention",
         "//internal/server",
+        "//internal/store",
         "@com_github_jackc_pgx_v5//pgxpool",
     ],
 )

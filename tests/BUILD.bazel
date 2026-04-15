@@ -2,7 +2,13 @@ load("@rules_go//go:def.bzl", "go_test")
 
 go_test(
     name = "tests_test",
-    srcs = ["integration_test.go"],
+    srcs = [
+        "auth_integration_test.go",
+        "integration_test.go",
+        "regex_search_test.go",
+        "retention_integration_test.go",
+        "utc_normalization_test.go",
+    ],
     data = ["//migrations"],
     tags = [
         "exclusive",
@@ -12,7 +18,9 @@ go_test(
         "//internal/config",
         "//internal/migrate",
         "//internal/model",
+        "//internal/retention",
         "//internal/server",
+        "//internal/store",
         "@com_github_google_uuid//:uuid",
         "@com_github_jackc_pgx_v5//pgxpool",
         "@com_github_stretchr_testify//assert",

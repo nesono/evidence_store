@@ -6,16 +6,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/nesono/evidence-store/adapters/bazel/internal/client"
 	"github.com/nesono/evidence-store/adapters/bazel/internal/gitinfo"
 	"github.com/nesono/evidence-store/adapters/bazel/internal/junitxml"
 	"github.com/nesono/evidence-store/adapters/bazel/internal/testlogs"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/watch"
 )
 
 func main() {
+	// Handle "watch" subcommand before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "watch" {
+		runWatch(os.Args[2:])
+		return
+	}
+
 	var (
 		apiURL       = flag.String("api-url", envOrDefault("EVIDENCE_STORE_URL", ""), "Evidence Store API base URL (required)")
 		repo         = flag.String("repo", "", "Repository identifier (auto-detected from git remote)")
@@ -191,4 +200,147 @@ func envOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func runWatch(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: evidence-bazel watch <start|stop|status>")
+		os.Exit(1)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "start":
+		runWatchStart(wd, args[1:])
+	case "stop":
+		runWatchStop(wd)
+	case "status":
+		runWatchStatus(wd)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown watch command: %s\nusage: evidence-bazel watch <start|stop|status>\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func runWatchStart(workspaceDir string, args []string) {
+	fs := flag.NewFlagSet("watch start", flag.ExitOnError)
+	foreground := fs.Bool("foreground", false, "Run in foreground (don't daemonize)")
+	fs.Parse(args)
+
+	// Check if already running.
+	if pid, alive := watch.IsRunning(workspaceDir); alive {
+		fmt.Fprintf(os.Stderr, "watcher already running (pid %d)\n", pid)
+		os.Exit(1)
+	}
+
+	cfg, err := watch.LoadConfig(workspaceDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if cfg.APIURL == "" {
+		fmt.Fprintln(os.Stderr, "error: api_url not configured")
+		fmt.Fprintln(os.Stderr, "Set EVIDENCE_STORE_URL or create .evidence/config.yaml with api_url")
+		os.Exit(1)
+	}
+
+	// Daemonize if not foreground.
+	if !*foreground {
+		// Re-exec ourselves with --foreground in the background.
+		exe, err := os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := watch.EnsureEvidenceDir(workspaceDir); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating .evidence dir: %v\n", err)
+			os.Exit(1)
+		}
+
+		logFile, err := os.OpenFile(
+			watch.EvidenceDir(workspaceDir)+"/watch.log",
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error opening log file: %v\n", err)
+			os.Exit(1)
+		}
+
+		proc, err := os.StartProcess(exe, []string{exe, "watch", "start", "--foreground"}, &os.ProcAttr{
+			Dir:   workspaceDir,
+			Env:   os.Environ(),
+			Files: []*os.File{os.Stdin, logFile, logFile},
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error starting daemon: %v\n", err)
+			os.Exit(1)
+		}
+		logFile.Close()
+		proc.Release()
+
+		fmt.Printf("watcher started in background (check .evidence/watch.log for output)\n")
+		return
+	}
+
+	// Foreground mode.
+	if err := watch.EnsureEvidenceDir(workspaceDir); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating .evidence dir: %v\n", err)
+		os.Exit(1)
+	}
+
+	logHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New(logHandler)
+
+	if err := watch.WritePID(workspaceDir); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing PID file: %v\n", err)
+		os.Exit(1)
+	}
+	defer watch.RemovePID(workspaceDir)
+
+	w, err := watch.NewWatcher(workspaceDir, cfg, logger)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating watcher: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle signals for graceful shutdown.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigCh
+		logger.Info("received shutdown signal")
+		cancel()
+	}()
+
+	if err := w.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "watcher error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runWatchStop(workspaceDir string) {
+	if err := watch.StopWatcher(workspaceDir); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("watcher stopped")
+}
+
+func runWatchStatus(workspaceDir string) {
+	pid, alive := watch.IsRunning(workspaceDir)
+	if alive {
+		fmt.Printf("watcher running (pid %d)\n", pid)
+	} else {
+		fmt.Println("watcher not running")
+	}
 }
