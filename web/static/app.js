@@ -158,10 +158,12 @@ async function fetchEvidenceById(id) {
   return resp.json();
 }
 
+const HEALTH_POLL_MS = 5000;
+
 async function checkHealth() {
   const el = document.getElementById("health-status");
   try {
-    const resp = await fetch("/healthz");
+    const resp = await fetch("/healthz", { cache: "no-store" });
     if (resp.ok) {
       el.innerHTML = `<span class="health-dot health-ok"></span> Connected`;
     } else {
@@ -170,6 +172,14 @@ async function checkHealth() {
   } catch {
     el.innerHTML = `<span class="health-dot health-fail"></span> Offline`;
   }
+}
+
+function startHealthPolling() {
+  checkHealth();
+  setInterval(checkHealth, HEALTH_POLL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkHealth();
+  });
 }
 
 // --- Rendering ---
@@ -811,7 +821,7 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
 // --- Init ---
 
 (async function init() {
-  checkHealth();
+  startHealthPolling();
   updateAuthUI();
   refreshTemplateDropdown();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
