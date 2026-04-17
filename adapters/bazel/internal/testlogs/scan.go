@@ -33,6 +33,11 @@ func Scan(testlogsDir string) ([]TestLogEntry, error) {
 
 	err = filepath.Walk(absDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			// Bazel may delete/move test output dirs mid-walk when a new
+			// test run starts. Treat "not exist" as transient and skip.
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if info.IsDir() || info.Name() != "test.xml" {

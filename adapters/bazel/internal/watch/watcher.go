@@ -130,6 +130,12 @@ func (w *Watcher) poll(ctx context.Context) error {
 
 		result, duration, err := w.parseEntry(entry)
 		if err != nil {
+			// If the file vanished between scan and read, a new Bazel run
+			// started and clobbered it. Expected; we'll pick it up next cycle.
+			if os.IsNotExist(err) {
+				w.logger.Debug("test file disappeared mid-cycle", "target", entry.BazelTarget)
+				continue
+			}
 			w.logger.Warn("skipping unparseable entry", "target", entry.BazelTarget, "error", err)
 			continue
 		}
