@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "auth",
+    srcs = ["middleware.go"],
+    importpath = "github.com/nesono/evidence-store/internal/auth",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/config"],
+)
+
+go_test(
+    name = "auth_test",
+    srcs = ["middleware_test.go"],
+    embed = [":auth"],
+    deps = [
+        "//internal/config",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

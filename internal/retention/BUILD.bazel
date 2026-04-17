@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "retention",
+    srcs = [
+        "config.go",
+        "evaluator.go",
+        "worker.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/retention",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/model",
+        "//internal/store",
+        "@com_github_google_uuid//:uuid",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)
+
+go_test(
+    name = "retention_test",
+    srcs = [
+        "config_test.go",
+        "evaluator_test.go",
+        "worker_test.go",
+    ],
+    embed = [":retention"],
+    deps = [
+        "//internal/model",
+        "@com_github_google_uuid//:uuid",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

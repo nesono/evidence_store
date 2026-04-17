@@ -10,6 +10,7 @@ go_library(
         "//adapters/bazel/internal/gitinfo",
         "//adapters/bazel/internal/junitxml",
         "//adapters/bazel/internal/testlogs",
+        "//adapters/bazel/internal/watch",
     ],
 )
 

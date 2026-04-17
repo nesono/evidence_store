@@ -13,7 +13,10 @@ go_library(
 
 go_test(
     name = "model_test",
-    srcs = ["evidence_test.go"],
+    srcs = [
+        "evidence_test.go",
+        "flextime_test.go",
+    ],
     embed = [":model"],
     deps = [
         "@com_github_stretchr_testify//assert",

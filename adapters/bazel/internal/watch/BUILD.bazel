@@ -1,0 +1,35 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "watch",
+    srcs = [
+        "config.go",
+        "daemon.go",
+        "flock_unix.go",
+        "snapshot.go",
+        "watcher.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/adapters/bazel/internal/watch",
+    visibility = ["//adapters/bazel:__subpackages__"],
+    deps = [
+        "//adapters/bazel/internal/client",
+        "//adapters/bazel/internal/gitinfo",
+        "//adapters/bazel/internal/junitxml",
+        "//adapters/bazel/internal/testlogs",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)
+
+go_test(
+    name = "watch_test",
+    srcs = [
+        "config_test.go",
+        "daemon_test.go",
+        "snapshot_test.go",
+    ],
+    embed = [":watch"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
