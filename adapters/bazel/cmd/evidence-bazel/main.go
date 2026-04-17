@@ -208,10 +208,16 @@ func runWatch(args []string) {
 		os.Exit(1)
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+	// When run via "bazel run", the CWD is the runfiles tree.
+	// BUILD_WORKSPACE_DIRECTORY points to the actual workspace root.
+	wd := os.Getenv("BUILD_WORKSPACE_DIRECTORY")
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	switch args[0] {
