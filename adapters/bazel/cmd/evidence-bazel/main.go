@@ -19,10 +19,16 @@ import (
 )
 
 func main() {
-	// Handle "watch" subcommand before flag parsing.
-	if len(os.Args) > 1 && os.Args[1] == "watch" {
-		runWatch(os.Args[2:])
-		return
+	// Handle subcommands before flag parsing.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "watch":
+			runWatch(os.Args[2:])
+			return
+		case "record":
+			runRecord(os.Args[2:])
+			return
+		}
 	}
 
 	var (
