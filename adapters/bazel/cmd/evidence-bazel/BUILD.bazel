@@ -1,8 +1,11 @@
-load("@rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 
 go_library(
     name = "evidence-bazel_lib",
-    srcs = ["main.go"],
+    srcs = [
+        "main.go",
+        "record.go",
+    ],
     importpath = "github.com/nesono/evidence-store/adapters/bazel/cmd/evidence-bazel",
     visibility = ["//visibility:private"],
     deps = [
@@ -18,4 +21,15 @@ go_binary(
     name = "evidence-bazel",
     embed = [":evidence-bazel_lib"],
     visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "evidence-bazel_test",
+    srcs = ["record_test.go"],
+    embed = [":evidence-bazel_lib"],
+    deps = [
+        "//internal/client",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
 )

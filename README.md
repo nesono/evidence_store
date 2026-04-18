@@ -127,6 +127,57 @@ Or use the dogfood script that does both:
 | `--api-key` | `$EVIDENCE_STORE_API_KEY` | API key |
 | `--dry-run` | `false` | Print records instead of posting |
 
+### Recording ad-hoc results (`record` subcommand)
+
+Not all test workflows produce a JUnit `test.xml`. Failure tests (where a `bazel build` is *expected* to fail with a specific stderr pattern) and shell-driven integration tests determine pass/fail outside Bazel's test runner. For these, use the `record` subcommand to emit a single evidence record with an externally-determined verdict.
+
+```bash
+# Manual pass/fail decision
+evidence-bazel record \
+    --procedure-ref "//fire/starlark/failure_test:version_too_old_basic" \
+    --result PASS \
+    --notes "expected 'static_assert' pattern found in stderr" \
+    --tags failure_test,version_too_old \
+    --evidence-type bazel-failure-test
+```
+
+#### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--procedure-ref` | | Target label / test identifier (required) |
+| `--result` | | `PASS`, `FAIL`, `ERROR`, or `SKIPPED` (required, case-insensitive) |
+| `--evidence-type` | `bazel-manual` | Evidence type string |
+| `--notes` | | Free-text stored under `metadata.notes` |
+| `--tags` | | Comma-separated tags stored under `metadata.tags` |
+| `--duration-ms` | | Duration in milliseconds (optional) |
+| `--metadata` | | JSON object to merge into metadata (e.g. `'{"pattern":"static_assert"}'`) |
+| `--invocation-id` | | Group multiple records from the same run |
+| `--finished-at` | now (UTC) | RFC3339 timestamp |
+| `--repo`, `--branch`, `--rcs-ref`, `--source` | auto-detected | Same as ingest path |
+| `--api-url`, `--api-key` | env vars | Same as ingest path |
+| `--dry-run` | `false` | Print the record as JSON instead of posting |
+
+#### Example: driving failure tests from a shell script
+
+```bash
+INVOCATION_ID=$(uuidgen)
+for tgt in $(discover_failure_tests); do
+    if bazel build "$tgt" 2> stderr.log; then
+        evidence-bazel record --procedure-ref "$tgt" --result FAIL \
+            --notes "expected build failure but build succeeded" \
+            --invocation-id "$INVOCATION_ID"
+    elif grep -q "static_assert" stderr.log; then
+        evidence-bazel record --procedure-ref "$tgt" --result PASS \
+            --invocation-id "$INVOCATION_ID"
+    else
+        evidence-bazel record --procedure-ref "$tgt" --result ERROR \
+            --notes "build failed without expected pattern" \
+            --invocation-id "$INVOCATION_ID"
+    fi
+done
+```
+
 ### Watch Mode (Automatic Ingestion)
 
 The adapter can run as a background watcher that automatically uploads test results after every `bazel test` — no changes to your build workflow needed. The commands below assume a consumer workspace with `evidence_store_bazel` added as a `bazel_dep`; replace `@evidence_store_bazel//cmd/evidence-bazel` with `//cmd/evidence-bazel` when running from inside `adapters/bazel/` in this repo.
