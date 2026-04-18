@@ -13,19 +13,22 @@ EXTRA_ARGS=("$@")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-# Build the adapter with Bazel.
+ADAPTER_DIR="$REPO_ROOT/adapters/bazel"
+
+# Build the adapter binary from its own Bzlmod module.
 echo "==> Building evidence-bazel adapter..."
-bazel build //adapters/bazel/cmd/evidence-bazel
+(cd "$ADAPTER_DIR" && bazel build //cmd/evidence-bazel)
+ADAPTER_BIN="$(cd "$ADAPTER_DIR" && bazel cquery --output=files //cmd/evidence-bazel 2>/dev/null)"
+# cquery returns a path relative to the adapter workspace.
+ADAPTER_BIN="$ADAPTER_DIR/$ADAPTER_BIN"
 
-ADAPTER_BIN="$(bazel cquery --output=files //adapters/bazel/cmd/evidence-bazel 2>/dev/null)"
-
-# Run Bazel tests with a shared invocation ID.
+# Run Bazel tests in the root workspace with a shared invocation ID.
 INVOCATION_ID="$(uuidgen)"
 echo "==> Running bazel test //... (invocation: $INVOCATION_ID)"
-bazel test //... --invocation_id="$INVOCATION_ID" || true  # continue even if tests fail
+(cd "$REPO_ROOT" && bazel test //... --invocation_id="$INVOCATION_ID") || true  # continue even if tests fail
 
-# Determine testlogs path.
-TESTLOGS_DIR="$(bazel info bazel-testlogs)"
+# Determine testlogs path for the root workspace.
+TESTLOGS_DIR="$(cd "$REPO_ROOT" && bazel info bazel-testlogs)"
 
 # Ingest results.
 echo "==> Ingesting test results..."

@@ -57,18 +57,51 @@ The Bazel adapter supports this via `--api-key` or `EVIDENCE_STORE_API_KEY`. The
 
 Scans `bazel-testlogs/` after a test run and uploads results to the Evidence Store.
 
-### Build
+The adapter lives in `adapters/bazel/` as its own Bzlmod module named `evidence_store_bazel` so other Bazel workspaces can consume it without pulling in the server's dependencies.
+
+### Consume from another Bazel workspace
+
+Add this to the consuming repo's `MODULE.bazel`:
+
+```starlark
+bazel_dep(name = "evidence_store_bazel", version = "0.0.1")
+
+git_override(
+    module_name = "evidence_store_bazel",
+    remote = "https://github.com/nesono/evidence_store.git",
+    commit = "<pinned-sha>",
+    strip_prefix = "adapters/bazel",
+)
+```
+
+Then from the consumer workspace:
 
 ```bash
-bazel build //adapters/bazel/cmd/evidence-bazel
+bazel run @evidence_store_bazel//cmd/evidence-bazel -- watch start
+```
+
+For local development against a checkout:
+
+```starlark
+local_path_override(
+    module_name = "evidence_store_bazel",
+    path = "/path/to/evidence_store/adapters/bazel",
+)
+```
+
+### Build (inside this repo)
+
+```bash
+cd adapters/bazel
+bazel build //cmd/evidence-bazel
 ```
 
 ### Usage
 
 ```bash
-# Run tests, then ingest results
+# Run tests, then ingest results (from the adapter workspace)
 bazel test //...
-bazel run //adapters/bazel/cmd/evidence-bazel -- \
+bazel run //cmd/evidence-bazel -- \
     --api-url http://localhost:8000 \
     --testlogs-dir "$(bazel info bazel-testlogs)"
 ```
@@ -96,7 +129,7 @@ Or use the dogfood script that does both:
 
 ### Watch Mode (Automatic Ingestion)
 
-The adapter can run as a background watcher that automatically uploads test results after every `bazel test` — no changes to your build workflow needed.
+The adapter can run as a background watcher that automatically uploads test results after every `bazel test` — no changes to your build workflow needed. The commands below assume a consumer workspace with `evidence_store_bazel` added as a `bazel_dep`; replace `@evidence_store_bazel//cmd/evidence-bazel` with `//cmd/evidence-bazel` when running from inside `adapters/bazel/` in this repo.
 
 ```bash
 # One-time setup: create .evidence/config.yaml in your workspace
@@ -107,13 +140,13 @@ tags: [local, dev]
 EOF
 
 # Start the watcher (runs in background)
-bazel run //adapters/bazel/cmd/evidence-bazel -- watch start
+bazel run @evidence_store_bazel//cmd/evidence-bazel -- watch start
 
 # Check status
-bazel run //adapters/bazel/cmd/evidence-bazel -- watch status
+bazel run @evidence_store_bazel//cmd/evidence-bazel -- watch status
 
 # Stop
-bazel run //adapters/bazel/cmd/evidence-bazel -- watch stop
+bazel run @evidence_store_bazel//cmd/evidence-bazel -- watch stop
 ```
 
 The watcher polls `bazel-testlogs/` every 5 seconds, waits for Bazel to finish (lock released), then uploads only new/changed results. It reads config from `.evidence/config.yaml` and environment variables (`EVIDENCE_STORE_URL`, `EVIDENCE_STORE_API_KEY`). Logs go to `.evidence/watch.log`.

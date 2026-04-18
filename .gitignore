@@ -1,2 +1,3 @@
 /bazel-*
+/adapters/bazel/bazel-*
 .evidence/
