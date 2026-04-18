@@ -227,8 +227,10 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	response := struct {
 		Records    []model.EvidenceResponse `json:"records"`
 		NextCursor *string                  `json:"next_cursor,omitempty"`
+		Total      *int64                   `json:"total,omitempty"`
 	}{
 		NextCursor: result.NextCursor,
+		Total:      result.Total,
 	}
 
 	inherited := false

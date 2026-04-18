@@ -360,6 +360,8 @@ func TestListEvidencePagination(t *testing.T) {
 	page1 := decodeJSON[listResponse](t, resp)
 	assert.Len(t, page1.Records, 2)
 	require.NotNil(t, page1.NextCursor, "expected a next_cursor for page 1")
+	require.NotNil(t, page1.Total, "expected total on first page")
+	assert.Equal(t, int64(5), *page1.Total, "total should reflect full filtered count")
 
 	// Fetch page 2.
 	resp = getJSON(t, fmt.Sprintf("/api/v1/evidence?repo=%s&limit=2&cursor=%s", repo, *page1.NextCursor))
@@ -368,6 +370,7 @@ func TestListEvidencePagination(t *testing.T) {
 	page2 := decodeJSON[listResponse](t, resp)
 	assert.Len(t, page2.Records, 2)
 	require.NotNil(t, page2.NextCursor, "expected a next_cursor for page 2")
+	assert.Nil(t, page2.Total, "total should only be returned on first page")
 
 	// Fetch page 3 (last page, should have 1 record).
 	resp = getJSON(t, fmt.Sprintf("/api/v1/evidence?repo=%s&limit=2&cursor=%s", repo, *page2.NextCursor))
@@ -376,6 +379,7 @@ func TestListEvidencePagination(t *testing.T) {
 	page3 := decodeJSON[listResponse](t, resp)
 	assert.Len(t, page3.Records, 1)
 	assert.Nil(t, page3.NextCursor, "expected no next_cursor on last page")
+	assert.Nil(t, page3.Total, "total should only be returned on first page")
 
 	// Verify no overlap between pages.
 	allIDs := make(map[uuid.UUID]bool)
@@ -384,6 +388,26 @@ func TestListEvidencePagination(t *testing.T) {
 		allIDs[r.ID] = true
 	}
 	assert.Len(t, allIDs, 5)
+}
+
+func TestListEvidenceTotalWhenSinglePage(t *testing.T) {
+	repo := "org/single_page_" + uuid.New().String()[:8]
+
+	for range 3 {
+		ev := makeEvidence(repo, "main", "qqq111", "//pkg:only_test", "ci", model.ResultPass)
+		resp := postJSON(t, "/api/v1/evidence", ev)
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	resp := getJSON(t, fmt.Sprintf("/api/v1/evidence?repo=%s&limit=50", repo))
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	page := decodeJSON[listResponse](t, resp)
+	assert.Len(t, page.Records, 3)
+	assert.Nil(t, page.NextCursor, "no next cursor when results fit in one page")
+	require.NotNil(t, page.Total)
+	assert.Equal(t, int64(3), *page.Total)
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +597,7 @@ func TestHealthCheck(t *testing.T) {
 type listResponse struct {
 	Records    []model.EvidenceResponse `json:"records"`
 	NextCursor *string                  `json:"next_cursor"`
+	Total      *int64                   `json:"total"`
 }
 
 type inheritanceListResponse struct {

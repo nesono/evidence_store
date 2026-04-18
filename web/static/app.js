@@ -7,6 +7,7 @@ const DATETIME_FIELDS = ["finished_after", "finished_before"];
 
 let cursorStack = [];
 let currentCursor = null;
+let currentTotal = null;
 
 // --- URL State ---
 
@@ -236,10 +237,18 @@ function renderTable(records) {
   `).join("");
 }
 
-function renderSummary(count, hasMore) {
+function renderSummary(pageCount, total, hasMore) {
   const el = document.getElementById("results-summary");
+  if (total !== null && total !== undefined) {
+    if (total === pageCount) {
+      el.textContent = `${total} record${total !== 1 ? "s" : ""}`;
+    } else {
+      el.textContent = `showing ${pageCount} of ${total} records`;
+    }
+    return;
+  }
   const suffix = hasMore ? "+" : "";
-  el.textContent = `${count}${suffix} record${count !== 1 ? "s" : ""}`;
+  el.textContent = `${pageCount}${suffix} record${pageCount !== 1 ? "s" : ""}`;
 }
 
 function renderPagination(nextCursor) {
@@ -293,14 +302,23 @@ async function doSearch(filters, cursor) {
   const tbody = document.getElementById("results-body");
   tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading...</td></tr>`;
 
+  // Fresh first-page fetch invalidates any previously cached total.
+  if (!cursor) {
+    currentTotal = null;
+  }
+
   try {
     const data = await fetchEvidence(filters, cursor);
     renderTable(data.records);
-    renderSummary(data.records ? data.records.length : 0, !!data.next_cursor);
+    // The API only returns `total` on the first page; preserve it across subsequent page fetches.
+    if (data.total !== undefined && data.total !== null) {
+      currentTotal = data.total;
+    }
+    renderSummary(data.records ? data.records.length : 0, currentTotal, !!data.next_cursor);
     renderPagination(data.next_cursor || null);
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Error: ${esc(err.message)}</td></tr>`;
-    renderSummary(0, false);
+    renderSummary(0, null, false);
     renderPagination(null);
   }
 }
