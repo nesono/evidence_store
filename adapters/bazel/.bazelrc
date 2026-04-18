@@ -1,0 +1,3 @@
+# Suppress macOS ld "ignoring duplicate libraries: -lm" warnings from rules_go.
+build --host_action_env=GOFLAGS=-ldflags=-extldflags=-Wl,-no_warn_duplicate_libraries
+build --action_env=GOFLAGS=-ldflags=-extldflags=-Wl,-no_warn_duplicate_libraries

@@ -10,12 +10,12 @@ go_library(
         "watcher.go",
     ],
     importpath = "github.com/nesono/evidence-store/adapters/bazel/internal/watch",
-    visibility = ["//adapters/bazel:__subpackages__"],
+    visibility = ["//:__subpackages__"],
     deps = [
-        "//adapters/bazel/internal/client",
-        "//adapters/bazel/internal/gitinfo",
-        "//adapters/bazel/internal/junitxml",
-        "//adapters/bazel/internal/testlogs",
+        "//internal/client",
+        "//internal/gitinfo",
+        "//internal/junitxml",
+        "//internal/testlogs",
         "@in_gopkg_yaml_v3//:yaml_v3",
     ],
 )
