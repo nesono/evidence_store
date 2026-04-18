@@ -89,6 +89,7 @@ type ListParams struct {
 type ListResult struct {
 	Records    []model.Evidence `json:"records"`
 	NextCursor *string          `json:"next_cursor,omitempty"`
+	Total      *int64           `json:"total,omitempty"`
 }
 
 func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResult, error) {
@@ -165,6 +166,22 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 			where = append(where, fmt.Sprintf("metadata->>'notes' = %s", arg(val)))
 		}
 	}
+	// Count matching records before adding pagination clauses. Only done on
+	// the first page (no cursor) — subsequent pages keep the total from the
+	// first call so we don't recount on every "next page" click.
+	var total *int64
+	if params.Cursor == nil {
+		countQuery := "SELECT COUNT(*) FROM evidence"
+		if len(where) > 0 {
+			countQuery += " WHERE " + strings.Join(where, " AND ")
+		}
+		var n int64
+		if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&n); err != nil {
+			return nil, fmt.Errorf("count evidence: %w", err)
+		}
+		total = &n
+	}
+
 	if params.Cursor != nil {
 		where = append(where, fmt.Sprintf("(ingested_at, id) > (%s, %s)", arg(params.Cursor.IngestedAt), arg(params.Cursor.ID)))
 	}
@@ -194,7 +211,7 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		return nil, fmt.Errorf("iterate evidence rows: %w", err)
 	}
 
-	result := &ListResult{}
+	result := &ListResult{Total: total}
 	if len(records) > params.Limit {
 		last := records[params.Limit-1]
 		cursor := EncodeCursor(last.IngestedAt, last.ID)
