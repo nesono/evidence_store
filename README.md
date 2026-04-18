@@ -131,14 +131,22 @@ Or use the dogfood script that does both:
 
 Not all test workflows produce a JUnit `test.xml`. Failure tests (where a `bazel build` is *expected* to fail with a specific stderr pattern) and shell-driven integration tests determine pass/fail outside Bazel's test runner. For these, use the `record` subcommand to emit a single evidence record with an externally-determined verdict.
 
+From a consumer workspace that has `evidence_store_bazel` as a `bazel_dep`:
+
 ```bash
-# Manual pass/fail decision
-evidence-bazel record \
+bazel run @evidence_store_bazel//cmd/evidence-bazel -- record \
     --procedure-ref "//fire/starlark/failure_test:version_too_old_basic" \
     --result PASS \
     --notes "expected 'static_assert' pattern found in stderr" \
     --tags failure_test,version_too_old \
     --evidence-type bazel-failure-test
+```
+
+For calls in tight loops (e.g., a shell script iterating dozens of targets), suppress Bazel's UI chatter so only the CLI's output comes through:
+
+```bash
+bazel run --ui_event_filters=-info,-stdout,-stderr --noshow_progress \
+    @evidence_store_bazel//cmd/evidence-bazel -- record ...
 ```
 
 #### Flags
