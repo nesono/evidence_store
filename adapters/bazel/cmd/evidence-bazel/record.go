@@ -108,7 +108,7 @@ func buildRecord(opts recordOptions) (client.EvidenceRecord, error) {
 
 	evidenceType := opts.EvidenceType
 	if evidenceType == "" {
-		evidenceType = "bazel-manual"
+		evidenceType = "bazel_manual"
 	}
 
 	rec := client.EvidenceRecord{
@@ -150,11 +150,12 @@ func writeRecord(w io.Writer, rec client.EvidenceRecord) error {
 }
 
 func runRecord(args []string) {
-	// Resolve config defaults: .evidence/config.yaml (if present) → env vars.
-	// Command-line flags override both via flag.Parse.
+	// Resolve config defaults from .evidence/config.yaml only. Environment
+	// variables are deliberately ignored so that Bazel invocations remain
+	// analysis-cache-stable regardless of shell environment.
 	var cfgAPIURL, cfgAPIKey, cfgTags string
 	if wd := findWorkspaceDir(); wd != "" {
-		cfg, err := watch.LoadConfig(wd)
+		cfg, err := watch.LoadConfigFile(wd)
 		if err != nil {
 			slog.Warn("failed to load .evidence/config.yaml", "dir", wd, "error", err)
 		} else {
@@ -164,10 +165,6 @@ func runRecord(args []string) {
 				cfgTags = strings.Join(cfg.Tags, ",")
 			}
 		}
-	} else {
-		// No config file; fall back to env vars directly.
-		cfgAPIURL = os.Getenv("EVIDENCE_STORE_URL")
-		cfgAPIKey = os.Getenv("EVIDENCE_STORE_API_KEY")
 	}
 
 	fs := flag.NewFlagSet("record", flag.ExitOnError)
@@ -179,7 +176,7 @@ func runRecord(args []string) {
 	rcsRef := fs.String("rcs-ref", "", "RCS reference / commit hash (auto-detected from git HEAD)")
 	source := fs.String("source", "", "Source identifier: CI build URL or username (auto-detected)")
 	procedureRef := fs.String("procedure-ref", "", "Procedure / test identifier (required)")
-	evidenceType := fs.String("evidence-type", "bazel-manual", "Evidence type (e.g. bazel-failure-test)")
+	evidenceType := fs.String("evidence-type", "bazel_manual", "Evidence type (e.g. bazel_failure_test). Must match ^[a-z][a-z0-9_]{0,63}$.")
 	result := fs.String("result", "", "Result: PASS, FAIL, ERROR, or SKIPPED (required)")
 	notes := fs.String("notes", "", "Free-text context stored under metadata.notes")
 	tags := fs.String("tags", cfgTags, "Comma-separated tags stored under metadata.tags")

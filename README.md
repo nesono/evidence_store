@@ -139,14 +139,20 @@ bazel run @evidence_store_bazel//cmd/evidence-bazel -- record \
     --result PASS \
     --notes "expected 'static_assert' pattern found in stderr" \
     --tags failure_test,version_too_old \
-    --evidence-type bazel-failure-test
+    --evidence-type bazel_failure_test
 ```
 
-For calls in tight loops (e.g., a shell script iterating dozens of targets), suppress Bazel's UI chatter so only the CLI's output comes through:
+`--evidence-type` must match `^[a-z][a-z0-9_]{0,63}$` (lowercase, underscores, no hyphens).
+
+For calls in tight loops, avoid `bazel run` in the inner loop — its per-invocation configuration (and any differing `--action_env` flags on your other builds) churns the analysis cache. Build once up-front and exec the binary directly:
 
 ```bash
-bazel run --ui_event_filters=-info,-stdout,-stderr --noshow_progress \
-    @evidence_store_bazel//cmd/evidence-bazel -- record ...
+bazel build @evidence_store_bazel//cmd/evidence-bazel
+BIN="$(bazel info workspace)/$(bazel cquery --output=files @evidence_store_bazel//cmd/evidence-bazel)"
+
+for tgt in $targets; do
+    "$BIN" record --procedure-ref "$tgt" --result PASS ...
+done
 ```
 
 #### Flags
@@ -163,10 +169,10 @@ bazel run --ui_event_filters=-info,-stdout,-stderr --noshow_progress \
 | `--invocation-id` | | Group multiple records from the same run |
 | `--finished-at` | now (UTC) | RFC3339 timestamp |
 | `--repo`, `--branch`, `--rcs-ref`, `--source` | auto-detected | Same as ingest path |
-| `--api-url`, `--api-key` | `.evidence/config.yaml` → env vars | See below |
+| `--api-url`, `--api-key` | `.evidence/config.yaml` | See below |
 | `--dry-run` | `false` | Print the record as JSON instead of posting |
 
-Config resolution order (highest priority first): command-line flag → `EVIDENCE_STORE_URL` / `EVIDENCE_STORE_API_KEY` env vars → `.evidence/config.yaml` (searched upward from `BUILD_WORKSPACE_DIRECTORY` or cwd). This matches the watcher's behavior so the same config works for both.
+Config resolution order (highest priority first): command-line flag → `.evidence/config.yaml` (searched upward from `BUILD_WORKSPACE_DIRECTORY` or cwd). Environment variables are deliberately not consulted by `record`, so the binary's behavior is stable across shell-env changes and Bazel's analysis cache is not invalidated by invocations that happen to have different env.
 
 #### Example: driving failure tests from a shell script
 

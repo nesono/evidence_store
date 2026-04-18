@@ -29,7 +29,7 @@ func TestBuildRecord_Minimal(t *testing.T) {
 
 	assert.Equal(t, "nesono/evidence_store", rec.Repo)
 	assert.Equal(t, "PASS", rec.Result)
-	assert.Equal(t, "bazel-manual", rec.EvidenceType)
+	assert.Equal(t, "bazel_manual", rec.EvidenceType)
 	assert.Equal(t, "//pkg:failure_test", rec.ProcedureRef)
 	assert.Nil(t, rec.Metadata)
 
@@ -129,10 +129,10 @@ func TestBuildRecord_FinishedAtPassthrough(t *testing.T) {
 
 func TestBuildRecord_CustomEvidenceType(t *testing.T) {
 	opts := validRecordOptions()
-	opts.EvidenceType = "bazel-failure-test"
+	opts.EvidenceType = "bazel_failure_test"
 	rec, err := buildRecord(opts)
 	require.NoError(t, err)
-	assert.Equal(t, "bazel-failure-test", rec.EvidenceType)
+	assert.Equal(t, "bazel_failure_test", rec.EvidenceType)
 }
 
 func TestBuildRecord_EmptyTagsDoesNotAddKey(t *testing.T) {

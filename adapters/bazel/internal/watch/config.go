@@ -26,9 +26,10 @@ func DefaultConfig() Config {
 	}
 }
 
-// LoadConfig loads config from .evidence/config.yaml in the given workspace
-// directory, then overlays environment variables. Missing file is not an error.
-func LoadConfig(workspaceDir string) (Config, error) {
+// LoadConfigFile loads config from .evidence/config.yaml in the given
+// workspace directory. It does NOT consult environment variables, so the
+// YAML is the single source of truth. Missing file is not an error.
+func LoadConfigFile(workspaceDir string) (Config, error) {
 	cfg := DefaultConfig()
 
 	configPath := filepath.Join(workspaceDir, ".evidence", "config.yaml")
@@ -41,15 +42,6 @@ func LoadConfig(workspaceDir string) (Config, error) {
 		return cfg, fmt.Errorf("read %s: %w", configPath, err)
 	}
 
-	// Environment variables override file config.
-	if v := os.Getenv("EVIDENCE_STORE_URL"); v != "" {
-		cfg.APIURL = v
-	}
-	if v := os.Getenv("EVIDENCE_STORE_API_KEY"); v != "" {
-		cfg.APIKey = v
-	}
-
-	// Ensure defaults for durations if zero (e.g. from partial YAML).
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 5 * time.Second
 	}
@@ -57,6 +49,23 @@ func LoadConfig(workspaceDir string) (Config, error) {
 		cfg.DebounceWait = 2 * time.Second
 	}
 
+	return cfg, nil
+}
+
+// LoadConfig loads config from .evidence/config.yaml, then overlays
+// EVIDENCE_STORE_URL and EVIDENCE_STORE_API_KEY env vars. Used by the
+// watch subcommand for backwards compatibility with pre-file deployments.
+func LoadConfig(workspaceDir string) (Config, error) {
+	cfg, err := LoadConfigFile(workspaceDir)
+	if err != nil {
+		return cfg, err
+	}
+	if v := os.Getenv("EVIDENCE_STORE_URL"); v != "" {
+		cfg.APIURL = v
+	}
+	if v := os.Getenv("EVIDENCE_STORE_API_KEY"); v != "" {
+		cfg.APIKey = v
+	}
 	return cfg, nil
 }
 
