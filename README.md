@@ -155,8 +155,10 @@ evidence-bazel record \
 | `--invocation-id` | | Group multiple records from the same run |
 | `--finished-at` | now (UTC) | RFC3339 timestamp |
 | `--repo`, `--branch`, `--rcs-ref`, `--source` | auto-detected | Same as ingest path |
-| `--api-url`, `--api-key` | env vars | Same as ingest path |
+| `--api-url`, `--api-key` | `.evidence/config.yaml` → env vars | See below |
 | `--dry-run` | `false` | Print the record as JSON instead of posting |
+
+Config resolution order (highest priority first): command-line flag → `EVIDENCE_STORE_URL` / `EVIDENCE_STORE_API_KEY` env vars → `.evidence/config.yaml` (searched upward from `BUILD_WORKSPACE_DIRECTORY` or cwd). This matches the watcher's behavior so the same config works for both.
 
 #### Example: driving failure tests from a shell script
 

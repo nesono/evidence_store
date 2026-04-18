@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -147,6 +149,42 @@ func TestBuildRecord_ZeroDurationNotStored(t *testing.T) {
 	rec, err := buildRecord(opts)
 	require.NoError(t, err)
 	assert.Nil(t, rec.Metadata)
+}
+
+func TestFindWorkspaceDir_LocatesConfigFile(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, ".evidence")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("api_url: http://x\n"), 0o644))
+
+	// BUILD_WORKSPACE_DIRECTORY takes precedence.
+	t.Setenv("BUILD_WORKSPACE_DIRECTORY", root)
+	got := findWorkspaceDir()
+	// Resolve symlinks for macOS /var → /private/var.
+	gotAbs, _ := filepath.EvalSymlinks(got)
+	rootAbs, _ := filepath.EvalSymlinks(root)
+	assert.Equal(t, rootAbs, gotAbs)
+}
+
+func TestFindWorkspaceDir_WalksUpward(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".evidence"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".evidence", "config.yaml"), []byte(""), 0o644))
+
+	nested := filepath.Join(root, "a", "b", "c")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+	t.Setenv("BUILD_WORKSPACE_DIRECTORY", nested)
+
+	got := findWorkspaceDir()
+	gotAbs, _ := filepath.EvalSymlinks(got)
+	rootAbs, _ := filepath.EvalSymlinks(root)
+	assert.Equal(t, rootAbs, gotAbs)
+}
+
+func TestFindWorkspaceDir_ReturnsEmptyWhenNotFound(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("BUILD_WORKSPACE_DIRECTORY", root)
+	assert.Equal(t, "", findWorkspaceDir())
 }
 
 func TestWriteRecord_ProducesParseableJSON(t *testing.T) {

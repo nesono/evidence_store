@@ -8,12 +8,39 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/nesono/evidence-store/adapters/bazel/internal/client"
 	"github.com/nesono/evidence-store/adapters/bazel/internal/gitinfo"
+	"github.com/nesono/evidence-store/adapters/bazel/internal/watch"
 )
+
+// findWorkspaceDir returns the directory containing .evidence/config.yaml,
+// searching upward from BUILD_WORKSPACE_DIRECTORY (when set) or cwd. Returns
+// empty string when no config file is found.
+func findWorkspaceDir() string {
+	start := os.Getenv("BUILD_WORKSPACE_DIRECTORY")
+	if start == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return ""
+		}
+		start = cwd
+	}
+	dir := start
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".evidence", "config.yaml")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
 
 type recordOptions struct {
 	APIURL       string
@@ -123,10 +150,30 @@ func writeRecord(w io.Writer, rec client.EvidenceRecord) error {
 }
 
 func runRecord(args []string) {
+	// Resolve config defaults: .evidence/config.yaml (if present) → env vars.
+	// Command-line flags override both via flag.Parse.
+	var cfgAPIURL, cfgAPIKey, cfgTags string
+	if wd := findWorkspaceDir(); wd != "" {
+		cfg, err := watch.LoadConfig(wd)
+		if err != nil {
+			slog.Warn("failed to load .evidence/config.yaml", "dir", wd, "error", err)
+		} else {
+			cfgAPIURL = cfg.APIURL
+			cfgAPIKey = cfg.APIKey
+			if len(cfg.Tags) > 0 {
+				cfgTags = strings.Join(cfg.Tags, ",")
+			}
+		}
+	} else {
+		// No config file; fall back to env vars directly.
+		cfgAPIURL = os.Getenv("EVIDENCE_STORE_URL")
+		cfgAPIKey = os.Getenv("EVIDENCE_STORE_API_KEY")
+	}
+
 	fs := flag.NewFlagSet("record", flag.ExitOnError)
 
-	apiURL := fs.String("api-url", envOrDefault("EVIDENCE_STORE_URL", ""), "Evidence Store API base URL (required unless --dry-run)")
-	apiKey := fs.String("api-key", envOrDefault("EVIDENCE_STORE_API_KEY", ""), "API key for authentication (optional)")
+	apiURL := fs.String("api-url", cfgAPIURL, "Evidence Store API base URL (required unless --dry-run)")
+	apiKey := fs.String("api-key", cfgAPIKey, "API key for authentication (optional)")
 	repo := fs.String("repo", "", "Repository identifier (auto-detected from git remote)")
 	branch := fs.String("branch", "", "Branch name (auto-detected from git)")
 	rcsRef := fs.String("rcs-ref", "", "RCS reference / commit hash (auto-detected from git HEAD)")
@@ -135,7 +182,7 @@ func runRecord(args []string) {
 	evidenceType := fs.String("evidence-type", "bazel-manual", "Evidence type (e.g. bazel-failure-test)")
 	result := fs.String("result", "", "Result: PASS, FAIL, ERROR, or SKIPPED (required)")
 	notes := fs.String("notes", "", "Free-text context stored under metadata.notes")
-	tags := fs.String("tags", "", "Comma-separated tags stored under metadata.tags")
+	tags := fs.String("tags", cfgTags, "Comma-separated tags stored under metadata.tags")
 	durationMS := fs.Int64("duration-ms", 0, "Duration in milliseconds (optional)")
 	metadataJSON := fs.String("metadata", "", "JSON object of arbitrary metadata to merge")
 	invocationID := fs.String("invocation-id", "", "Bazel invocation ID (optional)")
