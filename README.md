@@ -220,6 +220,23 @@ The watcher polls `bazel-testlogs/` every 5 seconds, waits for Bazel to finish (
 
 Use `--foreground` with `watch start` to run in the foreground (useful for debugging).
 
+### Releasing to the Bazel Central Registry
+
+The adapter module (`evidence_store_bazel`) is published to the [Bazel Central Registry](https://registry.bazel.build/) so consumers can pin it via `bazel_dep` without a `git_override`.
+
+**Release flow:**
+
+1. Bump `version` in `adapters/bazel/MODULE.bazel`.
+2. Commit and merge to `main`.
+3. Tag the commit with `evidence_store_bazel-v<version>` (e.g., `evidence_store_bazel-v0.0.1`) and push the tag.
+4. The `Release evidence_store_bazel` workflow (`.github/workflows/release-bazel-adapter.yml`) builds a source tarball of `adapters/bazel/`, creates a GitHub release, then calls the [`bazel-contrib/publish-to-bcr`](https://github.com/bazel-contrib/publish-to-bcr) reusable workflow to open a PR against [`bazelbuild/bazel-central-registry`](https://github.com/bazelbuild/bazel-central-registry) from the fork configured in the workflow.
+
+**One-time setup (before the first release):**
+
+- Fork `bazelbuild/bazel-central-registry` to `nesono/bazel-central-registry`.
+- Create a classic Personal Access Token with `public_repo` scope and save it as the `BCR_PUBLISH_TOKEN` repository secret.
+- BCR templates live in `.bcr/` at the repo root; `.bcr/config.yml` declares `adapters/bazel` as the module root.
+
 ## API
 
 Base URL: `/api/v1`

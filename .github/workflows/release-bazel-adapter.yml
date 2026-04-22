@@ -1,0 +1,68 @@
+name: Release evidence_store_bazel
+
+on:
+  push:
+    tags:
+      - "evidence_store_bazel-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+      prefix: ${{ steps.vars.outputs.prefix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version vars
+        id: vars
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#evidence_store_bazel-v}"
+          PREFIX="evidence_store_bazel-v${VERSION}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
+
+      - name: Build source tarball
+        run: |
+          set -euo pipefail
+          PREFIX="${{ steps.vars.outputs.prefix }}"
+          mkdir -p "staging/${PREFIX}"
+          rsync -a \
+            --exclude 'bazel-*' \
+            adapters/bazel/ "staging/${PREFIX}/"
+          tar -C staging \
+            --sort=name \
+            --owner=0 --group=0 --numeric-owner \
+            -czf "${PREFIX}.tar.gz" "${PREFIX}"
+          sha256sum "${PREFIX}.tar.gz"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: evidence_store_bazel ${{ steps.vars.outputs.version }}
+          files: ${{ steps.vars.outputs.prefix }}.tar.gz
+          generate_release_notes: true
+
+  publish:
+    needs: release
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+    uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@main
+    with:
+      tag_name: ${{ needs.release.outputs.tag }}
+      tag_prefix: evidence_store_bazel-v
+      registry_fork: nesono/bazel-central-registry
+      attest: false
+      download_default_release_artifacts: false
+    secrets:
+      publish_token: ${{ secrets.BCR_PUBLISH_TOKEN }}
