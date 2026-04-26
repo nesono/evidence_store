@@ -39,6 +39,13 @@
     {
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Postgres: minor/patch/digest updates are fine. Block routine major upgrades (data migration is costly); a vulnerability alert can still drive one if needed via vulnerabilityAlerts.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ],
   "vulnerabilityAlerts": {
