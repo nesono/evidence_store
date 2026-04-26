@@ -1,0 +1,6 @@
+moduleRoots:
+  - adapters/bazel
+
+fixedReleaser:
+  login: nesono
+  email: github@nesono.com
