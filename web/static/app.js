@@ -336,6 +336,7 @@ document.getElementById("filter-form").addEventListener("submit", (e) => {
 document.getElementById("clear-filters").addEventListener("click", () => {
   const form = document.getElementById("filter-form");
   form.reset();
+  form.querySelectorAll("input[data-utc-preview]").forEach(updateUtcPreview);
   cursorStack = [];
   writeFiltersToURL({});
   document.getElementById("results-body").innerHTML =
@@ -513,8 +514,36 @@ function readCustomFields() {
 }
 
 document.getElementById("fill-now").addEventListener("click", () => {
-  document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
+  const input = document.querySelector('#add-form [name="finished_at"]');
+  input.value = formatTime(new Date().toISOString());
+  updateUtcPreview(input);
 });
+
+function updateUtcPreview(input) {
+  const preview = document.querySelector(`.utc-preview[data-preview-for="${input.name}"]`);
+  if (!preview) return;
+  const raw = input.value.trim();
+  if (!raw) {
+    preview.textContent = "";
+    preview.classList.remove("utc-preview-error");
+    return;
+  }
+  const d = parseUserDateTime(raw);
+  if (!d) {
+    preview.textContent = "unparseable — expected e.g. 2026-03-30 14:00";
+    preview.classList.add("utc-preview-error");
+    return;
+  }
+  preview.textContent = `= ${formatTime(d.toISOString())} UTC`;
+  preview.classList.remove("utc-preview-error");
+}
+
+function wireUtcPreviews() {
+  document.querySelectorAll("input[data-utc-preview]").forEach(input => {
+    input.addEventListener("input", () => updateUtcPreview(input));
+    updateUtcPreview(input);
+  });
+}
 
 document.getElementById("add-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -845,6 +874,7 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
   const filters = readFiltersFromURL();
   populateFormFromFilters(filters);
+  wireUtcPreviews();
 
   const hasFilters = Object.keys(filters).some(k => k !== "detail" && k !== "cursor");
   if (hasFilters) {

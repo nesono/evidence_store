@@ -414,6 +414,19 @@
     cursor: default;
 }
 
+.utc-preview {
+    display: block;
+    min-height: 1.2em;
+    margin-top: 0.15em;
+    color: var(--pico-muted-color);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8em;
+}
+
+.utc-preview-error {
+    color: var(--pico-del-color, #c0392b);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     #results-table th:nth-child(n+5),

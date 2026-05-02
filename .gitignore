@@ -1,3 +1,4 @@
 /bazel-*
 /adapters/bazel/bazel-*
 .evidence/
+/.claude/
