@@ -159,6 +159,23 @@ async function fetchEvidenceById(id) {
   return resp.json();
 }
 
+const DATALIST_FIELDS = [
+  { field: "repo",          listId: "repos-list" },
+  { field: "evidence_type", listId: "evidence-types-list" },
+  { field: "source",        listId: "sources-list" },
+];
+
+async function refreshDatalists() {
+  await Promise.all(DATALIST_FIELDS.map(async ({ field, listId }) => {
+    const resp = await apiFetch(`${API_BASE}/evidence/distinct?field=${field}&limit=500`);
+    if (!resp.ok) return;
+    const { values } = await resp.json();
+    const list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML = (values || []).map(v => `<option value="${esc(v)}"></option>`).join("");
+  }));
+}
+
 const HEALTH_POLL_MS = 5000;
 
 async function checkHealth() {
@@ -463,6 +480,7 @@ async function submitEvidence(andAnother) {
       feedback.innerHTML = `<p class="feedback-error">${esc(msg)}</p>`;
       return;
     }
+    refreshDatalists();
     if (andAnother) {
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code></p>`;
       form.querySelector('[name="result"]:checked').checked = false;
@@ -871,6 +889,7 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
   startHealthPolling();
   updateAuthUI();
   refreshTemplateDropdown();
+  refreshDatalists();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
   const filters = readFiltersFromURL();
   populateFormFromFilters(filters);

@@ -113,6 +113,34 @@ func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, model.BatchResponse{Results: results})
 }
 
+// Distinct returns up to `limit` distinct values of a whitelisted field
+// (`repo`, `evidence_type`, `source`), optionally filtered by `q` substring.
+// Powers the editable combo boxes in the UI.
+func (h *EvidenceHandler) Distinct(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	field := q.Get("field")
+	if field == "" {
+		writeError(w, http.StatusBadRequest, "field parameter is required")
+		return
+	}
+
+	limit := 100
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
+			limit = n
+		}
+	}
+
+	values, err := h.evidence.Distinct(r.Context(), field, q.Get("q"), limit)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string][]string{"values": values})
+}
+
 func (h *EvidenceHandler) Get(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
