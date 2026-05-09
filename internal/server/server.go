@@ -51,6 +51,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 		r.Post("/evidence", evidenceAPI.Create)
 		r.Post("/evidence/batch", evidenceAPI.CreateBatch)
 		r.Get("/evidence", evidenceAPI.List)
+		r.Get("/evidence/distinct", evidenceAPI.Distinct)
 		r.Get("/evidence/{id}", evidenceAPI.Get)
 
 		r.Post("/inheritance", inheritanceAPI.Create)

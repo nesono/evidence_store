@@ -251,6 +251,59 @@ func scanEvidenceRow(rows pgx.Rows) (*model.Evidence, error) {
 	return &e, nil
 }
 
+// distinctFields are the columns that may be queried via Distinct.
+// Whitelisted to prevent SQL injection — the field name is interpolated directly.
+var distinctFields = map[string]bool{
+	"repo":          true,
+	"evidence_type": true,
+	"source":        true,
+}
+
+// Distinct returns up to `limit` distinct values for the given column,
+// optionally filtered by a case-insensitive substring match against `query`.
+// Returns an error if the field is not in the whitelist.
+func (s *EvidenceStore) Distinct(ctx context.Context, field, query string, limit int) ([]string, error) {
+	if !distinctFields[field] {
+		return nil, fmt.Errorf("field %q is not queryable for distinct values", field)
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var (
+		where string
+		args  []any
+	)
+	if query != "" {
+		where = fmt.Sprintf(" WHERE %s ILIKE $1", field)
+		args = []any{"%" + query + "%"}
+	}
+
+	sql := fmt.Sprintf(
+		"SELECT DISTINCT %s FROM evidence%s ORDER BY %s LIMIT %d",
+		field, where, field, limit,
+	)
+
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query distinct %s: %w", field, err)
+	}
+	defer rows.Close()
+
+	values := make([]string, 0)
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("scan distinct row: %w", err)
+		}
+		values = append(values, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate distinct rows: %w", err)
+	}
+	return values, nil
+}
+
 // DeleteBatch deletes evidence records by IDs and returns the number of rows deleted.
 func (s *EvidenceStore) DeleteBatch(ctx context.Context, ids []uuid.UUID) (int64, error) {
 	if len(ids) == 0 {

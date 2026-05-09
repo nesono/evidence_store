@@ -38,7 +38,7 @@
             <form id="add-form">
                 <div class="grid">
                     <label>Repo <small>(required)</small>
-                        <input type="text" name="repo" placeholder="org/repo" required>
+                        <input type="text" name="repo" placeholder="org/repo" list="repos-list" required>
                     </label>
                     <label>Branch
                         <input type="text" name="branch" placeholder="main">
@@ -52,10 +52,10 @@
                         <input type="text" name="procedure_ref" placeholder="manual/login-flow" required>
                     </label>
                     <label>Evidence type <small>(required)</small>
-                        <input type="text" name="evidence_type" value="manual" required>
+                        <input type="text" name="evidence_type" value="manual" list="evidence-types-list" required>
                     </label>
                     <label>Source <small>(required)</small>
-                        <input type="text" name="source" placeholder="your name" required>
+                        <input type="text" name="source" placeholder="your name" list="sources-list" required>
                     </label>
                 </div>
                 <div class="grid">
@@ -99,13 +99,13 @@
             <form id="filter-form">
                 <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
                 <div class="grid">
-                    <label>Repo <input type="text" name="repo" placeholder="org/repo or ~^org/.*"></label>
+                    <label>Repo <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list"></label>
                     <label>Branch <input type="text" name="branch" placeholder="main or ~^release/.*"></label>
                     <label>Commit <input type="text" name="rcs_ref" placeholder="abc123..."></label>
                 </div>
                 <div class="grid">
-                    <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$"></label>
-                    <label>Source <input type="text" name="source" placeholder="CI URL or user"></label>
+                    <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$" list="evidence-types-list"></label>
+                    <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
                     <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                 </div>
                 <div class="grid">
@@ -190,6 +190,10 @@
             </article>
         </dialog>
     </main>
+
+    <datalist id="repos-list"></datalist>
+    <datalist id="evidence-types-list"></datalist>
+    <datalist id="sources-list"></datalist>
 
     <script type="module" src="app.js"></script>
 </body>
