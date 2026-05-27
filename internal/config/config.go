@@ -21,6 +21,21 @@ type Config struct {
 	MaxBatchSize    int
 	LogLevel        string
 	APIKeys         []APIKey
+	RateLimit       RateLimit
+}
+
+// RateLimit configures per-caller token-bucket limits. Zero RPS disables
+// the corresponding bucket. Burst defaults to 2× RPS when unset.
+type RateLimit struct {
+	ReadRPS    float64
+	ReadBurst  int
+	WriteRPS   float64
+	WriteBurst int
+}
+
+// Enabled reports whether any rate limiting is configured.
+func (r RateLimit) Enabled() bool {
+	return r.ReadRPS > 0 || r.WriteRPS > 0
 }
 
 func Load() (*Config, error) {
@@ -43,6 +58,19 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("EVIDENCE_API_KEYS: %w", err)
 		}
 		cfg.APIKeys = keys
+	}
+
+	cfg.RateLimit = RateLimit{
+		ReadRPS:    envOrDefaultFloat("EVIDENCE_RATE_LIMIT_READ_RPS", 0),
+		WriteRPS:   envOrDefaultFloat("EVIDENCE_RATE_LIMIT_WRITE_RPS", 0),
+		ReadBurst:  envOrDefaultInt("EVIDENCE_RATE_LIMIT_READ_BURST", 0),
+		WriteBurst: envOrDefaultInt("EVIDENCE_RATE_LIMIT_WRITE_BURST", 0),
+	}
+	if cfg.RateLimit.ReadRPS > 0 && cfg.RateLimit.ReadBurst == 0 {
+		cfg.RateLimit.ReadBurst = max(int(cfg.RateLimit.ReadRPS*2), 1)
+	}
+	if cfg.RateLimit.WriteRPS > 0 && cfg.RateLimit.WriteBurst == 0 {
+		cfg.RateLimit.WriteBurst = max(int(cfg.RateLimit.WriteRPS*2), 1)
 	}
 
 	return cfg, nil
@@ -84,6 +112,15 @@ func envOrDefaultInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envOrDefaultFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return fallback

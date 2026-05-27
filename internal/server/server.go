@@ -13,6 +13,7 @@ import (
 	"github.com/nesono/evidence-store/internal/api"
 	"github.com/nesono/evidence-store/internal/auth"
 	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/ratelimit"
 	"github.com/nesono/evidence-store/internal/store"
 	"github.com/nesono/evidence-store/web"
 )
@@ -47,6 +48,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.APIKeys))
+		r.Use(ratelimit.Middleware(cfg.RateLimit))
 
 		r.Post("/evidence", evidenceAPI.Create)
 		r.Post("/evidence/batch", evidenceAPI.CreateBatch)
