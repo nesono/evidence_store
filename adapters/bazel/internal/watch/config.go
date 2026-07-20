@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Config holds watch mode configuration.
 type Config struct {
-	APIURL       string        `yaml:"api_url"`
-	APIKey       string        `yaml:"api_key"`
-	Tags         []string      `yaml:"tags"`
-	PollInterval time.Duration `yaml:"poll_interval"`
-	DebounceWait time.Duration `yaml:"debounce_wait"`
+	APIURL       string
+	APIKey       string
+	Tags         []string
+	PollInterval time.Duration
+	DebounceWait time.Duration
 }
 
 // DefaultConfig returns a config with sensible defaults.
@@ -35,7 +34,7 @@ func LoadConfigFile(workspaceDir string) (Config, error) {
 	configPath := filepath.Join(workspaceDir, ".evidence", "config.yaml")
 	data, err := os.ReadFile(configPath)
 	if err == nil {
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+		if err := parseConfig(data, &cfg); err != nil {
 			return cfg, fmt.Errorf("parse %s: %w", configPath, err)
 		}
 	} else if !os.IsNotExist(err) {
@@ -50,6 +49,68 @@ func LoadConfigFile(workspaceDir string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseConfig(data []byte, cfg *Config) error {
+	for lineNo, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return fmt.Errorf("line %d: expected key: value", lineNo+1)
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+
+		switch key {
+		case "api_url":
+			cfg.APIURL = unquote(value)
+		case "api_key":
+			cfg.APIKey = unquote(value)
+		case "tags":
+			cfg.Tags = parseTags(value)
+		case "poll_interval":
+			duration, err := time.ParseDuration(unquote(value))
+			if err != nil {
+				return fmt.Errorf("line %d: invalid poll_interval: %w", lineNo+1, err)
+			}
+			cfg.PollInterval = duration
+		case "debounce_wait":
+			duration, err := time.ParseDuration(unquote(value))
+			if err != nil {
+				return fmt.Errorf("line %d: invalid debounce_wait: %w", lineNo+1, err)
+			}
+			cfg.DebounceWait = duration
+		default:
+			return fmt.Errorf("line %d: unknown key %q", lineNo+1, key)
+		}
+	}
+	return nil
+}
+
+func parseTags(value string) []string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		value = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(value, "["), "]"))
+	}
+	if value == "" {
+		return nil
+	}
+
+	var tags []string
+	for _, tag := range strings.Split(value, ",") {
+		if tag = unquote(strings.TrimSpace(tag)); tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+	return tags
+}
+
+func unquote(value string) string {
+	return strings.Trim(strings.TrimSpace(value), `"'`)
 }
 
 // LoadConfig loads config from .evidence/config.yaml, then overlays

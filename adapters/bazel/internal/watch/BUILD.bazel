@@ -16,7 +16,6 @@ go_library(
         "//internal/gitinfo",
         "//internal/junitxml",
         "//internal/testlogs",
-        "@in_gopkg_yaml_v3//:yaml_v3",
     ],
 )
 
