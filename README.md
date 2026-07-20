@@ -24,6 +24,10 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_MAX_PAGE_SIZE` | `1000` | Max page size |
 | `EVIDENCE_MAX_BATCH_SIZE` | `1000` | Max records per batch |
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
+| `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
+| `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
+| `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
+| `EVIDENCE_RATE_LIMIT_WRITE_BURST` | `2 × write RPS` | Token-bucket burst capacity for writes |
 
 ### Authentication
 
@@ -52,6 +56,20 @@ curl -H "Authorization: Bearer my-secret-key" \
 ```
 
 The Bazel adapter supports this via `--api-key` or `EVIDENCE_STORE_API_KEY`. The web UI prompts for a key on first 401 and stores it in `localStorage`.
+
+### Rate limiting
+
+Set `EVIDENCE_RATE_LIMIT_READ_RPS` and/or `EVIDENCE_RATE_LIMIT_WRITE_RPS` to enforce per-caller token-bucket limits on `/api/v1/*` endpoints. Reads (GET/HEAD/OPTIONS) and writes (POST/PUT/PATCH/DELETE) use separate buckets so a flood of reads cannot starve writes.
+
+```bash
+# 50 reads/sec sustained (burst 100), 10 writes/sec sustained (burst 20).
+export EVIDENCE_RATE_LIMIT_READ_RPS=50
+export EVIDENCE_RATE_LIMIT_WRITE_RPS=10
+```
+
+- Authenticated callers are bucketed by API key; unauthenticated callers by IP (`X-Forwarded-For` honored).
+- When a limit is exceeded the server returns `429 Too Many Requests` with a `Retry-After` header (seconds).
+- Limits are in-memory and per process — deployments running multiple replicas should add a shared limiter (e.g. Redis) if precise global enforcement is required.
 
 ## Bazel Adapter
 
