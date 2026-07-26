@@ -102,16 +102,19 @@
                     <label class="fb-field fb-field-commit">Commit
                         <input type="text" name="rcs_ref" placeholder="abc123...">
                     </label>
-                    <!-- A div rather than a fieldset: a legend always renders on its own
-                         line, which is the vertical space this bar is trying to save.
-                         role/aria-label keeps the grouping for assistive tech. -->
-                    <div class="fb-results" role="group" aria-label="Result">
-                        <span class="fb-group-label">Result</span>
-                        <label><input type="checkbox" name="result" value="PASS"> PASS</label>
-                        <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>
-                        <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
-                        <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
-                    </div>
+                    <!-- A checkbox dropdown. There is no native HTML control for this:
+                         <select multiple> renders as an always-expanded list box, not a
+                         dropdown. <details> gives the disclosure behaviour for free; the
+                         checkboxes stay in the form, so reading the filter is unchanged. -->
+                    <details class="fb-dropdown" id="result-dropdown">
+                        <summary id="result-summary" role="button" aria-label="Result filter">Result</summary>
+                        <div class="fb-dropdown-menu" role="group" aria-label="Result">
+                            <label><input type="checkbox" name="result" value="PASS"> PASS</label>
+                            <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>
+                            <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
+                            <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
+                        </div>
+                    </details>
                     <div class="fb-actions">
                         <button type="submit">Search</button>
                         <button type="button" class="secondary" id="clear-filters">Clear</button>

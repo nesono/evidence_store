@@ -108,39 +108,96 @@
     margin-bottom: 0;
 }
 
-/* Repo is the only field that benefits from extra room, so it takes the slack. */
-#filter-bar .fb-field-repo {
-    flex: 1 1 16em;
-    min-width: 9em;
+/* Both inputs are sized in `ch`, which is the width of the element's own "0"
+   glyph — so 40ch of the monospace commit field is exactly a 40-character hash.
+   Repo is proportional, so its 40ch renders a little narrower. Neither grows:
+   both hold identifiers of bounded length. Longer values (full hashes, or `~`
+   regex filters — which is why there is no maxlength) scroll. */
+#filter-bar .fb-field-repo input,
+#filter-bar .fb-field-commit input {
+    flex: 0 0 auto;
+    width: 40ch;
 }
 
-/* A revision hash has a bounded length, so this field never needs to grow.
-   Sized for a comfortable prefix; full-length hashes and `~` regexes still fit,
-   they just scroll — hence no maxlength. */
 #filter-bar .fb-field-commit input {
-    flex: 0 0 13em;
-    width: 13em;
     font-family: monospace;
 }
 
-#filter-bar .fb-results {
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-    flex: 0 0 auto;
-}
-
-#filter-bar .fb-results label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25em;
-    margin: 0;
-    white-space: nowrap;
-}
-
-#filter-bar .fb-group-label,
 #filter-bar .fb-field {
     color: var(--pico-muted-color);
+}
+
+/* Result dropdown */
+#filter-bar .fb-dropdown {
+    position: relative;
+    flex: 0 0 auto;
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+
+#filter-bar .fb-dropdown > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.25em 0.6em;
+    margin: 0;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    background: none;
+    color: var(--pico-color);
+    font-size: 1em;
+    font-weight: normal;
+    line-height: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+}
+
+/* Replace both marker implementations with one caret we control. */
+#filter-bar .fb-dropdown > summary::-webkit-details-marker { display: none; }
+#filter-bar .fb-dropdown > summary::marker { content: ""; }
+
+#filter-bar .fb-dropdown > summary::after {
+    content: "";
+    border: 0.3em solid transparent;
+    border-top-color: currentColor;
+    margin-top: 0.3em;
+    transform: none;
+    width: 0;
+    height: 0;
+    background: none;
+}
+
+#filter-bar .fb-dropdown[open] > summary::after {
+    margin-top: -0.3em;
+    border-top-color: transparent;
+    border-bottom-color: currentColor;
+}
+
+#filter-bar .fb-dropdown-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.25em);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    min-width: 100%;
+    padding: 0.5em 0.7em;
+    background: var(--pico-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+#filter-bar .fb-dropdown-menu label {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin: 0;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
 #filter-bar .fb-actions {

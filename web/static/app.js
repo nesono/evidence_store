@@ -151,6 +151,23 @@ function activeAdvancedCount(filters) {
   return n;
 }
 
+// The result checkboxes live in a closed dropdown most of the time, so the
+// summary has to say what is selected — otherwise an active filter is invisible.
+function refreshResultSummary() {
+  const selected = Array.from(
+    document.querySelectorAll('#result-dropdown [name="result"]:checked')
+  ).map(cb => cb.value);
+
+  const summary = document.getElementById("result-summary");
+  if (selected.length === 0) {
+    summary.textContent = "Result";
+  } else if (selected.length === 1) {
+    summary.textContent = `Result: ${selected[0]}`;
+  } else {
+    summary.textContent = `Result: ${selected.length} selected`;
+  }
+}
+
 function advancedExpanded() {
   return document.getElementById("toggle-advanced").getAttribute("aria-expanded") === "true";
 }
@@ -535,11 +552,33 @@ document.getElementById("clear-filters").addEventListener("click", () => {
   const form = document.getElementById("filter-form");
   form.reset();
   form.querySelectorAll("input[data-utc-preview]").forEach(updateUtcPreview);
+  refreshResultSummary();
   search();
 });
 
 document.getElementById("toggle-advanced").addEventListener("click", () => {
   setAdvancedExpanded(!advancedExpanded());
+});
+
+// --- Result dropdown ---
+
+const resultDropdown = document.getElementById("result-dropdown");
+
+resultDropdown.addEventListener("change", refreshResultSummary);
+
+// <details> has no dismiss behaviour of its own, so closing on an outside click
+// and on Escape has to be wired up.
+document.addEventListener("click", (e) => {
+  if (resultDropdown.open && !resultDropdown.contains(e.target)) {
+    resultDropdown.open = false;
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && resultDropdown.open) {
+    resultDropdown.open = false;
+    resultDropdown.querySelector("summary").focus();
+  }
 });
 
 document.getElementById("first-window").addEventListener("click", () => moveWindow(0));
@@ -615,6 +654,7 @@ window.addEventListener("popstate", () => {
 // Reflects URL-derived state into the form and the window controls.
 function applyURLState(filters) {
   populateFormFromFilters(filters);
+  refreshResultSummary();
   document.getElementById("window-size").value = String(windowSize);
   // A deep link carrying an advanced filter opens the panel, so the constraint
   // that is shaping the results is never invisible.
