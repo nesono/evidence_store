@@ -716,6 +716,13 @@ body > main {
     cursor: default;
 }
 
+/* Only the After/Before labels carry a preview, so reserving a line for an empty
+   one made the middle row of the advanced grid taller than its neighbours. It
+   takes no space until it has something to report. */
+.utc-preview:empty {
+    display: none;
+}
+
 .utc-preview {
     display: block;
     min-height: 1.2em;
