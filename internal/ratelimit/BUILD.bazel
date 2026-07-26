@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ratelimit",
+    srcs = ["ratelimit.go"],
+    importpath = "github.com/nesono/evidence-store/internal/ratelimit",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "@org_golang_x_time//rate",
+    ],
+)
+
+go_test(
+    name = "ratelimit_test",
+    srcs = ["ratelimit_test.go"],
+    embed = [":ratelimit"],
+    deps = [
+        "//internal/config",
+        "@com_github_stretchr_testify//assert",
+    ],
+)
