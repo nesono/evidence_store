@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "analytics",
+    srcs = [
+        "metrics.go",
+        "stats.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/analytics",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "analytics_test",
+    srcs = [
+        "metrics_test.go",
+        "stats_test.go",
+    ],
+    embed = [":analytics"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

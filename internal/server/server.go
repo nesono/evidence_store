@@ -45,6 +45,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 
 	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
+	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.APIKeys))
@@ -58,6 +59,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 
 		r.Post("/inheritance", inheritanceAPI.Create)
 		r.Get("/inheritance", inheritanceAPI.List)
+
+		r.Get("/analytics/summary", analyticsAPI.Summary)
+		r.Get("/analytics/tests", analyticsAPI.Tests)
 	})
 
 	r.Handle("/*", web.StaticHandler())
