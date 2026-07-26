@@ -107,7 +107,10 @@
                          dropdown. <details> gives the disclosure behaviour for free; the
                          checkboxes stay in the form, so reading the filter is unchanged. -->
                     <details class="fb-dropdown" id="result-dropdown">
-                        <summary id="result-summary" role="button" aria-label="Result filter">Result</summary>
+                        <!-- No role="button": <summary> is already a disclosure control,
+                             and the role both replaces those semantics and drags in
+                             Pico's button colours. -->
+                        <summary><span id="result-summary">All Results</span></summary>
                         <div class="fb-dropdown-menu" role="group" aria-label="Result">
                             <label><input type="checkbox" name="result" value="PASS"> PASS</label>
                             <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>

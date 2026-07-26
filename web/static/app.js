@@ -151,6 +151,10 @@ function activeAdvancedCount(filters) {
   return n;
 }
 
+// Initials keep the closed control narrow; the full names go in the tooltip so
+// the abbreviation is never the only way to read the filter.
+const RESULT_INITIALS = { PASS: "P", FAIL: "F", ERROR: "E", SKIPPED: "S" };
+
 // The result checkboxes live in a closed dropdown most of the time, so the
 // summary has to say what is selected — otherwise an active filter is invisible.
 function refreshResultSummary() {
@@ -158,14 +162,14 @@ function refreshResultSummary() {
     document.querySelectorAll('#result-dropdown [name="result"]:checked')
   ).map(cb => cb.value);
 
-  const summary = document.getElementById("result-summary");
+  const label = document.getElementById("result-summary");
   if (selected.length === 0) {
-    summary.textContent = "Result";
-  } else if (selected.length === 1) {
-    summary.textContent = `Result: ${selected[0]}`;
-  } else {
-    summary.textContent = `Result: ${selected.length} selected`;
+    label.textContent = "All Results";
+    label.closest("summary").title = "Filter by result (all results shown)";
+    return;
   }
+  label.textContent = selected.map(v => RESULT_INITIALS[v] || v).join(", ");
+  label.closest("summary").title = selected.join(", ");
 }
 
 function advancedExpanded() {

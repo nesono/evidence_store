@@ -151,13 +151,23 @@
     border: 1px solid var(--pico-muted-border-color);
     border-radius: 4px;
     background: none;
-    color: var(--pico-color);
+    /* `inherit`, not var(--pico-color): that variable is reassigned by several
+       Pico component rules, and picking up the wrong one renders the label in a
+       colour meant for a filled background. */
+    color: inherit;
     font-size: 1em;
     font-weight: normal;
     line-height: inherit;
     white-space: nowrap;
     cursor: pointer;
     list-style: none;
+}
+
+/* Pinned width, so selecting results doesn't resize the control and shove the
+   buttons beside it around. Fits the longest label, "All Results". */
+#filter-bar .fb-dropdown > summary > span {
+    display: inline-block;
+    min-width: 11ch;
 }
 
 /* Replace both marker implementations with one caret we control. */
