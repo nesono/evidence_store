@@ -541,14 +541,16 @@ func TestEvidenceQueryWithInheritance(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	resp.Body.Close()
 
-	// Query for target_commit — should include inherited evidence.
+	// Query for target_commit — the inherited evidence is reported separately from
+	// the paginated window so it cannot distort the window's range or total.
 	resp = getJSON(t, fmt.Sprintf("/api/v1/evidence?repo=%s&rcs_ref=target_commit", repo))
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	result := decodeJSON[listResponse](t, resp)
-	require.Len(t, result.Records, 1)
-	assert.True(t, *result.Records[0].Inherited)
-	assert.NotNil(t, result.Records[0].InheritanceDeclaration)
+	assert.Empty(t, result.Records, "no evidence was recorded directly against target_commit")
+	require.Len(t, result.InheritedRecords, 1)
+	assert.True(t, *result.InheritedRecords[0].Inherited)
+	assert.NotNil(t, result.InheritedRecords[0].InheritanceDeclaration)
 }
 
 func TestEvidenceQueryWithoutInheritance(t *testing.T) {
@@ -578,6 +580,7 @@ func TestEvidenceQueryWithoutInheritance(t *testing.T) {
 
 	result := decodeJSON[listResponse](t, resp)
 	assert.Empty(t, result.Records)
+	assert.Empty(t, result.InheritedRecords)
 }
 
 // ---------------------------------------------------------------------------
@@ -595,9 +598,10 @@ func TestHealthCheck(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type listResponse struct {
-	Records    []model.EvidenceResponse `json:"records"`
-	NextCursor *string                  `json:"next_cursor"`
-	Total      *int64                   `json:"total"`
+	Records          []model.EvidenceResponse `json:"records"`
+	InheritedRecords []model.EvidenceResponse `json:"inherited_records"`
+	NextCursor       *string                  `json:"next_cursor"`
+	Total            *int64                   `json:"total"`
 }
 
 type inheritanceListResponse struct {

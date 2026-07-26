@@ -84,6 +84,36 @@ type ListParams struct {
 	Filter model.EvidenceFilter
 	Cursor *Cursor
 	Limit  int
+	// Offset skips the first N matching rows. Only meaningful when Cursor is nil —
+	// the two are different pagination modes and the API rejects their combination.
+	Offset int
+	// Sort names the column to order by; empty means the default (ingested_at ASC).
+	// Must be a member of sortColumns.
+	Sort string
+	Desc bool
+	// WithTotal requests a COUNT(*) of all matching rows. Callers paging through a
+	// result set should set it only on the first request and cache the answer.
+	WithTotal bool
+}
+
+// sortColumns are the columns that may be used as an ORDER BY key. Whitelisted
+// because the column name is interpolated directly into the query, the same
+// approach used by distinctFields.
+var sortColumns = map[string]bool{
+	"repo":          true,
+	"branch":        true,
+	"rcs_ref":       true,
+	"procedure_ref": true,
+	"evidence_type": true,
+	"source":        true,
+	"result":        true,
+	"finished_at":   true,
+	"ingested_at":   true,
+}
+
+// IsSortable reports whether column may be used as a sort key.
+func IsSortable(column string) bool {
+	return sortColumns[column]
 }
 
 type ListResult struct {
@@ -166,11 +196,11 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 			where = append(where, fmt.Sprintf("metadata->>'notes' = %s", arg(val)))
 		}
 	}
-	// Count matching records before adding pagination clauses. Only done on
-	// the first page (no cursor) — subsequent pages keep the total from the
-	// first call so we don't recount on every "next page" click.
+	// Count matching records before adding pagination clauses. Only done when the
+	// caller asks for it — pages after the first keep the total from the initial
+	// call so we don't recount on every "next page" click.
 	var total *int64
-	if params.Cursor == nil {
+	if params.WithTotal {
 		countQuery := "SELECT COUNT(*) FROM evidence"
 		if len(where) > 0 {
 			countQuery += " WHERE " + strings.Join(where, " AND ")
@@ -190,8 +220,26 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	query += " ORDER BY ingested_at ASC, id ASC"
+
+	// id breaks ties so the total order is deterministic and offset windows
+	// neither repeat nor skip records.
+	if params.Sort == "" {
+		query += " ORDER BY ingested_at ASC, id ASC"
+	} else {
+		if !sortColumns[params.Sort] {
+			return nil, fmt.Errorf("column %q is not sortable", params.Sort)
+		}
+		direction := "ASC"
+		if params.Desc {
+			direction = "DESC"
+		}
+		query += fmt.Sprintf(" ORDER BY %s %s, id ASC", params.Sort, direction)
+	}
+
 	query += fmt.Sprintf(" LIMIT %s", arg(params.Limit+1))
+	if params.Offset > 0 && params.Cursor == nil {
+		query += fmt.Sprintf(" OFFSET %s", arg(params.Offset))
+	}
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -213,10 +261,15 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 
 	result := &ListResult{Total: total}
 	if len(records) > params.Limit {
-		last := records[params.Limit-1]
-		cursor := EncodeCursor(last.IngestedAt, last.ID)
-		result.NextCursor = &cursor
 		records = records[:params.Limit]
+		// A keyset cursor encodes a position in the default (ingested_at, id)
+		// ordering, so it is only meaningful when that ordering is in effect.
+		// Under a custom sort, callers page with offset instead.
+		if params.Sort == "" {
+			last := records[params.Limit-1]
+			cursor := EncodeCursor(last.IngestedAt, last.ID)
+			result.NextCursor = &cursor
+		}
 	}
 	result.Records = records
 
