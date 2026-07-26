@@ -30,19 +30,21 @@
     font-size: 0.95em;
 }
 
-/* Compact forms */
-#filter-form label,
+/* Compact forms.
+   The filter bar sizes itself (see #filter-bar) — applying the 0.8em here too
+   would compound against it, so only the advanced panel is covered. */
+#filter-advanced label,
 #add-form label {
     font-size: 0.8em;
     margin-bottom: 0;
 }
 
-#filter-form input,
-#filter-form select,
+#filter-advanced input,
+#filter-advanced select,
 #add-form input,
 #add-form select,
 #add-form textarea {
-    padding: 0.3em 0.5em;
+    padding: 0.25em 0.5em;
     font-size: 0.85em;
     height: auto;
 }
@@ -53,27 +55,6 @@
     margin-bottom: 0.3em;
 }
 
-#filter-form fieldset {
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-
-#filter-form fieldset legend {
-    font-size: 0.8em;
-    font-weight: 600;
-    margin-bottom: 0.15em;
-}
-
-#filter-form fieldset label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3em;
-    margin-right: 0.6em;
-    font-size: 0.8em;
-}
-
-#filter-form fieldset input[type="checkbox"],
 #filter-form input[type="checkbox"] {
     -webkit-appearance: checkbox;
     appearance: checkbox;
@@ -94,46 +75,103 @@
     font-size: 0.85em;
 }
 
-/* Collapsed filter bar — the common filters on a single line */
+/* Compress Pico's form rhythm for the whole search view. Its defaults are sized
+   for prose-width forms; this view is a dense data table. */
+#tab-search {
+    --pico-form-element-spacing-vertical: 0.3em;
+    --pico-form-element-spacing-horizontal: 0.5em;
+    --pico-spacing: 0.5rem;
+}
+
+/* Collapsed filter bar — the common filters on a single line.
+   Labels sit beside their inputs rather than above, which is what keeps the bar
+   one line tall instead of two. */
 #filter-bar {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.6em;
-    margin-bottom: 0.4em;
+    align-items: center;
+    gap: 0.3em 0.7em;
+    margin-bottom: 0.35em;
+    font-size: 0.8em;
 }
 
 #filter-bar .fb-field {
-    flex: 1 1 14em;
-    min-width: 10em;
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+#filter-bar .fb-field input {
+    font-size: 1em;
     margin-bottom: 0;
 }
 
+/* Repo is the only field that benefits from extra room, so it takes the slack. */
+#filter-bar .fb-field-repo {
+    flex: 1 1 16em;
+    min-width: 9em;
+}
+
+/* A revision hash has a bounded length, so this field never needs to grow.
+   Sized for a comfortable prefix; full-length hashes and `~` regexes still fit,
+   they just scroll — hence no maxlength. */
+#filter-bar .fb-field-commit input {
+    flex: 0 0 13em;
+    width: 13em;
+    font-family: monospace;
+}
+
 #filter-bar .fb-results {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
     flex: 0 0 auto;
-    margin-bottom: 0.15em;
+}
+
+#filter-bar .fb-results label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    margin: 0;
+    white-space: nowrap;
+}
+
+#filter-bar .fb-group-label,
+#filter-bar .fb-field {
+    color: var(--pico-muted-color);
 }
 
 #filter-bar .fb-actions {
     display: flex;
-    gap: 0.4em;
+    gap: 0.35em;
     margin-left: auto;
 }
 
 #filter-bar .fb-actions button {
     width: auto;
-    padding: 0.3em 1em;
-    font-size: 0.85em;
+    padding: 0.25em 0.9em;
+    font-size: 1em;
     margin-bottom: 0;
     white-space: nowrap;
 }
 
 /* Advanced filters, revealed by "More filters" */
 #filter-advanced {
-    padding: 0.6em 0.8em;
-    margin-bottom: 0.5em;
+    padding: 0.45em 0.6em 0.15em;
+    margin-bottom: 0.4em;
     border: 1px solid var(--pico-muted-border-color);
     border-radius: 4px;
+}
+
+#filter-advanced .grid {
+    gap: 0.3em 0.6em;
+    margin-bottom: 0.25em;
+}
+
+#filter-advanced label {
+    margin-bottom: 0;
 }
 
 #filter-advanced .fa-checkbox {
@@ -148,8 +186,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.6em;
-    margin-bottom: 0.4em;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
 }
 
 #results-summary {
@@ -195,9 +233,10 @@
     white-space: nowrap;
 }
 
-/* Results window — a fixed-height viewport onto the current window of records */
+/* Results window — a fixed-height viewport onto the current window of records.
+   The offset accounts for the header, filter bar and window bar above it. */
 #results-window {
-    max-height: calc(100vh - 21em);
+    max-height: calc(100vh - 15em);
     min-height: 16em;
     overflow: auto;
     border: 1px solid var(--pico-muted-border-color);
@@ -205,10 +244,16 @@
 }
 
 #results-table {
-    font-size: 0.875em;
+    font-size: 0.8em;
     table-layout: fixed;
     width: 100%;
     margin: 0;
+}
+
+/* Dense rows: this is a data table, not prose. */
+#results-table th,
+#results-table td {
+    padding: 0.25em 0.5em;
 }
 
 /* Fixed widths keep columns from reflowing as the window advances. */
@@ -585,6 +630,6 @@
     }
 
     #results-window {
-        max-height: calc(100vh - 26em);
+        max-height: calc(100vh - 20em);
     }
 }

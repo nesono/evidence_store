@@ -96,19 +96,22 @@
         <section id="tab-search" class="tab-content">
             <form id="filter-form">
                 <div id="filter-bar">
-                    <label class="fb-field">Repo
+                    <label class="fb-field fb-field-repo">Repo
                         <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
                     </label>
-                    <label class="fb-field">Commit
+                    <label class="fb-field fb-field-commit">Commit
                         <input type="text" name="rcs_ref" placeholder="abc123...">
                     </label>
-                    <fieldset class="fb-results">
-                        <legend>Result</legend>
+                    <!-- A div rather than a fieldset: a legend always renders on its own
+                         line, which is the vertical space this bar is trying to save.
+                         role/aria-label keeps the grouping for assistive tech. -->
+                    <div class="fb-results" role="group" aria-label="Result">
+                        <span class="fb-group-label">Result</span>
                         <label><input type="checkbox" name="result" value="PASS"> PASS</label>
                         <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>
                         <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
                         <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
-                    </fieldset>
+                    </div>
                     <div class="fb-actions">
                         <button type="submit">Search</button>
                         <button type="button" class="secondary" id="clear-filters">Clear</button>
