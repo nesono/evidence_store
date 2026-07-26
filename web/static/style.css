@@ -1,3 +1,27 @@
+/* Header — Pico gives body>header 1rem of padding top and bottom, and nav li
+   another 1rem each, which costs roughly 80px before any content appears. This
+   is a dense tool, so the chrome is pulled in tight and the space handed to the
+   results window instead. */
+body > header {
+    padding-block: 0.3rem;
+}
+
+body > header nav {
+    font-size: 0.9em;
+}
+
+body > header nav li {
+    padding: 0.1rem 0.4rem;
+}
+
+body > header nav strong {
+    font-size: 0.95em;
+}
+
+body > main {
+    padding-block: 0.4rem 0.5rem;
+}
+
 /* Result badges */
 .badge {
     display: inline-block;
@@ -30,19 +54,21 @@
     font-size: 0.95em;
 }
 
-/* Compact forms */
-#filter-form label,
+/* Compact forms.
+   The filter bar sizes itself (see #filter-bar) — applying the 0.8em here too
+   would compound against it, so only the advanced panel is covered. */
+#filter-advanced label,
 #add-form label {
     font-size: 0.8em;
     margin-bottom: 0;
 }
 
-#filter-form input,
-#filter-form select,
+#filter-advanced input,
+#filter-advanced select,
 #add-form input,
 #add-form select,
 #add-form textarea {
-    padding: 0.3em 0.5em;
+    padding: 0.25em 0.5em;
     font-size: 0.85em;
     height: auto;
 }
@@ -53,27 +79,6 @@
     margin-bottom: 0.3em;
 }
 
-#filter-form fieldset {
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-
-#filter-form fieldset legend {
-    font-size: 0.8em;
-    font-weight: 600;
-    margin-bottom: 0.15em;
-}
-
-#filter-form fieldset label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3em;
-    margin-right: 0.6em;
-    font-size: 0.8em;
-}
-
-#filter-form fieldset input[type="checkbox"],
 #filter-form input[type="checkbox"] {
     -webkit-appearance: checkbox;
     appearance: checkbox;
@@ -94,15 +99,306 @@
     font-size: 0.85em;
 }
 
-/* Results */
-#results-summary {
-    font-size: 0.9em;
-    margin-bottom: 0.5em;
+/* Compress Pico's form rhythm for the whole search view. Its defaults are sized
+   for prose-width forms; this view is a dense data table. */
+#tab-search {
+    --pico-form-element-spacing-vertical: 0.3em;
+    --pico-form-element-spacing-horizontal: 0.5em;
+    --pico-spacing: 0.5rem;
+}
+
+/* Collapsed filter bar — the common filters on a single line.
+   Labels sit beside their inputs rather than above, which is what keeps the bar
+   one line tall instead of two. */
+#filter-bar {
+    /* One height for every control in the bar. Pico sizes inputs with
+       `calc(1rem * line-height + ...)`, where the 1rem is absolute and so ignores
+       this bar's smaller font — that made the inputs noticeably taller than the
+       dropdown, which carries no such rule. Pinning both here keeps them level. */
+    --fb-control-height: 35px;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3em 0.7em;
+    margin-bottom: 0.35em;
+    font-size: 0.8em;
+}
+
+#filter-bar .fb-field {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+#filter-bar .fb-field input {
+    font-size: 1em;
+    margin-bottom: 0;
+}
+
+/* Both inputs are sized in `ch`, the width of the element's own "0" glyph, so
+   the monospace commit field holds exactly a 40-character hash. Repo is
+   proportional, so its 40ch renders a little narrower. Neither grows: both hold
+   identifiers of bounded length. Longer values (full hashes, or `~` regex
+   filters — which is why there is no maxlength) scroll.
+
+   The padding and border are added back explicitly, because under Pico's global
+   border-box a plain 40ch would be consumed by them and leave about 38
+   characters visible. Doing it this way rather than with content-box keeps
+   box-sizing consistent, so the shared height below means the height it says. */
+#filter-bar .fb-field-repo input,
+#filter-bar .fb-field-commit input {
+    flex: 0 0 auto;
+    width: calc(40ch
+        + 2 * var(--pico-form-element-spacing-horizontal)
+        + 2 * var(--pico-border-width));
+}
+
+/* Every control in the bar shares one height, so they sit on a common baseline
+   regardless of how each one would otherwise size itself. */
+#filter-bar .fb-field input,
+#filter-bar .fb-dropdown > summary {
+    height: var(--fb-control-height);
+}
+
+#filter-bar .fb-field-commit input {
+    font-family: monospace;
+}
+
+#filter-bar .fb-field {
     color: var(--pico-muted-color);
 }
 
+/* Result dropdown */
+#filter-bar .fb-dropdown {
+    position: relative;
+    flex: 0 0 auto;
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+
+#filter-bar .fb-dropdown > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    /* An extra em of breathing room a side — the control was cramped against
+       its label and caret. */
+    padding: 0.25em 1.6em;
+    margin: 0;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    background: none;
+    /* `inherit`, not var(--pico-color): that variable is reassigned by several
+       Pico component rules, and picking up the wrong one renders the label in a
+       colour meant for a filled background. */
+    color: inherit;
+    font-size: 1em;
+    font-weight: normal;
+    line-height: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+}
+
+/* Pinned width, so selecting results doesn't resize the control and shove the
+   buttons beside it around. Fits the longest label, "All Results". */
+#filter-bar .fb-dropdown > summary > span {
+    display: inline-block;
+    min-width: 11ch;
+}
+
+/* Replace both marker implementations with one caret we control. */
+#filter-bar .fb-dropdown > summary::-webkit-details-marker { display: none; }
+#filter-bar .fb-dropdown > summary::marker { content: ""; }
+
+#filter-bar .fb-dropdown > summary::after {
+    content: "";
+    border: 0.3em solid transparent;
+    border-top-color: currentColor;
+    margin-top: 0.3em;
+    transform: none;
+    width: 0;
+    height: 0;
+    background: none;
+}
+
+#filter-bar .fb-dropdown[open] > summary::after {
+    margin-top: -0.3em;
+    border-top-color: transparent;
+    border-bottom-color: currentColor;
+}
+
+#filter-bar .fb-dropdown-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.25em);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    min-width: 100%;
+    padding: 0.5em 0.7em;
+    background: var(--pico-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+#filter-bar .fb-dropdown-menu label {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin: 0;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#filter-bar .fb-actions {
+    display: flex;
+    gap: 0.35em;
+    margin-left: auto;
+}
+
+#filter-bar .fb-actions button {
+    width: auto;
+    padding: 0.25em 0.9em;
+    font-size: 1em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Advanced filters, revealed by "More filters" */
+#filter-advanced {
+    padding: 0.45em 0.6em 0.15em;
+    margin-bottom: 0.4em;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+}
+
+#filter-advanced .grid {
+    gap: 0.3em 0.6em;
+    margin-bottom: 0.25em;
+}
+
+#filter-advanced label {
+    margin-bottom: 0;
+}
+
+#filter-advanced .fa-checkbox {
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+}
+
+/* Window bar — range readout, size selector and window navigation */
+#window-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+}
+
+#results-summary {
+    font-size: 0.9em;
+    color: var(--pico-muted-color);
+    font-variant-numeric: tabular-nums;
+}
+
+#window-bar .wb-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-left: auto;
+}
+
+#window-size-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Pico paints the chevron as a 1rem background-image inset 0.75rem from the
+   right, sized in rem while this control is a fraction of a rem — so it landed
+   on top of the digits. The value is self-explanatory, so drop the arrow and
+   reclaim its padding; `padding-inline-end` is set explicitly because Pico
+   reserves the arrow's space with the logical property. */
+#window-size {
+    width: auto;
+    padding: 0.2em 0.5em;
+    padding-inline-end: 0.5em;
+    background-image: none;
+    font-size: 0.85em;
+    height: auto;
+    margin-bottom: 0;
+    text-align: center;
+}
+
+#window-nav {
+    display: flex;
+    gap: 0.3em;
+}
+
+#window-nav button {
+    width: auto;
+    padding: 0.25em 0.7em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Results window — a fixed-height viewport onto the current window of records.
+   The offset accounts for the header, filter bar and window bar above it. */
+#results-window {
+    max-height: calc(100vh - 9.5em);
+    min-height: 16em;
+    overflow: auto;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+}
+
 #results-table {
-    font-size: 0.875em;
+    font-size: 0.8em;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+}
+
+/* Dense rows: this is a data table, not prose. */
+#results-table th,
+#results-table td {
+    padding: 0.25em 0.5em;
+}
+
+/* Fixed widths keep columns from reflowing as the window advances. */
+#results-table .col-result    { width: 5.5em; }
+#results-table .col-procedure { width: 20%; }
+#results-table .col-repo      { width: 13%; }
+#results-table .col-branch    { width: 10%; }
+#results-table .col-commit    { width: 7em; }
+#results-table .col-type      { width: 6em; }
+#results-table .col-source    { width: 12%; }
+#results-table .col-finished  { width: 9.5em; }
+
+#results-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--pico-background-color);
+    box-shadow: inset 0 -1px 0 var(--pico-muted-border-color);
+}
+
+#results-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #results-table tbody tr {
@@ -117,6 +413,7 @@
     text-align: center;
     color: var(--pico-muted-color);
     padding: 2em !important;
+    white-space: normal !important;
 }
 
 .commit-ref {
@@ -129,16 +426,21 @@
     font-style: italic;
 }
 
-/* Pagination */
-#pagination {
-    display: flex;
-    gap: 0.5em;
-    justify-content: center;
-    margin-top: 1em;
+/* Inherited records — resolved outside the window, so listed separately */
+#inherited-panel {
+    margin-top: 0.6em;
+    font-size: 0.9em;
 }
 
-#pagination button {
-    width: auto;
+#inherited-panel summary {
+    color: var(--pico-muted-color);
+    font-size: 0.9em;
+}
+
+#inherited-table {
+    font-size: 0.875em;
+    table-layout: fixed;
+    width: 100%;
 }
 
 /* Detail dialog */
@@ -414,6 +716,13 @@
     cursor: default;
 }
 
+/* Only the After/Before labels carry a preview, so reserving a line for an empty
+   one made the middle row of the advanced grid taller than its neighbours. It
+   takes no space until it has something to report. */
+.utc-preview:empty {
+    display: none;
+}
+
 .utc-preview {
     display: block;
     min-height: 1.2em;
@@ -429,8 +738,26 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-    #results-table th:nth-child(n+5),
-    #results-table td:nth-child(n+5) {
+    /* Keyed off column classes rather than position, so the columns that survive
+       stay correct regardless of what else is hidden. */
+    #results-table .col-commit,
+    #results-table .col-type,
+    #results-table .col-source,
+    #results-table .col-finished,
+    #results-table .col-tags {
         display: none;
+    }
+
+    #filter-bar .fb-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    #window-bar .wb-controls {
+        margin-left: 0;
+    }
+
+    #results-window {
+        max-height: calc(100vh - 14em);
     }
 }

@@ -253,6 +253,54 @@ func TestListEvidenceSortIsStableAcrossWindows(t *testing.T) {
 	assert.Len(t, seen, 6, "every record must appear exactly once across the windows")
 }
 
+func TestReversedWindowMatchesDirectWindow(t *testing.T) {
+	repo := "org/reverse_" + uuid.New().String()[:8]
+
+	// Two batches. Every record within a batch shares ingested_at, because now()
+	// is the transaction timestamp, so the id tie-break alone decides their order.
+	// Reading a window from the far end has to reverse cleanly through those ties,
+	// which is what lets the UI jump to the last window without a deep OFFSET.
+	for b := range 2 {
+		var records []model.EvidenceCreate
+		for i := range 10 {
+			records = append(records, makeEvidence(
+				repo, "main", "rev123", fmt.Sprintf("//pkg:b%d_t%d", b, i), "ci", model.ResultPass))
+		}
+		resp := postJSON(t, "/api/v1/evidence/batch", model.BatchRequest{Records: records})
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	const total, size = 20, 4
+
+	for offset := 0; offset+size <= total; offset += size {
+		resp := getJSON(t, fmt.Sprintf(
+			"/api/v1/evidence?repo=%s&limit=%d&offset=%d&sort=ingested_at&order=asc", repo, size, offset))
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		direct := decodeJSON[listResponse](t, resp)
+		require.Len(t, direct.Records, size)
+
+		// The same window, approached from the opposite end.
+		resp = getJSON(t, fmt.Sprintf(
+			"/api/v1/evidence?repo=%s&limit=%d&offset=%d&sort=ingested_at&order=desc",
+			repo, size, total-offset-size))
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		reversed := decodeJSON[listResponse](t, resp)
+		require.Len(t, reversed.Records, size)
+
+		want := make([]uuid.UUID, 0, size)
+		for _, r := range direct.Records {
+			want = append(want, r.ID)
+		}
+		got := make([]uuid.UUID, 0, size)
+		for i := len(reversed.Records) - 1; i >= 0; i-- {
+			got = append(got, reversed.Records[i].ID)
+		}
+		assert.Equal(t, want, got,
+			"window at offset %d read from the far end must match the direct read", offset)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Tests: Inherited records are kept out of the window
 // ---------------------------------------------------------------------------

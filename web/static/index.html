@@ -94,80 +94,111 @@
         </section>
 
         <section id="tab-search" class="tab-content">
-        <details id="filter-panel" open>
-            <summary>Filters</summary>
             <form id="filter-form">
-                <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
-                <div class="grid">
-                    <label>Repo <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list"></label>
-                    <label>Branch <input type="text" name="branch" placeholder="main or ~^release/.*"></label>
-                    <label>Commit <input type="text" name="rcs_ref" placeholder="abc123..."></label>
-                </div>
-                <div class="grid">
-                    <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$" list="evidence-types-list"></label>
-                    <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
-                    <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
-                </div>
-                <div class="grid">
-                    <fieldset>
-                        <legend>Result</legend>
-                        <label><input type="checkbox" name="result" value="PASS"> PASS</label>
-                        <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>
-                        <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
-                        <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
-                    </fieldset>
-                    <label>After <small>(UTC)</small>
-                        <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview>
-                        <small class="utc-preview" data-preview-for="finished_after"></small>
+                <div id="filter-bar">
+                    <label class="fb-field fb-field-repo">Repo
+                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
                     </label>
-                    <label>Before <small>(UTC)</small>
-                        <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview>
-                        <small class="utc-preview" data-preview-for="finished_before"></small>
+                    <label class="fb-field fb-field-commit">Commit
+                        <input type="text" name="rcs_ref" placeholder="abc123...">
                     </label>
+                    <!-- A checkbox dropdown. There is no native HTML control for this:
+                         <select multiple> renders as an always-expanded list box, not a
+                         dropdown. <details> gives the disclosure behaviour for free; the
+                         checkboxes stay in the form, so reading the filter is unchanged. -->
+                    <details class="fb-dropdown" id="result-dropdown">
+                        <!-- No role="button": <summary> is already a disclosure control,
+                             and the role both replaces those semantics and drags in
+                             Pico's button colours. -->
+                        <summary><span id="result-summary">All Results</span></summary>
+                        <div class="fb-dropdown-menu" role="group" aria-label="Result">
+                            <label><input type="checkbox" name="result" value="PASS"> PASS</label>
+                            <label><input type="checkbox" name="result" value="FAIL"> FAIL</label>
+                            <label><input type="checkbox" name="result" value="ERROR"> ERROR</label>
+                            <label><input type="checkbox" name="result" value="SKIPPED"> SKIPPED</label>
+                        </div>
+                    </details>
+                    <div class="fb-actions">
+                        <button type="submit">Search</button>
+                        <button type="button" class="secondary" id="clear-filters">Clear</button>
+                        <button type="button" class="secondary outline" id="toggle-advanced" aria-expanded="false" aria-controls="filter-advanced">More filters</button>
+                    </div>
                 </div>
-                <div class="grid">
-                    <label>Tags <input type="text" name="tags" placeholder="ci,nightly or ~^reg.*"></label>
-                    <label>Notes <input type="text" name="notes" placeholder="keyword or ~pattern"></label>
-                    <label>Limit <input type="number" name="limit" min="1" max="1000" placeholder="100"></label>
-                </div>
-                <div class="grid">
-                    <label style="align-self:end"><input type="checkbox" name="include_inherited" checked> Include inherited</label>
-                </div>
-                <div class="filter-actions">
-                    <button type="submit">Search</button>
-                    <button type="button" class="secondary" id="clear-filters">Clear</button>
+
+                <div id="filter-advanced" hidden>
+                    <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
+                    <div class="grid">
+                        <label>Branch <input type="text" name="branch" placeholder="main or ~^release/.*"></label>
+                        <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$" list="evidence-types-list"></label>
+                        <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
+                    </div>
+                    <div class="grid">
+                        <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
+                        <label>After <small>(UTC)</small>
+                            <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview>
+                            <small class="utc-preview" data-preview-for="finished_after"></small>
+                        </label>
+                        <label>Before <small>(UTC)</small>
+                            <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview>
+                            <small class="utc-preview" data-preview-for="finished_before"></small>
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>Tags <input type="text" name="tags" placeholder="ci,nightly or ~^reg.*"></label>
+                        <label>Notes <input type="text" name="notes" placeholder="keyword or ~pattern"></label>
+                        <label class="fa-checkbox"><input type="checkbox" name="include_inherited" checked> Include inherited</label>
+                    </div>
                 </div>
             </form>
-        </details>
 
-        <div id="results-summary"></div>
+            <div id="window-bar">
+                <span id="results-summary"></span>
+                <div class="wb-controls">
+                    <label id="window-size-label">Rows
+                        <select id="window-size">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                        </select>
+                    </label>
+                    <div id="window-nav">
+                        <button type="button" class="secondary outline" id="first-window" title="First window (Home)" disabled>&laquo;</button>
+                        <button type="button" class="secondary outline" id="prev-page" title="Previous window (PageUp)" disabled>&lsaquo; Prev</button>
+                        <button type="button" class="secondary outline" id="next-page" title="Next window (PageDown)" disabled>Next &rsaquo;</button>
+                        <button type="button" class="secondary outline" id="last-window" title="Last window (End)" disabled>&raquo;</button>
+                    </div>
+                </div>
+            </div>
 
-        <figure>
-            <table id="results-table">
-                <thead>
-                    <tr>
-                        <th>Result</th>
-                        <th>Procedure</th>
-                        <th>Repo</th>
-                        <th>Branch</th>
-                        <th>Commit</th>
-                        <th>Type</th>
-                        <th>Source</th>
-                        <th>Finished</th>
-                        <th>Tags</th>
-                    </tr>
-                </thead>
-                <tbody id="results-body">
-                    <tr><td colspan="9" class="empty-state">Enter filters and click Search</td></tr>
-                </tbody>
-            </table>
-        </figure>
+            <div id="results-window">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th class="col-result">Result</th>
+                            <th class="col-procedure">Procedure</th>
+                            <th class="col-repo">Repo</th>
+                            <th class="col-branch">Branch</th>
+                            <th class="col-commit">Commit</th>
+                            <th class="col-type">Type</th>
+                            <th class="col-source">Source</th>
+                            <th class="col-finished">Finished</th>
+                            <th class="col-tags">Tags</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body">
+                        <tr><td colspan="9" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
 
-        <div id="pagination">
-            <button id="prev-page" class="secondary" disabled>Previous</button>
-            <button id="next-page" class="secondary" disabled>Next</button>
-        </div>
-
+            <details id="inherited-panel" hidden>
+                <summary><span id="inherited-count">0</span> inherited record(s)</summary>
+                <table id="inherited-table">
+                    <tbody id="inherited-body"></tbody>
+                </table>
+            </details>
         </section>
 
         <dialog id="template-dialog">
