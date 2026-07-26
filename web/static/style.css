@@ -108,14 +108,18 @@
     margin-bottom: 0;
 }
 
-/* Both inputs are sized in `ch`, which is the width of the element's own "0"
-   glyph — so 40ch of the monospace commit field is exactly a 40-character hash.
-   Repo is proportional, so its 40ch renders a little narrower. Neither grows:
-   both hold identifiers of bounded length. Longer values (full hashes, or `~`
-   regex filters — which is why there is no maxlength) scroll. */
+/* Both inputs are sized in `ch`, the width of the element's own "0" glyph, so
+   the monospace commit field holds exactly a 40-character hash. Repo is
+   proportional, so its 40ch renders a little narrower. Neither grows: both hold
+   identifiers of bounded length. Longer values (full hashes, or `~` regex
+   filters — which is why there is no maxlength) scroll.
+
+   content-box matters here: under Pico's global border-box, a 40ch width would
+   be consumed by the padding and border, leaving about 38 characters visible. */
 #filter-bar .fb-field-repo input,
 #filter-bar .fb-field-commit input {
     flex: 0 0 auto;
+    box-sizing: content-box;
     width: 40ch;
 }
 
