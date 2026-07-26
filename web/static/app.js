@@ -1,43 +1,93 @@
 const API_BASE = "/api/v1";
 
-const TEXT_FIELDS = [
-  "repo", "branch", "rcs_ref", "evidence_type", "source", "procedure_ref", "tags", "notes",
-];
+// Fields shown in the collapsed bar; everything else lives behind "More filters".
+const BAR_TEXT_FIELDS = ["repo", "rcs_ref"];
+const ADVANCED_TEXT_FIELDS = ["branch", "evidence_type", "source", "procedure_ref", "tags", "notes"];
+const TEXT_FIELDS = [...BAR_TEXT_FIELDS, ...ADVANCED_TEXT_FIELDS];
 const DATETIME_FIELDS = ["finished_after", "finished_before"];
+// Badged onto the toggle, so a collapsed panel never hides an applied constraint.
+const ADVANCED_FIELDS = [...ADVANCED_TEXT_FIELDS, ...DATETIME_FIELDS, "include_inherited"];
 
-let cursorStack = [];
-let currentCursor = null;
-let currentTotal = null;
+// The list endpoint's default ordering. Named because reading a window from the
+// far end has to ask for the exact reverse of it.
+const DEFAULT_SORT_COLUMN = "ingested_at";
+
+const WINDOW_SIZES = [25, 50, 100, 200, 500];
+const DEFAULT_WINDOW_SIZE = 50;
+
+// The current window into the result set.
+let windowOffset = 0;
+let windowSize = DEFAULT_WINDOW_SIZE;
+let sortColumn = "";     // "" means the API's default ordering
+let sortDesc = false;
+let totalRecords = null; // cached, so only a filter change pays for the COUNT(*)
+
+// --- Preferences ---
+
+const WINDOW_SIZE_KEY = "evidence_window_size";
+
+function loadPref(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function savePref(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* storage unavailable (private mode); preference just won't persist */ }
+}
+
+function normalizeWindowSize(n) {
+  return WINDOW_SIZES.includes(n) ? n : DEFAULT_WINDOW_SIZE;
+}
 
 // --- URL State ---
 
-function readFiltersFromURL() {
+function readStateFromURL() {
   const params = new URLSearchParams(window.location.search);
   const filters = {};
-  for (const f of TEXT_FIELDS) {
-    if (params.has(f)) filters[f] = params.get(f);
-  }
-  for (const f of DATETIME_FIELDS) {
+  for (const f of [...TEXT_FIELDS, ...DATETIME_FIELDS]) {
     if (params.has(f)) filters[f] = params.get(f);
   }
   if (params.has("result")) filters.result = params.get("result");
-  if (params.has("limit")) filters.limit = params.get("limit");
   if (params.has("include_inherited")) filters.include_inherited = params.get("include_inherited");
-  if (params.has("cursor")) filters.cursor = params.get("cursor");
-  if (params.has("detail")) filters.detail = params.get("detail");
-  return filters;
+
+  const offset = parseInt(params.get("offset"), 10);
+  windowOffset = Number.isFinite(offset) && offset > 0 ? offset : 0;
+
+  const limit = parseInt(params.get("limit"), 10);
+  windowSize = Number.isFinite(limit)
+    ? normalizeWindowSize(limit)
+    : normalizeWindowSize(loadPref(WINDOW_SIZE_KEY, DEFAULT_WINDOW_SIZE));
+
+  sortColumn = params.get("sort") || "";
+  sortDesc = params.get("order") === "desc";
+
+  // A `cursor=` from an older link is deliberately ignored. It is an opaque
+  // position marker: it cannot say which window it refers to, so the view would
+  // have no range to show and no way back. Those links open at the first window.
+  return { filters, detail: params.get("detail") };
 }
 
-function writeFiltersToURL(filters) {
+function writeStateToURL(filters, detail) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) {
     if (v !== "" && v !== null && v !== undefined) {
       params.set(k, v);
     }
   }
-  const qs = params.toString();
-  const url = qs ? `?${qs}` : window.location.pathname;
-  history.pushState(null, "", url);
+  if (windowOffset > 0) params.set("offset", String(windowOffset));
+  params.set("limit", String(windowSize));
+  if (sortColumn) {
+    params.set("sort", sortColumn);
+    params.set("order", sortDesc ? "desc" : "asc");
+  }
+  if (detail) params.set("detail", detail);
+  history.pushState(null, "", `?${params}`);
 }
 
 function populateFormFromFilters(filters) {
@@ -48,18 +98,19 @@ function populateFormFromFilters(filters) {
   }
   for (const f of DATETIME_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
-    if (input && filters[f]) {
-      const d = parseUserDateTime(filters[f]);
-      input.value = d ? formatTime(d.toISOString()) : filters[f];
+    if (input) {
+      if (filters[f]) {
+        const d = parseUserDateTime(filters[f]);
+        input.value = d ? formatTime(d.toISOString()) : filters[f];
+      } else {
+        input.value = "";
+      }
     }
   }
-  const resultChecks = form.querySelectorAll('[name="result"]');
   const activeResults = (filters.result || "").split(",").filter(Boolean);
-  resultChecks.forEach(cb => {
+  form.querySelectorAll('[name="result"]').forEach(cb => {
     cb.checked = activeResults.includes(cb.value);
   });
-  const limitInput = form.querySelector('[name="limit"]');
-  if (limitInput) limitInput.value = filters.limit || "";
   const inheritedInput = form.querySelector('[name="include_inherited"]');
   if (inheritedInput) inheritedInput.checked = filters.include_inherited !== "false";
 }
@@ -80,12 +131,44 @@ function readFormFilters() {
   }
   const results = Array.from(form.querySelectorAll('[name="result"]:checked')).map(cb => cb.value);
   if (results.length > 0) filters.result = results.join(",");
-  const limit = form.querySelector('[name="limit"]').value;
-  if (limit) filters.limit = limit;
   if (!form.querySelector('[name="include_inherited"]').checked) {
     filters.include_inherited = "false";
   }
   return filters;
+}
+
+// --- Filter panel ---
+
+function activeAdvancedCount(filters) {
+  let n = 0;
+  for (const f of ADVANCED_FIELDS) {
+    if (f === "include_inherited") {
+      if (filters.include_inherited === "false") n++;
+    } else if (filters[f]) {
+      n++;
+    }
+  }
+  return n;
+}
+
+function advancedExpanded() {
+  return document.getElementById("toggle-advanced").getAttribute("aria-expanded") === "true";
+}
+
+function setAdvancedExpanded(expanded) {
+  document.getElementById("filter-advanced").hidden = !expanded;
+  document.getElementById("toggle-advanced").setAttribute("aria-expanded", String(expanded));
+  refreshAdvancedToggle();
+}
+
+function refreshAdvancedToggle() {
+  const btn = document.getElementById("toggle-advanced");
+  if (advancedExpanded()) {
+    btn.textContent = "Fewer filters";
+    return;
+  }
+  const n = activeAdvancedCount(readFormFilters());
+  btn.textContent = n > 0 ? `More filters (${n})` : "More filters";
 }
 
 // --- Auth ---
@@ -137,20 +220,60 @@ async function apiFetch(url, options = {}) {
 
 // --- API ---
 
-async function fetchEvidence(filters, cursor) {
+// fetchWindow retrieves the current window of records.
+//
+// A window near the end of a large result set is expensive to read directly:
+// OFFSET makes Postgres walk every skipped row, which at two million records
+// costs seconds. Approaching from whichever end is closer keeps that walk short,
+// so jumping to the last window is as cheap as the first. This relies on
+// descending order being the exact reverse of ascending, which holds because the
+// API's id tie-break follows the sort direction.
+async function fetchWindow(filters) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) {
-    if (k === "detail") continue;
     if (v !== "" && v !== null && v !== undefined) {
       params.set(k, v);
     }
   }
-  if (cursor) params.set("cursor", cursor);
-  if (!params.has("limit")) params.set("limit", "50");
+
+  // The total only changes when the filters do, so it is fetched once and cached.
+  if (totalRecords === null) {
+    params.set("include_total", "true");
+  } else {
+    params.set("include_total", "false");
+  }
+
+  let limit = windowSize;
+  let offset = windowOffset;
+  const fromFarEnd = totalRecords !== null && windowOffset > totalRecords / 2;
+
+  if (fromFarEnd) {
+    limit = Math.min(windowSize, Math.max(0, totalRecords - windowOffset));
+    offset = Math.max(0, totalRecords - windowOffset - limit);
+  }
+
+  if (limit <= 0) {
+    // Window sits entirely past the end; let the caller clamp and retry.
+    return { records: [], total: totalRecords };
+  }
+
+  params.set("limit", String(limit));
+  if (offset > 0) params.set("offset", String(offset));
+
+  if (fromFarEnd || sortColumn) {
+    params.set("sort", sortColumn || DEFAULT_SORT_COLUMN);
+    const desc = fromFarEnd ? !sortDesc : sortDesc;
+    params.set("order", desc ? "desc" : "asc");
+  }
 
   const resp = await apiFetch(`${API_BASE}/evidence?${params}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
-  return resp.json();
+  const data = await resp.json();
+
+  if (fromFarEnd && data.records) {
+    data.records = data.records.slice().reverse();
+  }
+  return data;
 }
 
 async function fetchEvidenceById(id) {
@@ -233,45 +356,79 @@ function parseUserDateTime(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+function rowHTML(r) {
+  const branch = r.branch || "";
+  return `
+    <tr data-id="${r.id}" class="${r.inherited ? "inherited-row" : ""}">
+      <td class="col-result">${resultBadge(r.result)}</td>
+      <td class="col-procedure" title="${esc(r.procedure_ref)}">${esc(r.procedure_ref)}</td>
+      <td class="col-repo" title="${esc(r.repo)}">${esc(r.repo)}</td>
+      <td class="col-branch" title="${esc(branch)}">${esc(branch)}</td>
+      <td class="col-commit commit-ref">${esc((r.rcs_ref || "").slice(0, 10))}</td>
+      <td class="col-type">${esc(r.evidence_type)}</td>
+      <td class="col-source" title="${esc(r.source)}">${esc(r.source)}</td>
+      <td class="col-finished">${formatTime(r.finished_at)}</td>
+      <td class="col-tags">${renderTags(r.metadata)}</td>
+    </tr>`;
+}
+
 function renderTable(records) {
   const tbody = document.getElementById("results-body");
   if (!records || records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records match these filters</td></tr>`;
     return;
   }
-  tbody.innerHTML = records.map(r => `
-    <tr data-id="${r.id}" class="${r.inherited ? "inherited-row" : ""}">
-      <td>${resultBadge(r.result)}</td>
-      <td>${esc(r.procedure_ref)}</td>
-      <td>${esc(r.repo)}</td>
-      <td>${esc(r.branch || "")}</td>
-      <td class="commit-ref">${esc((r.rcs_ref || "").slice(0, 10))}</td>
-      <td>${esc(r.evidence_type)}</td>
-      <td>${esc(r.source)}</td>
-      <td>${formatTime(r.finished_at)}</td>
-      <td>${renderTags(r.metadata)}</td>
-    </tr>
-  `).join("");
+  tbody.innerHTML = records.map(rowHTML).join("");
+  // Each window starts at its own top rather than inheriting the previous scroll.
+  document.getElementById("results-window").scrollTop = 0;
 }
 
-function renderSummary(pageCount, total, hasMore) {
+// Inherited records are resolved outside the paginated window, so they are listed
+// separately and left out of the range readout.
+function renderInherited(records) {
+  const panel = document.getElementById("inherited-panel");
+  if (!records || records.length === 0) {
+    panel.hidden = true;
+    document.getElementById("inherited-body").innerHTML = "";
+    return;
+  }
+  panel.hidden = false;
+  document.getElementById("inherited-count").textContent = records.length.toLocaleString();
+  document.getElementById("inherited-body").innerHTML = records.map(rowHTML).join("");
+}
+
+function renderRange(count) {
   const el = document.getElementById("results-summary");
-  if (total !== null && total !== undefined) {
-    if (total === pageCount) {
-      el.textContent = `${total} record${total !== 1 ? "s" : ""}`;
-    } else {
-      el.textContent = `showing ${pageCount} of ${total} records`;
-    }
+  const n = x => x.toLocaleString();
+
+  if (count === 0) {
+    el.textContent = totalRecords ? `no records in this window of ${n(totalRecords)}` : "no records";
     return;
   }
-  const suffix = hasMore ? "+" : "";
-  el.textContent = `${pageCount}${suffix} record${pageCount !== 1 ? "s" : ""}`;
+  const from = windowOffset + 1;
+  const to = windowOffset + count;
+
+  if (totalRecords === null) {
+    el.textContent = `${n(from)}–${n(to)}`;
+  } else if (windowOffset === 0 && count === totalRecords) {
+    el.textContent = `${n(totalRecords)} record${totalRecords !== 1 ? "s" : ""}`;
+  } else {
+    el.textContent = `${n(from)}–${n(to)} of ${n(totalRecords)} records`;
+  }
 }
 
-function renderPagination(nextCursor) {
-  currentCursor = nextCursor;
-  document.getElementById("next-page").disabled = !nextCursor;
-  document.getElementById("prev-page").disabled = cursorStack.length === 0;
+function lastWindowOffset() {
+  if (!totalRecords) return 0;
+  return Math.max(0, Math.floor((totalRecords - 1) / windowSize) * windowSize);
+}
+
+function renderWindowNav() {
+  const atStart = windowOffset === 0;
+  const atEnd = totalRecords === null || windowOffset >= lastWindowOffset();
+  document.getElementById("first-window").disabled = atStart;
+  document.getElementById("prev-page").disabled = atStart;
+  document.getElementById("next-page").disabled = atEnd;
+  document.getElementById("last-window").disabled = atEnd;
 }
 
 function renderDetail(record) {
@@ -315,105 +472,154 @@ function esc(str) {
 
 // --- Search ---
 
-async function doSearch(filters, cursor) {
+async function doSearch(filters, { clamped = false } = {}) {
   const tbody = document.getElementById("results-body");
   tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading...</td></tr>`;
 
-  // Fresh first-page fetch invalidates any previously cached total.
-  if (!cursor) {
-    currentTotal = null;
-  }
-
   try {
-    const data = await fetchEvidence(filters, cursor);
-    // Inherited records are returned outside the paginated window so they cannot
-    // distort its range; this view lists them inline after the window's records.
-    const records = data.records || [];
-    const inherited = data.inherited_records || [];
-    renderTable([...records, ...inherited]);
-    // The API only returns `total` on the first page; preserve it across subsequent page fetches.
+    const data = await fetchWindow(filters);
     if (data.total !== undefined && data.total !== null) {
-      currentTotal = data.total;
+      totalRecords = data.total;
     }
-    renderSummary(records.length + inherited.length, currentTotal, !!data.next_cursor);
-    renderPagination(data.next_cursor || null);
+
+    // The requested window can sit past the end — a stale deep link, a smaller
+    // result set than last time, or a larger window size. Clamp once and refetch.
+    if (!clamped && totalRecords !== null && windowOffset > 0 && windowOffset >= totalRecords) {
+      windowOffset = lastWindowOffset();
+      writeStateToURL(filters);
+      return doSearch(filters, { clamped: true });
+    }
+
+    renderTable(data.records);
+    renderInherited(data.inherited_records);
+    renderRange((data.records || []).length);
+    renderWindowNav();
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Error: ${esc(err.message)}</td></tr>`;
-    renderSummary(0, null, false);
-    renderPagination(null);
+    document.getElementById("results-summary").textContent = "";
+    renderInherited(null);
+    renderWindowNav();
   }
+}
+
+// Re-runs the search from the first window, discarding the cached total because
+// changing the filters changes the count.
+function search() {
+  windowOffset = 0;
+  totalRecords = null;
+  const filters = readFormFilters();
+  refreshAdvancedToggle();
+  writeStateToURL(filters);
+  doSearch(filters);
+}
+
+// Moves the window without re-counting — the filters, and so the total, are
+// unchanged.
+function moveWindow(offset) {
+  const target = Math.max(0, Math.min(offset, lastWindowOffset()));
+  if (target === windowOffset) return;
+  windowOffset = target;
+  const filters = readFormFilters();
+  writeStateToURL(filters);
+  doSearch(filters);
 }
 
 // --- Events ---
 
 document.getElementById("filter-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  cursorStack = [];
-  const filters = readFormFilters();
-  writeFiltersToURL(filters);
-  doSearch(filters, null);
+  search();
 });
 
 document.getElementById("clear-filters").addEventListener("click", () => {
   const form = document.getElementById("filter-form");
   form.reset();
   form.querySelectorAll("input[data-utc-preview]").forEach(updateUtcPreview);
-  cursorStack = [];
-  writeFiltersToURL({});
-  document.getElementById("results-body").innerHTML =
-    `<tr><td colspan="9" class="empty-state">Enter filters and click Search</td></tr>`;
-  document.getElementById("results-summary").textContent = "";
-  renderPagination(null);
+  search();
 });
 
-document.getElementById("next-page").addEventListener("click", () => {
-  if (!currentCursor) return;
-  const filters = readFormFilters();
-  cursorStack.push(filters.cursor || null);
-  filters.cursor = currentCursor;
-  writeFiltersToURL(filters);
-  doSearch(filters, currentCursor);
+document.getElementById("toggle-advanced").addEventListener("click", () => {
+  setAdvancedExpanded(!advancedExpanded());
 });
 
-document.getElementById("prev-page").addEventListener("click", () => {
-  if (cursorStack.length === 0) return;
+document.getElementById("first-window").addEventListener("click", () => moveWindow(0));
+document.getElementById("prev-page").addEventListener("click", () => moveWindow(windowOffset - windowSize));
+document.getElementById("next-page").addEventListener("click", () => moveWindow(windowOffset + windowSize));
+document.getElementById("last-window").addEventListener("click", () => moveWindow(lastWindowOffset()));
+
+document.getElementById("window-size").addEventListener("change", (e) => {
+  const size = normalizeWindowSize(parseInt(e.target.value, 10));
+  // Keep the first record of the current window visible across the size change,
+  // so the view stays roughly where the user was rather than jumping to the top.
+  const anchor = windowOffset;
+  windowSize = size;
+  savePref(WINDOW_SIZE_KEY, size);
+  windowOffset = Math.floor(anchor / size) * size;
   const filters = readFormFilters();
-  const prevCursor = cursorStack.pop();
-  if (prevCursor) {
-    filters.cursor = prevCursor;
-  } else {
-    delete filters.cursor;
+  writeStateToURL(filters);
+  doSearch(filters);
+});
+
+// Window navigation from the keyboard, ignored while typing in the filter form.
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (document.querySelector("dialog[open]")) return;
+  if (document.getElementById("tab-search").hidden) return;
+
+  switch (e.key) {
+    case "PageDown": moveWindow(windowOffset + windowSize); break;
+    case "PageUp":   moveWindow(windowOffset - windowSize); break;
+    case "Home":     moveWindow(0); break;
+    case "End":      moveWindow(lastWindowOffset()); break;
+    default: return;
   }
-  writeFiltersToURL(filters);
-  doSearch(filters, prevCursor);
+  e.preventDefault();
 });
 
-document.getElementById("results-body").addEventListener("click", async (e) => {
-  const row = e.target.closest("tr[data-id]");
-  if (!row) return;
+async function openDetail(id) {
   try {
-    const record = await fetchEvidenceById(row.dataset.id);
+    const record = await fetchEvidenceById(id);
     renderDetail(record);
-    const filters = readFormFilters();
-    filters.detail = row.dataset.id;
-    writeFiltersToURL(filters);
+    writeStateToURL(readFormFilters(), id);
   } catch (err) {
     alert(`Failed to load record: ${err.message}`);
   }
+}
+
+document.getElementById("results-body").addEventListener("click", (e) => {
+  const row = e.target.closest("tr[data-id]");
+  if (row) openDetail(row.dataset.id);
+});
+
+document.getElementById("inherited-body").addEventListener("click", (e) => {
+  const row = e.target.closest("tr[data-id]");
+  if (row) openDetail(row.dataset.id);
 });
 
 document.getElementById("close-detail").addEventListener("click", () => {
   document.getElementById("detail-dialog").close();
-  const filters = readFormFilters();
-  delete filters.detail;
-  writeFiltersToURL(filters);
+  writeStateToURL(readFormFilters());
 });
 
 window.addEventListener("popstate", () => {
-  const filters = readFiltersFromURL();
-  populateFormFromFilters(filters);
-  doSearch(filters, filters.cursor || null);
+  const { filters } = readStateFromURL();
+  applyURLState(filters);
+  // Going back may land on a different filter set, so the cached count no longer
+  // applies.
+  totalRecords = null;
+  doSearch(filters);
 });
+
+// Reflects URL-derived state into the form and the window controls.
+function applyURLState(filters) {
+  populateFormFromFilters(filters);
+  document.getElementById("window-size").value = String(windowSize);
+  // A deep link carrying an advanced filter opens the panel, so the constraint
+  // that is shaping the results is never invisible.
+  setAdvancedExpanded(activeAdvancedCount(filters) > 0);
+}
 
 // --- Tabs ---
 
@@ -895,19 +1101,20 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
   refreshTemplateDropdown();
   refreshDatalists();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
-  const filters = readFiltersFromURL();
-  populateFormFromFilters(filters);
+
+  const { filters, detail } = readStateFromURL();
+  applyURLState(filters);
   wireUtcPreviews();
 
-  const hasFilters = Object.keys(filters).some(k => k !== "detail" && k !== "cursor");
-  if (hasFilters) {
-    doSearch(filters, filters.cursor || null);
-  }
+  // Always search. The window is a view onto the whole result set, so an empty
+  // filter set is a legitimate query — "everything" — not a prompt to fill the
+  // form in. Only showing results once a filter is set used to leave any link
+  // without one, including a shared deep link, rendering an empty table.
+  await doSearch(filters);
 
-  if (filters.detail) {
+  if (detail) {
     try {
-      const record = await fetchEvidenceById(filters.detail);
-      renderDetail(record);
-    } catch { /* ignore */ }
+      renderDetail(await fetchEvidenceById(detail));
+    } catch { /* record may have been deleted; leave the window as it is */ }
   }
 })();

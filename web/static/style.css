@@ -94,15 +94,145 @@
     font-size: 0.85em;
 }
 
-/* Results */
+/* Collapsed filter bar — the common filters on a single line */
+#filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.6em;
+    margin-bottom: 0.4em;
+}
+
+#filter-bar .fb-field {
+    flex: 1 1 14em;
+    min-width: 10em;
+    margin-bottom: 0;
+}
+
+#filter-bar .fb-results {
+    flex: 0 0 auto;
+    margin-bottom: 0.15em;
+}
+
+#filter-bar .fb-actions {
+    display: flex;
+    gap: 0.4em;
+    margin-left: auto;
+}
+
+#filter-bar .fb-actions button {
+    width: auto;
+    padding: 0.3em 1em;
+    font-size: 0.85em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Advanced filters, revealed by "More filters" */
+#filter-advanced {
+    padding: 0.6em 0.8em;
+    margin-bottom: 0.5em;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+}
+
+#filter-advanced .fa-checkbox {
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+}
+
+/* Window bar — range readout, size selector and window navigation */
+#window-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 0.4em;
+}
+
 #results-summary {
     font-size: 0.9em;
-    margin-bottom: 0.5em;
     color: var(--pico-muted-color);
+    font-variant-numeric: tabular-nums;
+}
+
+#window-bar .wb-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-left: auto;
+}
+
+#window-size-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+#window-size {
+    width: auto;
+    padding: 0.2em 1.6em 0.2em 0.5em;
+    font-size: 0.85em;
+    height: auto;
+    margin-bottom: 0;
+}
+
+#window-nav {
+    display: flex;
+    gap: 0.3em;
+}
+
+#window-nav button {
+    width: auto;
+    padding: 0.25em 0.7em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Results window — a fixed-height viewport onto the current window of records */
+#results-window {
+    max-height: calc(100vh - 21em);
+    min-height: 16em;
+    overflow: auto;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
 }
 
 #results-table {
     font-size: 0.875em;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+}
+
+/* Fixed widths keep columns from reflowing as the window advances. */
+#results-table .col-result    { width: 5.5em; }
+#results-table .col-procedure { width: 20%; }
+#results-table .col-repo      { width: 13%; }
+#results-table .col-branch    { width: 10%; }
+#results-table .col-commit    { width: 7em; }
+#results-table .col-type      { width: 6em; }
+#results-table .col-source    { width: 12%; }
+#results-table .col-finished  { width: 9.5em; }
+
+#results-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--pico-background-color);
+    box-shadow: inset 0 -1px 0 var(--pico-muted-border-color);
+}
+
+#results-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #results-table tbody tr {
@@ -117,6 +247,7 @@
     text-align: center;
     color: var(--pico-muted-color);
     padding: 2em !important;
+    white-space: normal !important;
 }
 
 .commit-ref {
@@ -129,16 +260,21 @@
     font-style: italic;
 }
 
-/* Pagination */
-#pagination {
-    display: flex;
-    gap: 0.5em;
-    justify-content: center;
-    margin-top: 1em;
+/* Inherited records — resolved outside the window, so listed separately */
+#inherited-panel {
+    margin-top: 0.6em;
+    font-size: 0.9em;
 }
 
-#pagination button {
-    width: auto;
+#inherited-panel summary {
+    color: var(--pico-muted-color);
+    font-size: 0.9em;
+}
+
+#inherited-table {
+    font-size: 0.875em;
+    table-layout: fixed;
+    width: 100%;
 }
 
 /* Detail dialog */
@@ -429,8 +565,26 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-    #results-table th:nth-child(n+5),
-    #results-table td:nth-child(n+5) {
+    /* Keyed off column classes rather than position, so the columns that survive
+       stay correct regardless of what else is hidden. */
+    #results-table .col-commit,
+    #results-table .col-type,
+    #results-table .col-source,
+    #results-table .col-finished,
+    #results-table .col-tags {
         display: none;
+    }
+
+    #filter-bar .fb-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    #window-bar .wb-controls {
+        margin-left: 0;
+    }
+
+    #results-window {
+        max-height: calc(100vh - 26em);
     }
 }

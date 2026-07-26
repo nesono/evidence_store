@@ -233,7 +233,10 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		if params.Desc {
 			direction = "DESC"
 		}
-		query += fmt.Sprintf(" ORDER BY %s %s, id ASC", params.Sort, direction)
+		// The tie-break follows the sort direction so that descending is the exact
+		// reverse of ascending. Clients rely on that to read a window near the end
+		// of a large result set from the far end, avoiding a deep OFFSET scan.
+		query += fmt.Sprintf(" ORDER BY %s %s, id %s", params.Sort, direction, direction)
 	}
 
 	query += fmt.Sprintf(" LIMIT %s", arg(params.Limit+1))
