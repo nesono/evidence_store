@@ -1,3 +1,27 @@
+/* Header — Pico gives body>header 1rem of padding top and bottom, and nav li
+   another 1rem each, which costs roughly 80px before any content appears. This
+   is a dense tool, so the chrome is pulled in tight and the space handed to the
+   results window instead. */
+body > header {
+    padding-block: 0.3rem;
+}
+
+body > header nav {
+    font-size: 0.9em;
+}
+
+body > header nav li {
+    padding: 0.1rem 0.4rem;
+}
+
+body > header nav strong {
+    font-size: 0.95em;
+}
+
+body > main {
+    padding-block: 0.4rem 0.5rem;
+}
+
 /* Result badges */
 .badge {
     display: inline-block;
@@ -309,7 +333,7 @@
 /* Results window — a fixed-height viewport onto the current window of records.
    The offset accounts for the header, filter bar and window bar above it. */
 #results-window {
-    max-height: calc(100vh - 15em);
+    max-height: calc(100vh - 9.5em);
     min-height: 16em;
     overflow: auto;
     border: 1px solid var(--pico-muted-border-color);
@@ -703,6 +727,6 @@
     }
 
     #results-window {
-        max-height: calc(100vh - 20em);
+        max-height: calc(100vh - 14em);
     }
 }
