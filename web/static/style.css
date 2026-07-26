@@ -111,6 +111,12 @@ body > main {
    Labels sit beside their inputs rather than above, which is what keeps the bar
    one line tall instead of two. */
 #filter-bar {
+    /* One height for every control in the bar. Pico sizes inputs with
+       `calc(1rem * line-height + ...)`, where the 1rem is absolute and so ignores
+       this bar's smaller font — that made the inputs noticeably taller than the
+       dropdown, which carries no such rule. Pinning both here keeps them level. */
+    --fb-control-height: 35px;
+
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -138,13 +144,23 @@ body > main {
    identifiers of bounded length. Longer values (full hashes, or `~` regex
    filters — which is why there is no maxlength) scroll.
 
-   content-box matters here: under Pico's global border-box, a 40ch width would
-   be consumed by the padding and border, leaving about 38 characters visible. */
+   The padding and border are added back explicitly, because under Pico's global
+   border-box a plain 40ch would be consumed by them and leave about 38
+   characters visible. Doing it this way rather than with content-box keeps
+   box-sizing consistent, so the shared height below means the height it says. */
 #filter-bar .fb-field-repo input,
 #filter-bar .fb-field-commit input {
     flex: 0 0 auto;
-    box-sizing: content-box;
-    width: 40ch;
+    width: calc(40ch
+        + 2 * var(--pico-form-element-spacing-horizontal)
+        + 2 * var(--pico-border-width));
+}
+
+/* Every control in the bar shares one height, so they sit on a common baseline
+   regardless of how each one would otherwise size itself. */
+#filter-bar .fb-field input,
+#filter-bar .fb-dropdown > summary {
+    height: var(--fb-control-height);
 }
 
 #filter-bar .fb-field-commit input {
