@@ -144,7 +144,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3em;
-    padding: 0.25em 0.6em;
+    /* An extra em of breathing room a side — the control was cramped against
+       its label and caret. */
+    padding: 0.25em 1.6em;
     margin: 0;
     border: 1px solid var(--pico-muted-border-color);
     border-radius: 4px;
