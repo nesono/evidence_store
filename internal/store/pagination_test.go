@@ -56,3 +56,23 @@ func TestCursorPreservesSubSecondPrecision(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ts.Equal(decoded.IngestedAt))
 }
+
+func TestIsSortableAcceptsQueryableColumns(t *testing.T) {
+	for _, col := range []string{
+		"repo", "branch", "rcs_ref", "procedure_ref",
+		"evidence_type", "source", "result", "finished_at", "ingested_at",
+	} {
+		assert.True(t, IsSortable(col), "%s should be sortable", col)
+	}
+}
+
+func TestIsSortableRejectsEverythingElse(t *testing.T) {
+	// The sort column is interpolated into the query, so the whitelist is the
+	// injection guard.
+	for _, col := range []string{
+		"", "id", "metadata", "unknown_column",
+		"repo; DROP TABLE evidence", "repo DESC", "REPO",
+	} {
+		assert.False(t, IsSortable(col), "%q should not be sortable", col)
+	}
+}

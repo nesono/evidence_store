@@ -235,10 +235,59 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		cursor = c
 	}
 
+	// Offset and cursor are separate pagination modes. Silently honouring one
+	// would show the caller a different window than the one they asked for.
+	offset := 0
+	if v := q.Get("offset"); v != "" {
+		if cursor != nil {
+			writeError(w, http.StatusBadRequest, "offset and cursor cannot be combined")
+			return
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "offset must be a non-negative integer")
+			return
+		}
+		offset = n
+	}
+
+	// Keyset pagination is tied to the (ingested_at, id) ordering, so re-sorting
+	// mid-walk would skip or repeat records.
+	sort := q.Get("sort")
+	if sort != "" {
+		if cursor != nil {
+			writeError(w, http.StatusBadRequest, "sort and cursor cannot be combined; page with offset instead")
+			return
+		}
+		if !store.IsSortable(sort) {
+			writeError(w, http.StatusBadRequest, "cannot sort by "+sort)
+			return
+		}
+	}
+
+	desc := false
+	switch order := q.Get("order"); order {
+	case "", "asc":
+	case "desc":
+		desc = true
+	default:
+		writeError(w, http.StatusBadRequest, `order must be "asc" or "desc"`)
+		return
+	}
+
+	// Counting is the expensive part of the query, so callers walking a result set
+	// can fetch the total once and opt out on subsequent windows. Cursor mode never
+	// reports a total, preserving the previous behaviour.
+	withTotal := cursor == nil && q.Get("include_total") != "false"
+
 	params := store.ListParams{
-		Filter: filter,
-		Cursor: cursor,
-		Limit:  limit,
+		Filter:    filter,
+		Cursor:    cursor,
+		Limit:     limit,
+		Offset:    offset,
+		Sort:      sort,
+		Desc:      desc,
+		WithTotal: withTotal,
 	}
 
 	// Check if inheritance should be included.
@@ -251,11 +300,15 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response with inheritance annotation.
+	// Build response with inheritance annotation. Inherited records are reported
+	// separately: they are resolved outside the paginated window, so mixing them
+	// into `records` would make the window's length disagree with `limit` and its
+	// position disagree with `total`.
 	response := struct {
-		Records    []model.EvidenceResponse `json:"records"`
-		NextCursor *string                  `json:"next_cursor,omitempty"`
-		Total      *int64                   `json:"total,omitempty"`
+		Records          []model.EvidenceResponse `json:"records"`
+		InheritedRecords []model.EvidenceResponse `json:"inherited_records,omitempty"`
+		NextCursor       *string                  `json:"next_cursor,omitempty"`
+		Total            *int64                   `json:"total,omitempty"`
 	}{
 		NextCursor: result.NextCursor,
 		Total:      result.Total,
@@ -291,7 +344,7 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 				isInherited := true
 				declID := decl.ID
 				for _, ev := range inheritedResult.Records {
-					response.Records = append(response.Records, model.EvidenceResponse{
+					response.InheritedRecords = append(response.InheritedRecords, model.EvidenceResponse{
 						Evidence:               ev,
 						Inherited:              &isInherited,
 						InheritanceDeclaration: &declID,

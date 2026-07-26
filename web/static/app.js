@@ -326,12 +326,16 @@ async function doSearch(filters, cursor) {
 
   try {
     const data = await fetchEvidence(filters, cursor);
-    renderTable(data.records);
+    // Inherited records are returned outside the paginated window so they cannot
+    // distort its range; this view lists them inline after the window's records.
+    const records = data.records || [];
+    const inherited = data.inherited_records || [];
+    renderTable([...records, ...inherited]);
     // The API only returns `total` on the first page; preserve it across subsequent page fetches.
     if (data.total !== undefined && data.total !== null) {
       currentTotal = data.total;
     }
-    renderSummary(data.records ? data.records.length : 0, currentTotal, !!data.next_cursor);
+    renderSummary(records.length + inherited.length, currentTotal, !!data.next_cursor);
     renderPagination(data.next_cursor || null);
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Error: ${esc(err.message)}</td></tr>`;

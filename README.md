@@ -306,11 +306,35 @@ curl "http://localhost:8000/api/v1/evidence?result=FAIL,ERROR"
 # Filter by time range
 curl "http://localhost:8000/api/v1/evidence?finished_after=2026-01-01T00:00:00Z"
 
-# Paginate
+# Paginate with a keyset cursor (streaming through a whole result set)
 curl "http://localhost:8000/api/v1/evidence?limit=10&cursor=<next_cursor>"
+
+# Paginate by offset (addressable windows — what the web UI uses)
+curl "http://localhost:8000/api/v1/evidence?limit=50&offset=1000"
+
+# Sort
+curl "http://localhost:8000/api/v1/evidence?sort=finished_at&order=desc"
+
+# Skip the COUNT(*) when paging (the total was already fetched with window 1)
+curl "http://localhost:8000/api/v1/evidence?limit=50&offset=50&include_total=false"
 ```
 
-**Query parameters:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `notes`, `limit`, `cursor`, `include_inherited`.
+**Query parameters:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `notes`, `limit`, `cursor`, `offset`, `sort`, `order`, `include_total`, `include_inherited`.
+
+### Pagination and sorting
+
+Two pagination modes are available, and they cannot be combined — passing both `cursor` and `offset` (or both `cursor` and `sort`) returns `400`.
+
+- **Cursor** — keyset pagination over the default `ingested_at` ordering. Stable while records are being inserted and cheap at any depth, so it is the right choice for streaming an entire result set. `next_cursor` is returned while more records remain; `total` is never returned for cursor requests.
+- **Offset** — `offset` skips N matching rows, giving addressable, shareable windows (`?offset=1000&limit=50`) and backwards navigation. Because a keyset cursor only describes a position in the default ordering, `sort` requires offset mode and suppresses `next_cursor`.
+
+`sort` accepts `repo`, `branch`, `rcs_ref`, `procedure_ref`, `evidence_type`, `source`, `result`, `finished_at` and `ingested_at`; any other value returns `400`. `order` is `asc` (default) or `desc`. Results are always tie-broken by `id`, so consecutive offset windows neither repeat nor skip a record.
+
+`total` (a `COUNT(*)` of all matching rows) is returned by default for non-cursor requests. Pass `include_total=false` on subsequent windows to skip the count once you have it.
+
+### Inherited records
+
+When `include_inherited` is on (the default) and both `repo` and `rcs_ref` are given, evidence resolved through an inheritance declaration is returned in a separate `inherited_records` field rather than in `records`. Inherited evidence is resolved outside the paginated window, so mixing it into `records` would make the window's length disagree with `limit` and its position disagree with `total`.
 
 ### Regex filtering
 

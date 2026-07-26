@@ -4,7 +4,9 @@ go_test(
     name = "tests_test",
     srcs = [
         "auth_integration_test.go",
+        "distinct_test.go",
         "integration_test.go",
+        "list_offset_sort_test.go",
         "regex_search_test.go",
         "retention_integration_test.go",
         "utc_normalization_test.go",
