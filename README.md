@@ -353,3 +353,25 @@ bazel run //cmd/server               # start the server
 docker compose up -d
 ./scripts/smoke-test.sh
 ```
+
+### Seed demo data
+
+`scripts/seed-demo` fills the database with synthetic evidence for demos and for
+exercising the UI at realistic scale.
+
+```bash
+docker compose up -d db
+go run ./scripts/seed-demo                 # 2,000,000 records (~1 minute)
+go run ./scripts/seed-demo --count 50000   # a smaller set
+go run ./scripts/seed-demo --truncate      # replace existing evidence
+```
+
+It writes to Postgres with `COPY` rather than through the API — the batch
+endpoint inserts one row per round trip, which takes tens of minutes at this
+size. API-level validation is therefore bypassed, so the generator is written to
+produce records that satisfy it anyway.
+
+Records are clustered onto a limited set of repositories, branches and commits so
+that filtering returns meaningful groups, with a realistic verdict distribution
+(88% `PASS`) and timestamps biased towards the recent past. `--seed` makes a run
+reproducible. Two million records occupy roughly 900 MB including indexes.
