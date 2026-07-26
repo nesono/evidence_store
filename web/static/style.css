@@ -309,12 +309,20 @@ body > main {
     white-space: nowrap;
 }
 
+/* Pico paints the chevron as a 1rem background-image inset 0.75rem from the
+   right, sized in rem while this control is a fraction of a rem — so it landed
+   on top of the digits. The value is self-explanatory, so drop the arrow and
+   reclaim its padding; `padding-inline-end` is set explicitly because Pico
+   reserves the arrow's space with the logical property. */
 #window-size {
     width: auto;
-    padding: 0.2em 1.6em 0.2em 0.5em;
+    padding: 0.2em 0.5em;
+    padding-inline-end: 0.5em;
+    background-image: none;
     font-size: 0.85em;
     height: auto;
     margin-bottom: 0;
+    text-align: center;
 }
 
 #window-nav {
