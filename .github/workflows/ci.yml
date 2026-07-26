@@ -50,3 +50,18 @@ jobs:
           go-version-file: go.mod
       - name: Build binary
         run: go build -o evidence-store ./cmd/server
+
+  # adapters/bazel is a separate Go module excluded via .bazelignore, so the
+  # jobs above never touch it. Build it the way the BCR presubmit does.
+  bazel-adapter:
+    name: Bazel Adapter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: adapters/bazel
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and test adapter
+        run: bazel test //...
+      - name: Verify consumer-facing build resolves without dev dependencies
+        run: bazel build --ignore_dev_dependency //cmd/evidence-bazel
