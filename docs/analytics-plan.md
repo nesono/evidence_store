@@ -188,7 +188,9 @@ A fourth nav tab, `Analytics`, with three sub-views sharing the existing filter 
 
 ## Status
 
-Phase 0 and phase 1 are implemented. Phases 2–4 are still as proposed below.
+Phases 0, 1 and 2 are implemented. Phases 3–4 are still as proposed below.
+
+One thing changed during phase 2: the plan clustered on `FAIL` **and** `ERROR`. That turned out to be wrong. An infrastructure outage errors every test in the same run at once, which makes every pair of them perfectly correlated; once outages outnumber genuine failing runs, the whole suite collapses into a single meaningless cluster. Errors are therefore excluded by default, behind `include_errors=true`. There is an integration test that reproduces the collapse.
 
 ## Implementation Phases
 
