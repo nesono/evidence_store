@@ -166,56 +166,10 @@ func (h *EvidenceHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	filter := model.EvidenceFilter{}
-	if v := q.Get("repo"); v != "" {
-		filter.Repo = &v
-	}
-	if v := q.Get("rcs_ref"); v != "" {
-		filter.RCSRef = &v
-	}
-	if v := q.Get("branch"); v != "" {
-		filter.Branch = &v
-	}
-	if v := q.Get("evidence_type"); v != "" {
-		filter.EvidenceType = &v
-	}
-	if v := q.Get("source"); v != "" {
-		filter.Source = &v
-	}
-	if v := q.Get("procedure_ref"); v != "" {
-		filter.ProcedureRef = &v
-	}
-	if v := q.Get("result"); v != "" {
-		for _, s := range strings.Split(v, ",") {
-			result, err := model.ParseEvidenceResult(strings.TrimSpace(s))
-			if err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			filter.Result = append(filter.Result, result)
-		}
-	}
-	if v := q.Get("finished_after"); v != "" {
-		t, err := model.ParseFlexibleTime(v)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid finished_after: "+err.Error())
-			return
-		}
-		filter.FinishedAfter = &t
-	}
-	if v := q.Get("finished_before"); v != "" {
-		t, err := model.ParseFlexibleTime(v)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid finished_before: "+err.Error())
-			return
-		}
-		filter.FinishedBefore = &t
-	}
-	if v := q.Get("tags"); v != "" {
-		filter.Tags = strings.Split(v, ",")
-	}
-	if v := q.Get("notes"); v != "" {
-		filter.Notes = &v
+	filter, err := parseEvidenceFilter(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	limit := h.cfg.DefaultPageSize
