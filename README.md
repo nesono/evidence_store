@@ -269,6 +269,8 @@ Base URL: `/api/v1`
 | `GET` | `/api/v1/evidence/{id}` | Get record by ID |
 | `POST` | `/api/v1/inheritance` | Create an inheritance declaration |
 | `GET` | `/api/v1/inheritance` | List inheritance declarations |
+| `GET` | `/api/v1/analytics/summary` | Headline counts for a filter window |
+| `GET` | `/api/v1/analytics/tests` | Per-test reliability metrics (see [Analytics](#analytics)) |
 | `GET` | `/healthz` | Health check |
 
 ### Creating evidence
@@ -360,6 +362,59 @@ curl "http://localhost:8000/api/v1/evidence?notes=~device.*XYZ"
 **Supported fields:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `tags`, `notes`.
 
 The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-POSIX-REGEXP) (the `~` operator). This supports the POSIX Extended Regular Expression syntax including character classes (`[a-z]`, `[[:digit:]]`), alternation (`a|b`), quantifiers (`*`, `+`, `?`, `{n,m}`), and anchors (`^`, `$`). Matching is case-sensitive.
+
+## Analytics
+
+`/api/v1/analytics/tests` collapses the evidence into one row per test — identified by `(repo, procedure_ref)` — so a suite can be judged rather than read record by record. It accepts every filter the list endpoint does, including the `~` regex and `*` prefix forms.
+
+```bash
+# Tests that never fail, best-evidenced first
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&sort=pass_rate_lower&order=desc"
+
+# Chronically broken tests
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&sort=fail_rate&order=desc"
+
+# Tests losing the most runs to infrastructure
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&sort=error_rate&order=desc"
+
+# Flakiest tests in the last 30 days
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&finished_after=2026-06-27&sort=flip_rate&order=desc"
+```
+
+### Metrics
+
+| Field | Meaning |
+|-------|---------|
+| `fail_rate` | `fail / (pass + fail)`. `ERROR` and `SKIPPED` are excluded — an infrastructure crash says nothing about whether the test is broken. |
+| `error_rate` | `error / (pass + fail + error)`. The infrastructure-trouble ranking. |
+| `flip_rate` | Share of consecutive verdicts that changed outcome. A permanently broken test has `fail_rate` 1.0 and `flip_rate` 0; a flaky one has a middling fail rate and a high flip rate. |
+| `flaky_commits` | Commits where the test both passed and failed. Same code, different outcome. |
+| `pass_rate_lower` | Wilson 95% lower bound on the pass rate. Ranks a clean 500-run record above a clean 8-run one, where the raw rate ties them at 1.0. |
+
+### Labels
+
+Each test carries a list of labels, not one category — a test can be both flaky and infrastructure-heavy.
+
+| Label | Rule |
+|-------|------|
+| `stable` | At least `min_runs` verdicts, no failures and no errors |
+| `always_failing` | At least `min_runs` verdicts and `fail_rate` ≥ `always_failing_rate` |
+| `flaky` | Any `flaky_commits`, or `flip_rate` ≥ the `flip_rate` threshold |
+| `infra_heavy` | At least `min_errors` errors and `error_rate` ≥ the `error_rate` threshold |
+| `sparse` | Fewer than `min_runs` verdicts — too little history to judge |
+
+Thresholds are query parameters (`min_runs`, `always_failing_rate`, `flip_rate`, `error_rate`, `min_errors`), because what counts as "almost always failing" is a judgement about a particular suite. The defaults are echoed back in every response.
+
+### Other parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `sort` | `procedure_ref` | `fail_rate`, `error_rate`, `flip_rate`, `pass_rate_lower`, `runs`, `pass`, `fail`, `error`, `flaky_commits`, `last_seen`, … |
+| `order` | `asc` | `asc` or `desc` |
+| `limit`, `offset` | page size config | Windows the sorted set; `total` always describes the whole set |
+| `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |
+
+A query matching more than 50,000 distinct tests returns `422` rather than truncating, since a truncated set yields confident-looking numbers computed from part of the data.
 
 ## Development
 

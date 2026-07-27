@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -123,103 +122,26 @@ type ListResult struct {
 }
 
 func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResult, error) {
-	var (
-		where []string
-		args  []any
-		argN  = 1
-	)
+	f := buildFilter(params.Filter)
 
-	arg := func(v any) string {
-		args = append(args, v)
-		s := fmt.Sprintf("$%d", argN)
-		argN++
-		return s
-	}
-
-	textFilter := func(column string, v *string) {
-		if v == nil {
-			return
-		}
-		val := *v
-		if strings.HasPrefix(val, "~") {
-			where = append(where, fmt.Sprintf("%s ~ %s", column, arg(val[1:])))
-		} else {
-			where = append(where, fmt.Sprintf("%s = %s", column, arg(val)))
-		}
-	}
-
-	textFilter("repo", params.Filter.Repo)
-	textFilter("rcs_ref", params.Filter.RCSRef)
-	textFilter("branch", params.Filter.Branch)
-	textFilter("evidence_type", params.Filter.EvidenceType)
-	textFilter("source", params.Filter.Source)
-	if v := params.Filter.ProcedureRef; v != nil {
-		val := *v
-		if strings.HasPrefix(val, "~") {
-			where = append(where, fmt.Sprintf("procedure_ref ~ %s", arg(val[1:])))
-		} else if strings.HasSuffix(val, "*") {
-			prefix := strings.TrimSuffix(val, "*")
-			where = append(where, fmt.Sprintf("procedure_ref LIKE %s", arg(prefix+"%")))
-		} else {
-			where = append(where, fmt.Sprintf("procedure_ref = %s", arg(val)))
-		}
-	}
-	if len(params.Filter.Result) > 0 {
-		placeholders := make([]string, len(params.Filter.Result))
-		for i, r := range params.Filter.Result {
-			placeholders[i] = arg(r)
-		}
-		where = append(where, fmt.Sprintf("result IN (%s)", strings.Join(placeholders, ",")))
-	}
-	if v := params.Filter.FinishedAfter; v != nil {
-		where = append(where, fmt.Sprintf("finished_at >= %s", arg(*v)))
-	}
-	if v := params.Filter.FinishedBefore; v != nil {
-		where = append(where, fmt.Sprintf("finished_at < %s", arg(*v)))
-	}
-	if len(params.Filter.Tags) > 0 {
-		// If the first tag starts with ~, treat all tags as regex patterns.
-		if strings.HasPrefix(params.Filter.Tags[0], "~") {
-			for _, t := range params.Filter.Tags {
-				pattern := strings.TrimPrefix(t, "~")
-				where = append(where, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements_text(metadata->'tags') tag WHERE tag ~ %s)", arg(pattern)))
-			}
-		} else {
-			where = append(where, fmt.Sprintf("metadata->'tags' @> %s", arg(mustJSON(params.Filter.Tags))))
-		}
-	}
-	if v := params.Filter.Notes; v != nil {
-		val := *v
-		if strings.HasPrefix(val, "~") {
-			where = append(where, fmt.Sprintf("metadata->>'notes' ~ %s", arg(val[1:])))
-		} else {
-			where = append(where, fmt.Sprintf("metadata->>'notes' = %s", arg(val)))
-		}
-	}
 	// Count matching records before adding pagination clauses. Only done when the
 	// caller asks for it — pages after the first keep the total from the initial
 	// call so we don't recount on every "next page" click.
 	var total *int64
 	if params.WithTotal {
-		countQuery := "SELECT COUNT(*) FROM evidence"
-		if len(where) > 0 {
-			countQuery += " WHERE " + strings.Join(where, " AND ")
-		}
+		countQuery := "SELECT COUNT(*) FROM evidence" + f.whereClause()
 		var n int64
-		if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&n); err != nil {
+		if err := s.pool.QueryRow(ctx, countQuery, f.args...).Scan(&n); err != nil {
 			return nil, fmt.Errorf("count evidence: %w", err)
 		}
 		total = &n
 	}
 
 	if params.Cursor != nil {
-		where = append(where, fmt.Sprintf("(ingested_at, id) > (%s, %s)", arg(params.Cursor.IngestedAt), arg(params.Cursor.ID)))
+		f.add(fmt.Sprintf("(ingested_at, id) > (%s, %s)", f.arg(params.Cursor.IngestedAt), f.arg(params.Cursor.ID)))
 	}
 
-	query := "SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata FROM evidence"
-	if len(where) > 0 {
-		query += " WHERE " + strings.Join(where, " AND ")
-	}
+	query := "SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata FROM evidence" + f.whereClause()
 
 	// id breaks ties so the total order is deterministic and offset windows
 	// neither repeat nor skip records.
@@ -239,12 +161,12 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		query += fmt.Sprintf(" ORDER BY %s %s, id %s", params.Sort, direction, direction)
 	}
 
-	query += fmt.Sprintf(" LIMIT %s", arg(params.Limit+1))
+	query += fmt.Sprintf(" LIMIT %s", f.arg(params.Limit+1))
 	if params.Offset > 0 && params.Cursor == nil {
-		query += fmt.Sprintf(" OFFSET %s", arg(params.Offset))
+		query += fmt.Sprintf(" OFFSET %s", f.arg(params.Offset))
 	}
 
-	rows, err := s.pool.Query(ctx, query, args...)
+	rows, err := s.pool.Query(ctx, query, f.args...)
 	if err != nil {
 		return nil, fmt.Errorf("query evidence: %w", err)
 	}

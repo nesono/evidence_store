@@ -53,7 +53,7 @@ Counts come straight from `count(*) FILTER (WHERE result = …)`.
 - **`pass_rate_lower`** = Wilson score lower bound (95%) on the pass rate. Used to rank "never fails" so that 500/500 outranks 8/8 instead of tying at 1.0.
 - `first_seen`, `last_seen`, `last_pass_at`, `last_fail_at`, `last_result`
 
-Everything except `pass_rate_lower` is one SQL pass; the Wilson bound is a pure Go function over the counts.
+The division of labour: **SQL counts, Go divides.** One SQL pass produces the raw tallies — including `flips` and `transitions` as separate counts from the `lag()` scan — and every rate, bound, and label is then a pure function in `internal/analytics`. This keeps each metric defined in exactly one place and unit-testable without a database, and it is why sorting happens in Go too: ordering by `fail_rate` in SQL would mean writing that definition a second time, in a second language, where the two could drift apart.
 
 ### Labels
 
@@ -91,16 +91,23 @@ Guardrails: hard caps on rows scanned (200k) and tests considered (2,000, by fai
 
 Aggregation in Postgres, correlation in Go, nothing precomputed in phase 1. The per-test query is a single grouped scan over a time window; the cluster query returns a projection of failing rows only. If measurement shows this is too slow at real volumes, the escape hatch is a nightly rollup table keyed by `(repo, procedure_ref, day)` — deferred until there is a number that justifies it.
 
-One new index, to be confirmed by `EXPLAIN ANALYZE` against seeded data before being committed:
+One new index. **Measured** on 1,000,000 seeded rows (12 repos, 88 procedures, 70k rows matching a 90-day window):
 
-```sql
--- migrations/000004_add_analytics_index.up.sql
-CREATE INDEX idx_evidence_analytics
-    ON evidence (repo, finished_at DESC)
-    INCLUDE (procedure_ref, result, rcs_ref, branch, evidence_type);
-```
+| index | time | size |
+|---|---|---|
+| *(none — baseline)* | 450 ms | — |
+| `(repo, finished_at DESC) INCLUDE (…)` | 328 ms | 155 MB |
+| `(repo, procedure_ref, finished_at DESC)` | 450 ms | 79 MB — planner ignores it |
+| **`(repo, procedure_ref, finished_at DESC) INCLUDE (result, rcs_ref, id)`** | **197 ms** | 149 MB |
 
-Today `repo` and `finished_at` are separate single-column indexes, so the planner bitmap-ANDs them and then hits the heap for every row. The composite with `INCLUDE` allows an index-only scan for the whole aggregation. The cost is index size — measure both before merging.
+Two things came out of the measurement that the original guess had backwards:
+
+1. **Leading with the group key beats leading with the time column.** The proposal assumed `(repo, finished_at)` was the right shape. Ordering by `(repo, procedure_ref, finished_at)` supplies the `GROUP BY` and the `DISTINCT ON` ordering directly, which removes an external merge sort that was spilling ~6 MB to disk.
+2. **The `INCLUDE` is not optional.** Without it the planner ignores the index entirely and falls back to the bitmap scan — same 450 ms, so the lean 79 MB variant buys nothing. With it the scan is index-only (`Heap Fetches: 0`).
+
+The `filtered` CTE therefore projects only the group columns, so `evidence_type` is selected only when a caller actually groups by it; selecting it unconditionally would force a heap fetch per row for everyone else.
+
+The cost is index size: roughly half the table's own size again (149 MB against a 275 MB table). Deployments that do not use the analytics endpoints can drop it and the queries still work, at the 450 ms figure above.
 
 ## API
 
@@ -119,15 +126,19 @@ Extra parameters: `min_runs`, `group_by`, `run_key`, `sort`, `order`, `limit`, `
 
 ```json
 {
-  "window": { "from": "2026-06-01T00:00:00Z", "to": "2026-07-26T00:00:00Z", "runs": 1240 },
+  "window": { "from": "2026-06-01T00:00:00Z", "to": "2026-07-26T00:00:00Z", "runs": 1240, "tests": 843 },
+  "thresholds": { "min_runs": 10, "always_failing_rate": 0.9, "flip_rate": 0.2, "error_rate": 0.1, "min_errors": 3 },
   "tests": [
     {
       "repo": "org/repo",
       "procedure_ref": "//pkg:integration_test",
-      "runs": 210, "pass": 168, "fail": 20, "error": 22, "skipped": 0,
+      "counts": {
+        "pass": 168, "fail": 20, "error": 22, "skipped": 0,
+        "flips": 26, "transitions": 187, "flaky_commits": 3
+      },
+      "runs": 210,
       "verdict_runs": 188,
-      "fail_rate": 0.106, "error_rate": 0.117, "flip_rate": 0.14,
-      "flaky_commits": 3,
+      "fail_rate": 0.106, "error_rate": 0.117, "flip_rate": 0.139,
       "pass_rate_lower": 0.837,
       "last_result": "PASS",
       "last_fail_at": "2026-07-24T09:12:00Z",
@@ -137,6 +148,12 @@ Extra parameters: `min_runs`, `group_by`, `run_key`, `sort`, `order`, `limit`, `
   "total": 843
 }
 ```
+
+The raw counts are nested under `counts` rather than flattened alongside the
+derived rates. Flattening would put a `runs` field next to a `Runs()` method on
+the same Go struct, where the field silently shadows the method — a trap worth
+avoiding for the sake of a slightly shorter payload. `flips` and `transitions`
+are reported so a caller can check `flip_rate` rather than having to trust it.
 
 `GET /analytics/clusters`:
 
@@ -168,6 +185,10 @@ A fourth nav tab, `Analytics`, with three sub-views sharing the existing filter 
 - **Clusters** — the cluster list, and the minimal covering set as a table with a cumulative-coverage bar.
 
 **Charts**: the page needs a sparkline and a stacked bar, nothing more. I recommend hand-rolled inline SVG (~100 lines in a small `chart.js` module) over pulling a charting library from a CDN. `index.html` does already load Pico from jsdelivr, so a CDN dependency is not unprecedented — but a full chart library is a large surface for two chart types, and inline SVG keeps the page working offline and in air-gapped deployments. Flagged as the one call worth your input before I start on phase 3.
+
+## Status
+
+Phase 0 and phase 1 are implemented. Phases 2–4 are still as proposed below.
 
 ## Implementation Phases
 

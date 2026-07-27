@@ -3,13 +3,16 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "store",
     srcs = [
+        "analytics.go",
         "evidence.go",
+        "filter.go",
         "inheritance.go",
         "pagination.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/store",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/analytics",
         "//internal/model",
         "@com_github_google_uuid//:uuid",
         "@com_github_jackc_pgx_v5//:pgx",
