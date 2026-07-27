@@ -5,6 +5,7 @@ go_test(
     srcs = [
         "analytics_integration_test.go",
         "auth_integration_test.go",
+        "clusters_integration_test.go",
         "distinct_test.go",
         "integration_test.go",
         "list_offset_sort_test.go",

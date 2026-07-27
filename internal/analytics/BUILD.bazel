@@ -3,6 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "analytics",
     srcs = [
+        "cluster.go",
         "metrics.go",
         "stats.go",
     ],
@@ -13,6 +14,7 @@ go_library(
 go_test(
     name = "analytics_test",
     srcs = [
+        "cluster_test.go",
         "metrics_test.go",
         "stats_test.go",
     ],

@@ -180,6 +180,139 @@ LIMIT %[4]s`, cols, where, prefixed("a"), limit)
 	return stats, nil
 }
 
+// DefaultMaxFailureRows caps the failing rows one clustering request may pull
+// into memory.
+const DefaultMaxFailureRows = 200000
+
+// ErrTooManyRows is returned when a clustering query matches more failing rows
+// than the cap allows.
+type ErrTooManyRows struct {
+	Max int
+}
+
+func (e *ErrTooManyRows) Error() string {
+	return fmt.Sprintf("query matches more than %d failing rows; narrow the filter or the time window", e.Max)
+}
+
+// RunKey selects how rows are grouped into "runs" for co-failure analysis.
+// The schema has no run column, so the grouping is derived — and clustering
+// quality depends entirely on getting it right, which is why it is explicit
+// rather than assumed.
+type RunKey string
+
+const (
+	// RunKeyAuto prefers the adapter's invocation id and falls back to the
+	// commit for rows that lack one.
+	RunKeyAuto RunKey = "auto"
+	// RunKeyInvocation groups strictly by invocation id, ignoring rows without
+	// one. Correct when every source sets it.
+	RunKeyInvocation RunKey = "invocation"
+	// RunKeyCommit groups by commit. Correct when a commit is tested once.
+	RunKeyCommit RunKey = "commit"
+)
+
+// Valid reports whether k names a supported grouping.
+func (k RunKey) Valid() bool {
+	switch k {
+	case RunKeyAuto, RunKeyInvocation, RunKeyCommit:
+		return true
+	}
+	return false
+}
+
+// expr renders the run key as SQL. Fixed strings chosen by a validated enum,
+// never interpolated from caller input.
+func (k RunKey) expr() string {
+	switch k {
+	case RunKeyInvocation:
+		return "metadata->>'invocation_id'"
+	case RunKeyCommit:
+		return "rcs_ref"
+	default:
+		return "COALESCE(metadata->>'invocation_id', rcs_ref)"
+	}
+}
+
+type FailureOccurrenceParams struct {
+	Filter model.EvidenceFilter
+	RunKey RunKey
+	// IncludeErrors folds ERROR in with FAIL.
+	//
+	// Off by default, and that default matters: an infrastructure outage fails
+	// every test in the same run at once, which makes every pair of them look
+	// perfectly correlated. Including errors would collapse the whole suite into
+	// one meaningless cluster and bury the real co-failure signal.
+	IncludeErrors bool
+	// MaxRows overrides DefaultMaxFailureRows when positive.
+	MaxRows int
+}
+
+// FailureOccurrences projects the filtered failures down to (test, run) pairs,
+// which is all the co-failure analysis needs. This is a small fraction of the
+// evidence — only failing rows, only three columns, deduplicated in the database.
+func (s *EvidenceStore) FailureOccurrences(ctx context.Context, params FailureOccurrenceParams) ([]analytics.Occurrence, error) {
+	if params.RunKey == "" {
+		params.RunKey = RunKeyAuto
+	}
+	if !params.RunKey.Valid() {
+		return nil, fmt.Errorf("unknown run key %q", params.RunKey)
+	}
+
+	maxRows := params.MaxRows
+	if maxRows <= 0 {
+		maxRows = DefaultMaxFailureRows
+	}
+
+	f := buildFilter(params.Filter)
+	results := []any{model.ResultFail}
+	if params.IncludeErrors {
+		results = append(results, model.ResultError)
+	}
+	placeholders := make([]string, len(results))
+	for i, r := range results {
+		placeholders[i] = f.arg(r)
+	}
+	f.add(fmt.Sprintf("result IN (%s)", strings.Join(placeholders, ",")))
+
+	runExpr := params.RunKey.expr()
+	// Rows with no run key cannot be grouped with anything, so they are dropped
+	// rather than silently collapsed into a single null bucket.
+	f.add(runExpr + " IS NOT NULL")
+
+	query := fmt.Sprintf(
+		"SELECT DISTINCT repo, procedure_ref, %s AS run FROM evidence%s LIMIT %s",
+		runExpr, f.whereClause(), f.arg(maxRows+1))
+
+	rows, err := s.pool.Query(ctx, query, f.args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failure occurrences: %w", err)
+	}
+	defer rows.Close()
+
+	occurrences := make([]analytics.Occurrence, 0)
+	for rows.Next() {
+		var repo, procedure, run string
+		if err := rows.Scan(&repo, &procedure, &run); err != nil {
+			return nil, fmt.Errorf("scan failure occurrence: %w", err)
+		}
+		occurrences = append(occurrences, analytics.Occurrence{
+			Test: analytics.TestID{Repo: repo, ProcedureRef: procedure},
+			// Runs are namespaced by repo so that two repos sharing a commit
+			// hash or invocation id are not treated as one run.
+			Run: repo + "\x00" + run,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate failure occurrences: %w", err)
+	}
+
+	if len(occurrences) > maxRows {
+		return nil, &ErrTooManyRows{Max: maxRows}
+	}
+
+	return occurrences, nil
+}
+
 // WindowSummary is the headline shape of a query window.
 type WindowSummary struct {
 	Runs    int64 `json:"runs"`

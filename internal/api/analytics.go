@@ -140,6 +140,97 @@ func (h *AnalyticsHandler) Tests(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Clustering caps. The matrix is held in memory and the pairwise similarity is
+// quadratic in the number of tests, so both dimensions are bounded. Exceeding
+// either is reported rather than truncated: a coverage percentage computed from
+// part of the failures is worse than no answer, because it looks like an answer.
+const (
+	MaxClusterTests = 2000
+	MaxClusterRuns  = 20000
+)
+
+// DefaultClusterThreshold is the Jaccard similarity at which two tests are
+// considered to fail together.
+const DefaultClusterThreshold = 0.6
+
+// Clusters groups tests that fail together and returns the smallest set of
+// tests that still catches most failing runs.
+func (h *AnalyticsHandler) Clusters(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	filter, err := parseEvidenceFilter(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	runKey := store.RunKey(q.Get("run_key"))
+	if runKey == "" {
+		runKey = store.RunKeyAuto
+	}
+	if !runKey.Valid() {
+		writeError(w, http.StatusBadRequest,
+			`run_key must be one of "auto", "invocation", "commit"`)
+		return
+	}
+
+	includeErrors := q.Get("include_errors") == "true"
+
+	threshold := DefaultClusterThreshold
+	if err := parseRateParam(q, "threshold", &threshold); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	occurrences, err := h.evidence.FailureOccurrences(r.Context(), store.FailureOccurrenceParams{
+		Filter:        filter,
+		RunKey:        runKey,
+		IncludeErrors: includeErrors,
+	})
+	if err != nil {
+		var tooMany *store.ErrTooManyRows
+		if errors.As(err, &tooMany) {
+			writeError(w, http.StatusUnprocessableEntity, tooMany.Error())
+			return
+		}
+		slog.Error("failed to load failure occurrences", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	matrix := analytics.NewMatrix(occurrences)
+	if matrix.Tests() > MaxClusterTests {
+		writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+			"query matches %d distinct failing tests, more than the %d that can be clustered; narrow the filter or the time window",
+			matrix.Tests(), MaxClusterTests))
+		return
+	}
+	if matrix.Runs() > MaxClusterRuns {
+		writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+			"query matches %d failing runs, more than the %d that can be clustered; narrow the filter or the time window",
+			matrix.Runs(), MaxClusterRuns))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		RunKey        store.RunKey          `json:"run_key"`
+		IncludeErrors bool                  `json:"include_errors"`
+		Threshold     float64               `json:"threshold"`
+		Tests         int                   `json:"tests"`
+		FailingRuns   int                   `json:"failing_runs"`
+		Clusters      []analytics.Cluster   `json:"clusters"`
+		MinimalSet    []analytics.CoverStep `json:"minimal_set"`
+	}{
+		RunKey:        runKey,
+		IncludeErrors: includeErrors,
+		Threshold:     threshold,
+		Tests:         matrix.Tests(),
+		FailingRuns:   matrix.FailingRuns(),
+		Clusters:      matrix.Cluster(threshold),
+		MinimalSet:    matrix.GreedyCover(),
+	})
+}
+
 // Summary returns the headline counts for a filter window.
 func (h *AnalyticsHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseEvidenceFilter(r.URL.Query())

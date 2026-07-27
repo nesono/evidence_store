@@ -62,6 +62,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 
 		r.Get("/analytics/summary", analyticsAPI.Summary)
 		r.Get("/analytics/tests", analyticsAPI.Tests)
+		r.Get("/analytics/clusters", analyticsAPI.Clusters)
 	})
 
 	r.Handle("/*", web.StaticHandler())

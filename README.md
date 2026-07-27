@@ -271,6 +271,7 @@ Base URL: `/api/v1`
 | `GET` | `/api/v1/inheritance` | List inheritance declarations |
 | `GET` | `/api/v1/analytics/summary` | Headline counts for a filter window |
 | `GET` | `/api/v1/analytics/tests` | Per-test reliability metrics (see [Analytics](#analytics)) |
+| `GET` | `/api/v1/analytics/clusters` | Co-failure clusters and the minimal covering set |
 | `GET` | `/healthz` | Health check |
 
 ### Creating evidence
@@ -415,6 +416,60 @@ Thresholds are query parameters (`min_runs`, `always_failing_rate`, `flip_rate`,
 | `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |
 
 A query matching more than 50,000 distinct tests returns `422` rather than truncating, since a truncated set yields confident-looking numbers computed from part of the data.
+
+### Co-failure clusters and test selection
+
+`/api/v1/analytics/clusters` answers "which tests fail for the same reason, and how few of them still catch most failures".
+
+```bash
+curl "http://localhost:8000/api/v1/analytics/clusters?repo=org/repo&finished_after=2026-06-01"
+```
+
+```json
+{
+  "run_key": "auto",
+  "include_errors": false,
+  "threshold": 0.6,
+  "tests": 34,
+  "failing_runs": 96,
+  "clusters": [
+    { "id": 1, "size": 7, "covers_runs": 41, "cohesion": 0.78,
+      "members": [{ "repo": "org/repo", "procedure_ref": "//pkg/net:a_test" }] }
+  ],
+  "minimal_set": [
+    { "test": { "repo": "org/repo", "procedure_ref": "//pkg/net:a_test" },
+      "new_runs": 41, "cumulative": 41, "coverage": 0.427 }
+  ]
+}
+```
+
+**`clusters`** groups tests whose failure sets are at least `threshold` similar (Jaccard), using single-link clustering — A and C group together if each is similar to B, even if not to each other. `cohesion` is the mean pairwise similarity inside the cluster, so a long chain scores lower than a group that genuinely all fail together. Solitary tests are omitted.
+
+**`minimal_set`** is a greedy set cover, ordered so it reads as "these N tests catch X% of failing runs". Every entry contributes something no earlier entry did. It is an approximation, not a proven minimum — set cover is NP-hard, and greedy can be beaten on constructed inputs — but it is within a `ln n` factor and gives the ranked list the decision needs.
+
+#### What counts as a "run"
+
+The schema has no run column, so the grouping is derived, and clustering quality depends entirely on it:
+
+| `run_key=` | Grouping | Use when |
+|-----------|----------|----------|
+| `auto` *(default)* | `metadata.invocation_id`, falling back to the commit | Mixed sources |
+| `invocation` | `metadata.invocation_id`; rows without one are dropped | Every source sets it |
+| `commit` | `rcs_ref` | A commit is tested once |
+
+Runs are namespaced by repo, so a commit hash or invocation id reused across repos is never treated as one run.
+
+#### Errors are excluded by default
+
+`ERROR` rows are not counted as failures unless `include_errors=true`. An infrastructure outage fails every test in the same run simultaneously, which makes every pair of them look perfectly correlated — enough of those and the entire suite collapses into a single meaningless cluster that buries the real signal.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `threshold` | `0.6` | Jaccard similarity at which two tests are considered to fail together |
+| `run_key` | `auto` | See above |
+| `include_errors` | `false` | Count `ERROR` alongside `FAIL` |
+
+Queries matching more than 200,000 failing rows, 2,000 distinct failing tests, or 20,000 failing runs return `422`.
 
 ## Development
 
