@@ -366,6 +366,11 @@ The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresq
 
 ## Analytics
 
+The web UI's **Analytics** tab is the front end for everything below: an overview
+of the filtered window, a sortable per-test table with presets for the four
+questions this feature exists to answer, and the co-failure clusters. Selecting a
+row opens the matching raw records in Search.
+
 `/api/v1/analytics/tests` collapses the evidence into one row per test — identified by `(repo, procedure_ref)` — so a suite can be judged rather than read record by record. It accepts every filter the list endpoint does, including the `~` regex and `*` prefix forms.
 
 ```bash

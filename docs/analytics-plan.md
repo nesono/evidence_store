@@ -184,11 +184,13 @@ A fourth nav tab, `Analytics`, with three sub-views sharing the existing filter 
 - **Tests** — the metrics table, sortable by every column, with label chips and quick presets that are just sort+filter combinations: *Never fails*, *Always fails*, *Most infra errors*, *Flakiest*. Clicking a row deep-links into the Search tab with `?repo=…&procedure_ref=…&result=FAIL` — the Search page already restores filters from the URL, so this needs no new plumbing.
 - **Clusters** — the cluster list, and the minimal covering set as a table with a cumulative-coverage bar.
 
-**Charts**: the page needs a sparkline and a stacked bar, nothing more. I recommend hand-rolled inline SVG (~100 lines in a small `chart.js` module) over pulling a charting library from a CDN. `index.html` does already load Pico from jsdelivr, so a CDN dependency is not unprecedented — but a full chart library is a large surface for two chart types, and inline SVG keeps the page working offline and in air-gapped deployments. Flagged as the one call worth your input before I start on phase 3.
+**Charts**: built with no new dependency, and in the end without SVG either. The two marks the page needs — a part-to-whole bar and a meter — are a flex row and a width in plain HTML/CSS, which is less code than the SVG equivalent and sidesteps viewBox scaling entirely. A charting library was never close to worth it for two shapes.
+
+Result colours reuse the app's existing status palette rather than introducing a second one, so a single page never shows two different greens. Status hues are red/green by nature and fail colour-blind separation on their own — the validated reference palette fails the same check — so every mark is paired with a written value: segments carry counts, the legend repeats them with shares, and every meter sits beside its number.
 
 ## Status
 
-Phases 0, 1 and 2 are implemented. Phases 3–4 are still as proposed below.
+Phases 0–3 are implemented. Phase 4 is still as proposed below.
 
 One thing changed during phase 2: the plan clustered on `FAIL` **and** `ERROR`. That turned out to be wrong. An infrastructure outage errors every test in the same run at once, which makes every pair of them perfectly correlated; once outages outnumber genuine failing runs, the whole suite collapses into a single meaningless cluster. Errors are therefore excluded by default, behind `include_errors=true`. There is an integration test that reproduces the collapse.
 

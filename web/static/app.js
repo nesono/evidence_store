@@ -1,4 +1,15 @@
-const API_BASE = "/api/v1";
+import {
+  API_BASE,
+  apiFetch,
+  esc,
+  formatTime,
+  getStoredAPIKey,
+  promptForAPIKey,
+  resultBadge,
+  setStoredAPIKey,
+  updateAuthUI,
+} from "./common.js";
+import { showAnalytics } from "./analytics.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 const BAR_TEXT_FIELDS = ["repo", "rcs_ref"];
@@ -192,53 +203,6 @@ function refreshAdvancedToggle() {
   btn.textContent = n > 0 ? `More filters (${n})` : "More filters";
 }
 
-// --- Auth ---
-
-const API_KEY_STORAGE = "evidence_api_key";
-
-function getStoredAPIKey() {
-  return localStorage.getItem(API_KEY_STORAGE) || "";
-}
-
-function setStoredAPIKey(key) {
-  if (key) {
-    localStorage.setItem(API_KEY_STORAGE, key);
-  } else {
-    localStorage.removeItem(API_KEY_STORAGE);
-  }
-  updateAuthUI();
-}
-
-function updateAuthUI() {
-  const btn = document.getElementById("auth-logout");
-  if (btn) btn.hidden = !getStoredAPIKey();
-}
-
-function promptForAPIKey(msg) {
-  const key = prompt(msg || "Enter your API key:");
-  if (key !== null) {
-    setStoredAPIKey(key.trim());
-  }
-  return getStoredAPIKey();
-}
-
-// Wrapper around fetch that attaches Authorization header and handles 401.
-async function apiFetch(url, options = {}) {
-  const key = getStoredAPIKey();
-  if (key) {
-    options.headers = { ...options.headers, Authorization: `Bearer ${key}` };
-  }
-  const resp = await fetch(url, options);
-  if (resp.status === 401) {
-    const newKey = promptForAPIKey("Authentication required. Enter your API key:");
-    if (newKey) {
-      options.headers = { ...options.headers, Authorization: `Bearer ${newKey}` };
-      return fetch(url, options);
-    }
-  }
-  return resp;
-}
-
 // --- API ---
 
 // fetchWindow retrieves the current window of records.
@@ -346,20 +310,9 @@ function startHealthPolling() {
 
 // --- Rendering ---
 
-function resultBadge(result) {
-  const cls = result ? result.toLowerCase() : "unknown";
-  return `<span class="badge badge-${cls}">${result || "?"}</span>`;
-}
-
 function renderTags(metadata) {
   if (!metadata || !metadata.tags || metadata.tags.length === 0) return "";
   return metadata.tags.map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(" ");
-}
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
 
 // Parse a user-entered datetime string. Zoneless values are treated as UTC.
@@ -483,12 +436,6 @@ function renderDetail(record) {
 
   el.innerHTML = html;
   document.getElementById("detail-dialog").showModal();
-}
-
-function esc(str) {
-  const d = document.createElement("div");
-  d.textContent = str;
-  return d.innerHTML;
 }
 
 // --- Search ---
@@ -675,6 +622,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     tab.classList.add("active");
     document.querySelectorAll(".tab-content").forEach(s => s.hidden = true);
     document.getElementById(`tab-${target}`).hidden = false;
+    if (target === "analytics") showAnalytics();
   });
 });
 
