@@ -408,3 +408,92 @@ func TestAnalyticsSummaryEmptyWindow(t *testing.T) {
 	assert.Zero(t, body.Tests)
 	assert.InDelta(t, 0, body.FailRate, 1e-9)
 }
+
+// ---------------------------------------------------------------------------
+// Combined ref filter
+//
+// One box in the UI has to match whatever the user pasted, without asking them
+// to say first whether it is a branch, a tag or a commit.
+// ---------------------------------------------------------------------------
+
+func seedRefFixture(t *testing.T) string {
+	t.Helper()
+
+	repo := fmt.Sprintf("refs/%d", time.Now().UnixNano())
+	rec := func(branch, rcsRef, procedure string) model.EvidenceCreate {
+		return model.EvidenceCreate{
+			Repo:         repo,
+			Branch:       branch,
+			RCSRef:       rcsRef,
+			ProcedureRef: procedure,
+			EvidenceType: "bazel",
+			Source:       "ci",
+			Result:       model.ResultPass,
+			FinishedAt:   model.FlexibleTime{Time: fixtureBase},
+		}
+	}
+
+	_, err := testEvidenceStore.InsertBatch(context.Background(), []model.EvidenceCreate{
+		rec("main", "aaaa1111bbbb2222cccc3333dddd4444eeee5555", "//on:main"),
+		rec("release/1.1", "1111aaaa2222bbbb3333cccc4444dddd5555eeee", "//on:release11"),
+		rec("release/1.10", "9999aaaa8888bbbb7777cccc6666dddd5555eeee", "//on:release110"),
+		rec("feature/x", "v2.0.0", "//on:tag"),
+	})
+	require.NoError(t, err)
+	return repo
+}
+
+func refProcedures(t *testing.T, repo, ref string) []string {
+	t.Helper()
+	q := url.Values{"repo": {repo}, "ref": {ref}, "min_runs": {"1"}}
+	resp := getJSON(t, "/api/v1/analytics/tests?"+q.Encode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body := decodeJSON[analyticsTestsResponse](t, resp)
+
+	out := make([]string, 0, len(body.Tests))
+	for _, s := range body.Tests {
+		out = append(out, s.ProcedureRef)
+	}
+	return out
+}
+
+func TestRefFilterMatchesBranch(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Equal(t, []string{"//on:main"}, refProcedures(t, repo, "main"))
+}
+
+func TestRefFilterMatchesFullCommit(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Equal(t, []string{"//on:main"},
+		refProcedures(t, repo, "aaaa1111bbbb2222cccc3333dddd4444eeee5555"))
+}
+
+// Pasting an abbreviated SHA is the common case and has to find the full one.
+func TestRefFilterMatchesAbbreviatedCommit(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Equal(t, []string{"//on:main"}, refProcedures(t, repo, "aaaa111"))
+}
+
+func TestRefFilterMatchesTagStoredAsRef(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Equal(t, []string{"//on:tag"}, refProcedures(t, repo, "v2.0.0"))
+}
+
+// Branches are matched whole. Prefix matching there would answer a request for
+// release/1.1 with release/1.10 as well.
+func TestRefFilterDoesNotPrefixMatchBranches(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Equal(t, []string{"//on:release11"}, refProcedures(t, repo, "release/1.1"))
+}
+
+func TestRefFilterAcceptsRegex(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.ElementsMatch(t,
+		[]string{"//on:release11", "//on:release110"},
+		refProcedures(t, repo, "~^release/"))
+}
+
+func TestRefFilterMatchingNothingReturnsEmpty(t *testing.T) {
+	repo := seedRefFixture(t)
+	assert.Empty(t, refProcedures(t, repo, "no-such-ref"))
+}

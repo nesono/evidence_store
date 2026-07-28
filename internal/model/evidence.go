@@ -109,9 +109,13 @@ type EvidenceResponse struct {
 }
 
 type EvidenceFilter struct {
-	Repo           *string
-	RCSRef         *string
-	Branch         *string
+	Repo   *string
+	RCSRef *string
+	Branch *string
+	// Ref matches a branch, tag or commit with one value. The UI offers a single
+	// box because a user pasting "what they are looking at" does not want to
+	// first classify it.
+	Ref            *string
 	EvidenceType   *string
 	Result         []EvidenceResult
 	Source         *string

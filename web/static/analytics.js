@@ -11,7 +11,23 @@
 
 import { API_BASE, apiFetch, esc, formatTime } from "./common.js";
 
-const FILTER_FIELDS = ["repo", "branch", "finished_after", "finished_before"];
+// `ref` is one box matching a branch, a tag or a commit. Someone pasting what
+// they are looking at should not have to classify it first; the server does the
+// OR, so no guessing happens here.
+const FILTER_FIELDS = ["repo", "ref", "finished_after", "finished_before"];
+
+// Relative ranges are resolved at query time rather than written into the date
+// inputs, so "last 3 hours" still means the last three hours an hour later.
+const RANGES = {
+  "3h": 3 * 3600e3,
+  "12h": 12 * 3600e3,
+  "24h": 24 * 3600e3,
+  "7d": 7 * 86400e3,
+  "30d": 30 * 86400e3,
+  "90d": 90 * 86400e3,
+};
+
+const DEFAULT_RANGE = "3h";
 
 // Ranked answers to the questions the analytics page exists to ask. Each is
 // just a sort key — the table is one view, not four.
@@ -32,7 +48,9 @@ const LABEL_TEXT = {
 
 const PAGE_SIZE = 50;
 
-let loaded = false;
+// Analytics queries scan far more evidence than a search does, so the page waits
+// to be asked. Nothing is fetched until Apply is pressed.
+let applied = false;
 let view = "overview";
 let sortKey = "fail_rate";
 let sortDesc = true;
@@ -49,14 +67,33 @@ function num(n) {
   return n.toLocaleString("en-US");
 }
 
+function selectedRange() {
+  return document.getElementById("an-range")?.value || DEFAULT_RANGE;
+}
+
 function readFilters() {
   const form = document.getElementById("analytics-filter");
+  const range = selectedRange();
   const filters = {};
+
   for (const field of FILTER_FIELDS) {
+    // The custom date boxes only speak when the range is set to custom.
+    if ((field === "finished_after" || field === "finished_before") && range !== "custom") continue;
     const value = form.elements[field]?.value.trim();
     if (value) filters[field] = value;
   }
+
+  if (RANGES[range]) {
+    filters.finished_after = new Date(Date.now() - RANGES[range]).toISOString();
+  }
   return filters;
+}
+
+// The custom date inputs are only meaningful for a custom range, so they are
+// only on screen for one.
+function syncRangeInputs() {
+  const custom = selectedRange() === "custom";
+  document.querySelectorAll(".an-custom-range").forEach(el => { el.hidden = !custom; });
 }
 
 function query(extra = {}) {
@@ -89,6 +126,24 @@ function clearError() {
 function loading(containerId, message = "Loading...") {
   document.getElementById(containerId).innerHTML =
     `<p class="empty-state">${esc(message)}</p>`;
+}
+
+function containerFor(v) {
+  if (v === "overview") return "an-overview";
+  if (v === "tests") return "an-tests-body-wrap";
+  return "an-clusters";
+}
+
+function showPrompt() {
+  document.getElementById(containerFor(view)).innerHTML = `
+    <p class="empty-state">
+      Choose a time range and press <strong>Apply</strong>.
+    </p>`;
+  if (view === "tests") {
+    document.getElementById("an-tests-range").textContent = "";
+    document.getElementById("an-prev").disabled = true;
+    document.getElementById("an-next").disabled = true;
+  }
 }
 
 // --- Marks ---
@@ -415,36 +470,45 @@ function setView(next) {
 
 async function refresh() {
   clearError();
+  if (!applied) {
+    showPrompt();
+    return;
+  }
   try {
     if (view === "overview") await loadOverview();
     else if (view === "tests") await loadTests();
     else await loadClusters();
   } catch (err) {
     showError(err.message);
-    document.getElementById(
-      view === "overview" ? "an-overview" : view === "tests" ? "an-tests-body-wrap" : "an-clusters",
-    ).innerHTML = "";
+    document.getElementById(containerFor(view)).innerHTML = "";
   }
 }
 
-// Called by the tab handler in app.js. The first activation loads; later ones
-// leave whatever the user was looking at alone.
+// Called by the tab handler in app.js. Opening the tab shows the controls and
+// waits; it does not run a query of its own accord.
 export function showAnalytics() {
-  if (loaded) return;
-  loaded = true;
-  setView(view);
+  syncRangeInputs();
+  if (!applied) showPrompt();
 }
 
 // --- Wiring ---
 
 document.getElementById("analytics-filter")?.addEventListener("submit", e => {
   e.preventDefault();
+  applied = true;
   offset = 0;
   refresh();
 });
 
+document.getElementById("an-range")?.addEventListener("change", syncRangeInputs);
+
 document.getElementById("an-clear")?.addEventListener("click", () => {
-  document.getElementById("analytics-filter").reset();
+  const form = document.getElementById("analytics-filter");
+  form.reset();
+  syncRangeInputs();
+  // Clearing puts the page back to its opening state rather than running the
+  // default query, so it stays consistent with never having pressed Apply.
+  applied = false;
   offset = 0;
   refresh();
 });

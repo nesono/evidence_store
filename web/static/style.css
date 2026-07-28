@@ -812,8 +812,9 @@ body > main {
     --pico-font-size: 0.9rem;
 }
 
-#an-bar .an-field input { width: 15rem; }
-#an-bar .an-field:nth-child(n+3) input { width: 10rem; }
+#an-bar .an-field input { width: 13rem; }
+#an-bar .an-field select { width: 11.5rem; }
+#an-bar .an-custom-range input { width: 9rem; }
 
 .an-actions {
     display: flex;

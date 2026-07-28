@@ -65,6 +65,26 @@ func TestParseEvidenceFilterEmptyValuesAreUnset(t *testing.T) {
 	assert.Nil(t, f.Notes)
 }
 
+func TestParseEvidenceFilterRef(t *testing.T) {
+	f, err := parseEvidenceFilter(mustQuery(t, "ref=release%2F1.2"))
+	require.NoError(t, err)
+	require.NotNil(t, f.Ref)
+	assert.Equal(t, "release/1.2", *f.Ref)
+
+	// ref is its own filter, not a substitute for branch or rcs_ref.
+	assert.Nil(t, f.Branch)
+	assert.Nil(t, f.RCSRef)
+}
+
+func TestParseEvidenceFilterRefCombinesWithBranch(t *testing.T) {
+	f, err := parseEvidenceFilter(mustQuery(t, "ref=abc123&branch=main"))
+	require.NoError(t, err)
+	require.NotNil(t, f.Ref)
+	require.NotNil(t, f.Branch)
+	assert.Equal(t, "abc123", *f.Ref)
+	assert.Equal(t, "main", *f.Branch)
+}
+
 func TestParseEvidenceFilterResults(t *testing.T) {
 	f, err := parseEvidenceFilter(mustQuery(t, "result=PASS,FAIL"))
 	require.NoError(t, err)
