@@ -29,6 +29,9 @@ const RANGES = {
 
 const DEFAULT_RANGE = "3h";
 
+// Mirrors the server's default, used when the threshold box cannot be read.
+const DEFAULT_CLUSTER_THRESHOLD = 0.6;
+
 // Ranked answers to the questions the analytics page exists to ask. Each is
 // just a sort key — the table is one view, not four.
 const PRESETS = {
@@ -395,8 +398,15 @@ async function loadClusters() {
   loading("an-clusters");
 
   const controls = document.getElementById("analytics-cluster-controls");
+  // A number input reports "" when the browser considers the typed value
+  // invalid, which a locale using a decimal comma can trigger. Fall back rather
+  // than sending nothing and silently getting a different threshold than the
+  // one on screen.
+  const typed = parseFloat(controls.elements.threshold.value);
+  const threshold = Number.isFinite(typed) ? typed : DEFAULT_CLUSTER_THRESHOLD;
+
   const data = await getJSON("/analytics/clusters", query({
-    threshold: controls.elements.threshold.value,
+    threshold,
     run_key: controls.elements.run_key.value,
     include_errors: controls.elements.include_errors.checked ? "true" : "",
   }));

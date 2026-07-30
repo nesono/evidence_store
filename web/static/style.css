@@ -804,10 +804,16 @@ body > main {
     color: var(--an-muted);
 }
 
+/* Pico gives form controls 15px of padding top and bottom. Combined with a
+   fixed 40px border-box height that leaves a 10px content box for a 27px line,
+   and `overflow: clip` then hides the text entirely — the control looks empty.
+   Zeroing the block padding is what makes the fixed height safe. */
 #tab-analytics .an-field input,
 #tab-analytics .an-field select {
     margin: 0;
     height: 40px;
+    padding-block: 0;
+    line-height: 1.2;
     font-size: 0.9rem;
     --pico-font-size: 0.9rem;
 }
@@ -1134,8 +1140,8 @@ body > main {
     margin-bottom: 1.2rem;
 }
 
-.an-cluster-controls .an-field input,
-.an-cluster-controls .an-field select { width: 12rem; }
+.an-cluster-controls .an-field input { width: 8rem; }
+.an-cluster-controls .an-field select { width: 15rem; }
 
 .an-checkbox {
     display: flex;
