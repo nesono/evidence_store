@@ -827,11 +827,52 @@ body > main {
     gap: 0.4rem;
 }
 
-.an-actions button {
+/* The filter-bar actions and the preset buttons are the same kind of control
+   and have to stay the same size, so they share one rule rather than two that
+   drift apart. */
+#tab-analytics .an-actions button,
+#tab-analytics .an-presets button {
     height: 40px;
+    width: auto;
     margin: 0;
     padding: 0 1rem;
     font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+/* Presets */
+
+.an-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.an-presets-label {
+    font-size: 0.8rem;
+    color: var(--an-muted);
+    margin-right: 0.2rem;
+}
+
+/* Only the applied preset is filled in; the rest read as the alternatives they
+   are, so the current ranking is visible at a glance. */
+#tab-analytics .an-presets button {
+    background: transparent;
+    border: 1px solid var(--an-hairline);
+    color: var(--an-muted);
+}
+
+#tab-analytics .an-presets button:hover {
+    border-color: var(--pico-primary, #1095c1);
+    color: var(--pico-primary, #1095c1);
+}
+
+#tab-analytics .an-presets button.active {
+    background: var(--pico-primary, #1095c1);
+    border-color: var(--pico-primary, #1095c1);
+    color: #fff;
 }
 
 /* Sub-view switcher */
