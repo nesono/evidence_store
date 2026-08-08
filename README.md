@@ -24,6 +24,7 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_MAX_PAGE_SIZE` | `1000` | Max page size |
 | `EVIDENCE_MAX_BATCH_SIZE` | `1000` | Max records per batch |
 | `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` | `30` | How long an analytics aggregation is reused for an identical filter (`0` disables) |
+| `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` | `15` | Budget for one analytics aggregation before it is refused (`0` disables) |
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
 | `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
@@ -470,6 +471,7 @@ curl -o tests.csv "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&so
 The export covers the whole filtered set rather than the requested page — filters and sorting apply, `limit` and `offset` do not. Rates are written as plain decimals (`0.106`) rather than percentages so a spreadsheet reads them as numbers, and labels come through space-separated in one column. The **Export CSV** button on the Analytics tab downloads exactly what the table is currently showing.
 
 Column order is a contract: new columns are appended, existing ones are not reordered or renamed.
+A query that cannot finish within `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` is refused the same way. Analytics scales with the rows scanned, so an unfiltered query over a long window on a large corpus can take tens of seconds; without a budget it runs until the server's request timeout and the caller gets a dropped connection rather than an answer. Scoping to a repo is what keeps these queries fast — a full year of one repo's history aggregates in about two seconds at six million rows.
 
 ### Co-failure clusters and test selection
 

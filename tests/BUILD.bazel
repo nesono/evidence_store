@@ -5,6 +5,7 @@ go_test(
     srcs = [
         "analytics_cache_test.go",
         "analytics_csv_test.go",
+        "analytics_budget_test.go",
         "analytics_integration_test.go",
         "auth_integration_test.go",
         "clusters_integration_test.go",

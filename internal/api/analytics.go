@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -19,6 +20,31 @@ import (
 type AnalyticsHandler struct {
 	evidence *store.EvidenceStore
 	cfg      *config.Config
+}
+
+// budget bounds one aggregation. Without it a wide enough query simply runs
+// until the server's request timeout drops the connection, and the caller gets
+// no response at all -- no status, no body, nothing to act on. Failing early
+// with the same advice the size caps give is strictly more useful.
+//
+// The returned check reports whether the budget is what expired, as opposed to
+// the caller having gone away, which is not an error worth reporting.
+func (h *AnalyticsHandler) budget(r *http.Request) (context.Context, context.CancelFunc, func(error) bool) {
+	if h.cfg.AnalyticsQueryTimeout <= 0 {
+		return r.Context(), func() {}, func(error) bool { return false }
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), h.cfg.AnalyticsQueryTimeout)
+	exceeded := func(err error) bool {
+		return errors.Is(err, context.DeadlineExceeded) && r.Context().Err() == nil
+	}
+	return ctx, cancel, exceeded
+}
+
+func (h *AnalyticsHandler) writeBudgetExceeded(w http.ResponseWriter) {
+	writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+		"query did not finish within %s; narrow the filter or the time window",
+		h.cfg.AnalyticsQueryTimeout))
 }
 
 func NewAnalyticsHandler(es *store.EvidenceStore, cfg *config.Config) *AnalyticsHandler {
@@ -91,11 +117,18 @@ func (h *AnalyticsHandler) Tests(w http.ResponseWriter, r *http.Request) {
 		offset = n
 	}
 
-	stats, err := h.evidence.TestStats(r.Context(), store.TestStatsParams{
+	ctx, cancel, budgetExceeded := h.budget(r)
+	defer cancel()
+
+	stats, err := h.evidence.TestStats(ctx, store.TestStatsParams{
 		Filter:              filter,
 		GroupByEvidenceType: q.Get("group_by") == "evidence_type",
 	})
 	if err != nil {
+		if budgetExceeded(err) {
+			h.writeBudgetExceeded(w)
+			return
+		}
 		var tooMany *store.ErrTooManyGroups
 		if errors.As(err, &tooMany) {
 			writeError(w, http.StatusUnprocessableEntity, tooMany.Error())
@@ -204,12 +237,19 @@ func (h *AnalyticsHandler) Clusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	occurrences, err := h.evidence.FailureOccurrences(r.Context(), store.FailureOccurrenceParams{
+	ctx, cancel, budgetExceeded := h.budget(r)
+	defer cancel()
+
+	occurrences, err := h.evidence.FailureOccurrences(ctx, store.FailureOccurrenceParams{
 		Filter:        filter,
 		RunKey:        runKey,
 		IncludeErrors: includeErrors,
 	})
 	if err != nil {
+		if budgetExceeded(err) {
+			h.writeBudgetExceeded(w)
+			return
+		}
 		var tooMany *store.ErrTooManyRows
 		if errors.As(err, &tooMany) {
 			writeError(w, http.StatusUnprocessableEntity, tooMany.Error())
@@ -261,8 +301,15 @@ func (h *AnalyticsHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sum, err := h.evidence.Summary(r.Context(), filter)
+	ctx, cancel, budgetExceeded := h.budget(r)
+	defer cancel()
+
+	sum, err := h.evidence.Summary(ctx, filter)
 	if err != nil {
+		if budgetExceeded(err) {
+			h.writeBudgetExceeded(w)
+			return
+		}
 		slog.Error("failed to summarize evidence", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

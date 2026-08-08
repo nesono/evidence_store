@@ -28,6 +28,9 @@ type Config struct {
 	// query, so this mostly serves those without a round trip; the cost is that
 	// a window can lag new evidence by up to this long.
 	AnalyticsCacheTTL time.Duration
+	// AnalyticsQueryTimeout bounds how long a single analytics aggregation may
+	// run. Zero means no budget beyond the server's own request timeout.
+	AnalyticsQueryTimeout time.Duration
 }
 
 // RateLimit configures per-caller token-bucket limits. Zero RPS disables
@@ -54,10 +57,16 @@ func Load() (*Config, error) {
 		LogLevel:        envOrDefault("EVIDENCE_LOG_LEVEL", "INFO"),
 		AnalyticsCacheTTL: time.Duration(
 			envOrDefaultInt("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS", 30)) * time.Second,
+		AnalyticsQueryTimeout: time.Duration(
+			envOrDefaultInt("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS", 15)) * time.Second,
 	}
 
 	if cfg.AnalyticsCacheTTL < 0 {
 		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS must not be negative")
+	}
+
+	if cfg.AnalyticsQueryTimeout < 0 {
+		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS must not be negative")
 	}
 
 	if cfg.DatabaseURL == "" {

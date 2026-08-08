@@ -216,9 +216,46 @@ Tests first at each step, per the project's practice — the metric math lands a
 - `web/static/analytics.js`, the nav tab, the three sub-views, deep-linking into Search.
 
 **Phase 4 — follow-ons, only if measurement demands**
-- Short-TTL in-memory response cache keyed by filter hash (dashboards re-request identical windows).
-- Nightly rollup table if the live aggregation is too slow.
-- CSV export of the tests table.
+- ~~Short-TTL in-memory response cache~~ — done, though not for the reason predicted. See below.
+- ~~Nightly rollup table if the live aggregation is too slow~~ — **measured and declined.** See below.
+- ~~CSV export of the tests table~~ — done.
+
+### What the measurement said
+
+Measured against 6,050,000 rows (12 repos, 88 procedures, one year of history;
+1664 MB table, 3888 MB with indexes):
+
+| window | one repo (605k rows) | all 12 repos (6.05M rows) |
+|---|---|---|
+| 3 hours | 0.081 s | 0.230 s |
+| 24 hours | 0.187 s | 1.260 s |
+| 7 days | 0.313 s | 4.562 s |
+| 30 days | 0.609 s | 11.107 s |
+| 90 days | 1.136 s | 28.423 s |
+| 365 days | 1.963 s | **connection dropped at 30 s** |
+
+Two conclusions, neither of them the one the plan expected.
+
+**A rollup table is not warranted.** Analytics is scoped to a repo — that is how
+the UI drives it and how the plan designed it. The worst case there is a full
+year at 2 seconds, and with the aggregation cache a re-sort of that result is
+free. A nightly rollup would buy a second and a half on the rarest query in
+exchange for a background worker, a second schema, an invalidation story, and
+answers that are stale by up to a day. That is a bad trade, and it stays
+undone.
+
+**The real defect was the failure mode, not the speed.** An unfiltered year-long
+query did not return an error — it ran until the server's request timeout and
+dropped the connection, so the caller got no status, no body, and nothing to act
+on. That is now a query budget
+(`EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS`, default 15): the same query comes
+back as a `422` naming the limit and advising the caller to narrow the filter or
+the window, consistent with the existing size caps.
+
+**The cache earns its place for a different reason than predicted.** The plan
+justified it with dashboards re-requesting identical windows. The actual win is
+that sorting and paging happen in Go after the query, so every click on a column
+header re-runs an aggregation whose inputs did not change.
 
 ## Testing
 
