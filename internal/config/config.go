@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // APIKey represents a configured API key with its access role.
@@ -22,6 +23,11 @@ type Config struct {
 	LogLevel        string
 	APIKeys         []APIKey
 	RateLimit       RateLimit
+	// AnalyticsCacheTTL is how long an aggregation is reused for an identical
+	// filter. Zero disables caching. Sorting and paging are applied after the
+	// query, so this mostly serves those without a round trip; the cost is that
+	// a window can lag new evidence by up to this long.
+	AnalyticsCacheTTL time.Duration
 }
 
 // RateLimit configures per-caller token-bucket limits. Zero RPS disables
@@ -46,6 +52,12 @@ func Load() (*Config, error) {
 		MaxPageSize:     envOrDefaultInt("EVIDENCE_MAX_PAGE_SIZE", 1000),
 		MaxBatchSize:    envOrDefaultInt("EVIDENCE_MAX_BATCH_SIZE", 1000),
 		LogLevel:        envOrDefault("EVIDENCE_LOG_LEVEL", "INFO"),
+		AnalyticsCacheTTL: time.Duration(
+			envOrDefaultInt("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS", 30)) * time.Second,
+	}
+
+	if cfg.AnalyticsCacheTTL < 0 {
+		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS must not be negative")
 	}
 
 	if cfg.DatabaseURL == "" {

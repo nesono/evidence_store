@@ -44,6 +44,14 @@ type TestStatsParams struct {
 // derived by analytics.Finalize, so SQL never computes a metric that Go also
 // knows how to compute.
 func (s *EvidenceStore) TestStats(ctx context.Context, params TestStatsParams) ([]analytics.TestStats, error) {
+	// Sorting and paging happen after this call, so a re-sort or a page turn
+	// asks for exactly the same aggregation again. Serving those from the cache
+	// is the whole point of it.
+	cacheKey := statsCacheKey(params)
+	if cached, ok := s.stats.get(cacheKey); ok {
+		return cached, nil
+	}
+
 	maxGroups := params.MaxGroups
 	if maxGroups <= 0 {
 		maxGroups = DefaultMaxAnalyticsGroups
@@ -177,6 +185,7 @@ LIMIT %[4]s`, cols, where, prefixed("a"), limit)
 		return nil, &ErrTooManyGroups{Max: maxGroups}
 	}
 
+	s.stats.put(cacheKey, stats)
 	return stats, nil
 }
 

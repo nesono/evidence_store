@@ -4,6 +4,7 @@ go_library(
     name = "store",
     srcs = [
         "analytics.go",
+        "cache.go",
         "evidence.go",
         "filter.go",
         "inheritance.go",
@@ -22,9 +23,14 @@ go_library(
 
 go_test(
     name = "store_test",
-    srcs = ["pagination_test.go"],
+    srcs = [
+        "cache_test.go",
+        "pagination_test.go",
+    ],
     embed = [":store"],
     deps = [
+        "//internal/analytics",
+        "//internal/model",
         "@com_github_google_uuid//:uuid",
         "@com_github_stretchr_testify//assert",
         "@com_github_stretchr_testify//require",

@@ -23,6 +23,7 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_DEFAULT_PAGE_SIZE` | `100` | Default page size |
 | `EVIDENCE_MAX_PAGE_SIZE` | `1000` | Max page size |
 | `EVIDENCE_MAX_BATCH_SIZE` | `1000` | Max records per batch |
+| `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` | `30` | How long an analytics aggregation is reused for an identical filter (`0` disables) |
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
 | `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
@@ -453,6 +454,12 @@ curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=stable&so
 | `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |
 
 A query matching more than 50,000 distinct tests returns `422` rather than truncating, since a truncated set yields confident-looking numbers computed from part of the data.
+
+### Caching
+
+Sorting and paging are applied after the aggregation, so clicking a column header re-asks for a result whose inputs did not change. Aggregations are therefore reused for `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` (default 30) against an identical filter, which makes re-sorting and paging instant.
+
+The cache is keyed by the filter and grouping only. Sort key, direction, paging and the labelling thresholds are applied to a fresh copy on every request, so two callers asking the same question with different thresholds still get different answers. The cost is that a window can lag newly ingested evidence by up to the TTL; set it to `0` to disable.
 
 ### Co-failure clusters and test selection
 
