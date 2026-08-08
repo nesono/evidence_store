@@ -12,8 +12,11 @@ import {
 import { showAnalytics } from "./analytics.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
-const BAR_TEXT_FIELDS = ["repo", "rcs_ref"];
-const ADVANCED_TEXT_FIELDS = ["branch", "evidence_type", "source", "procedure_ref", "tags", "notes"];
+// `ref` is one box matching a branch, a tag or a commit, the same as analytics
+// offers — a record has exactly one of each, so filtering on a combination of
+// them only ever narrowed to nothing.
+const BAR_TEXT_FIELDS = ["repo", "ref"];
+const ADVANCED_TEXT_FIELDS = ["evidence_type", "source", "procedure_ref", "tags", "notes"];
 const TEXT_FIELDS = [...BAR_TEXT_FIELDS, ...ADVANCED_TEXT_FIELDS];
 const DATETIME_FIELDS = ["finished_after", "finished_before"];
 // Badged onto the toggle, so a collapsed panel never hides an applied constraint.
@@ -66,6 +69,17 @@ function readStateFromURL() {
   }
   if (params.has("result")) filters.result = params.get("result");
   if (params.has("include_inherited")) filters.include_inherited = params.get("include_inherited");
+
+  // Links made before the two identity fields became one still carry `branch`
+  // or `rcs_ref`. Both are still valid API filters, but the form no longer has
+  // a box for either, and a filter with nowhere to show is a filter the user
+  // cannot see or clear — so they are folded into `ref`, which matches either
+  // column. A link carrying both keeps the commit, as the more specific of the
+  // two.
+  if (!filters.ref) {
+    const legacy = params.get("rcs_ref") || params.get("branch");
+    if (legacy) filters.ref = legacy;
+  }
 
   const offset = parseInt(params.get("offset"), 10);
   windowOffset = Number.isFinite(offset) && offset > 0 ? offset : 0;

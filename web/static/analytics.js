@@ -380,6 +380,9 @@ async function loadTests() {
         procedure_ref: tr.dataset.procedure,
       });
       const filters = readFilters();
+      // Search takes the same `ref` box, so the branch, tag or commit the
+      // numbers were computed over carries across instead of being dropped.
+      if (filters.ref) params.set("ref", filters.ref);
       if (filters.finished_after) params.set("finished_after", filters.finished_after);
       if (filters.finished_before) params.set("finished_before", filters.finished_before);
       window.location.search = params.toString();
