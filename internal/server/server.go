@@ -40,7 +40,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 		w.Write([]byte("ok"))
 	})
 
-	evidenceStore := store.NewEvidenceStore(pool)
+	evidenceStore := store.NewEvidenceStoreWithCache(pool, cfg.AnalyticsCacheTTL)
 	inheritanceStore := store.NewInheritanceStore(pool)
 
 	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)

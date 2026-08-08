@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -13,11 +14,23 @@ import (
 )
 
 type EvidenceStore struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	stats *statsCache
 }
 
 func NewEvidenceStore(pool *pgxpool.Pool) *EvidenceStore {
-	return &EvidenceStore{pool: pool}
+	return NewEvidenceStoreWithCache(pool, 0)
+}
+
+// maxCachedAggregations bounds the cache. Analytics filters vary little in
+// practice, so this is a guard against unbounded growth rather than a tuning
+// knob.
+const maxCachedAggregations = 64
+
+// NewEvidenceStoreWithCache returns a store that reuses aggregation results for
+// ttl. A ttl of zero disables caching.
+func NewEvidenceStoreWithCache(pool *pgxpool.Pool, ttl time.Duration) *EvidenceStore {
+	return &EvidenceStore{pool: pool, stats: newStatsCache(ttl, maxCachedAggregations)}
 }
 
 func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*model.Evidence, error) {

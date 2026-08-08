@@ -88,6 +88,10 @@ func TestMain(m *testing.M) {
 		MaxPageSize:     1000,
 		MaxBatchSize:    1000,
 		LogLevel:        "ERROR",
+		// Matches the production default so the caching path is exercised by
+		// the suite rather than only in unit tests. Every fixture seeds its own
+		// repo, so no test reads another's cached window.
+		AnalyticsCacheTTL: 30 * time.Second,
 	}
 
 	srv := server.New(cfg, pool)
