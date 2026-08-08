@@ -47,6 +47,40 @@ func TestFinalizeRespectsCustomThresholds(t *testing.T) {
 	assert.Equal(t, []string{LabelSparse}, stats[0].Labels)
 }
 
+func TestIsLabel(t *testing.T) {
+	for _, l := range []string{LabelStable, LabelAlwaysFailing, LabelFlaky, LabelInfraHeavy, LabelSparse} {
+		assert.True(t, IsLabel(l), l)
+	}
+	assert.False(t, IsLabel("brittle"))
+	assert.False(t, IsLabel(""))
+}
+
+func TestWithLabel(t *testing.T) {
+	stats := []TestStats{
+		statsFor("//broken:test", Counts{Fail: 20}),
+		statsFor("//clean:test", Counts{Pass: 20}),
+		statsFor("//thin:test", Counts{Pass: 2}),
+	}
+	Finalize(stats, DefaultThresholds())
+
+	assert.Equal(t, []string{"//broken:test"},
+		procedureOrder(WithLabel(stats, LabelAlwaysFailing)))
+	assert.Equal(t, []string{"//clean:test"},
+		procedureOrder(WithLabel(stats, LabelStable)))
+	assert.Equal(t, []string{"//thin:test"},
+		procedureOrder(WithLabel(stats, LabelSparse)))
+}
+
+// Filtering by a label nothing carries is an empty table, not a null one.
+func TestWithLabelMatchingNothing(t *testing.T) {
+	stats := []TestStats{statsFor("//clean:test", Counts{Pass: 20})}
+	Finalize(stats, DefaultThresholds())
+
+	got := WithLabel(stats, LabelInfraHeavy)
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
+}
+
 func TestSortByFailRate(t *testing.T) {
 	stats := []TestStats{
 		statsFor("//low:test", Counts{Pass: 19, Fail: 1}),

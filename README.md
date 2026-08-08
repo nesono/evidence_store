@@ -360,11 +360,40 @@ curl "http://localhost:8000/api/v1/evidence?tags=~^nightly-"
 curl "http://localhost:8000/api/v1/evidence?notes=~device.*XYZ"
 ```
 
-**Supported fields:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `tags`, `notes`.
+**Supported fields:** `repo`, `branch`, `rcs_ref`, `ref`, `evidence_type`, `source`, `procedure_ref`, `tags`, `notes`.
+
+### Matching a branch, tag or commit with one filter
+
+`ref` matches a value against *either* identity column, so a caller who has "the thing they are looking at" does not have to say first whether it is a branch, a tag or a commit:
+
+```bash
+# Any of these work
+curl "http://localhost:8000/api/v1/analytics/tests?ref=main"
+curl "http://localhost:8000/api/v1/analytics/tests?ref=v2.0.0"
+curl "http://localhost:8000/api/v1/analytics/tests?ref=aaaa111"     # abbreviated SHA
+curl "http://localhost:8000/api/v1/analytics/tests?ref=~^release/"  # regex, both columns
+```
+
+Commits match by prefix, so a pasted short SHA finds the full one it abbreviates. Branches and tags match whole — a prefix there would answer a request for `release/1.1` with `release/1.10` as well. `ref` is available on every endpoint that takes filters, including `/api/v1/evidence`.
 
 The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-POSIX-REGEXP) (the `~` operator). This supports the POSIX Extended Regular Expression syntax including character classes (`[a-z]`, `[[:digit:]]`), alternation (`a|b`), quantifiers (`*`, `+`, `?`, `{n,m}`), and anchors (`^`, `$`). Matching is case-sensitive.
 
 ## Analytics
+
+The web UI's **Analytics** tab is the front end for everything below: an overview
+of the filtered window, a sortable per-test table, and the co-failure clusters.
+Selecting a row opens the matching raw records in Search.
+
+Every column in the table is a sort key — click a header to rank by it, click
+again to reverse. Each of the questions this feature exists to answer is one of
+those columns, so ranking by fail rate, infra errors, flip rate or reliability is
+a single click.
+
+The tab does not query until **Apply** is pressed — these aggregations scan far
+more evidence than a search does, so the page waits to be asked rather than
+running the widest possible query on arrival. The time range defaults to the last
+three hours and expands from there; relative ranges are resolved at query time,
+so "last 3 hours" still means the last three hours an hour later.
 
 `/api/v1/analytics/tests` collapses the evidence into one row per test — identified by `(repo, procedure_ref)` — so a suite can be judged rather than read record by record. It accepts every filter the list endpoint does, including the `~` regex and `*` prefix forms.
 
@@ -406,11 +435,19 @@ Each test carries a list of labels, not one category — a test can be both flak
 
 Thresholds are query parameters (`min_runs`, `always_failing_rate`, `flip_rate`, `error_rate`, `min_errors`), because what counts as "almost always failing" is a judgement about a particular suite. The defaults are echoed back in every response.
 
+Use `label=` to *filter* by one, which is a different question from sorting. Ranking by fail rate shows the worst tests, but on a healthy suite the worst may still fail only one run in ten; `label=always_failing` returns the ones that actually meet the threshold, and `label=stable` the ones that genuinely never fail:
+
+```bash
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=always_failing"
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=stable&sort=pass_rate_lower&order=desc"
+```
+
 ### Other parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `sort` | `procedure_ref` | `fail_rate`, `error_rate`, `flip_rate`, `pass_rate_lower`, `runs`, `pass`, `fail`, `error`, `flaky_commits`, `last_seen`, … |
+| `label` | *(none)* | Keep only tests carrying a label: `stable`, `always_failing`, `flaky`, `infra_heavy`, `sparse` |
 | `order` | `asc` | `asc` or `desc` |
 | `limit`, `offset` | page size config | Windows the sorted set; `total` always describes the whole set |
 | `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |

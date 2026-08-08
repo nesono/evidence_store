@@ -761,3 +761,454 @@ body > main {
         max-height: calc(100vh - 14em);
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Analytics
+
+   Marks are HTML/CSS: a flex row for the part-to-whole bar, a width for each
+   meter. Result colours reuse the badge palette so one page never shows two
+   greens, and they are always accompanied by a written value — status hues are
+   red/green by nature and cannot carry meaning unaided.
+   --------------------------------------------------------------------------- */
+
+#tab-analytics {
+    --an-pass: #2d9e2d;
+    --an-fail: #d32f2f;
+    --an-error: #e67e22;
+    --an-skipped: #888;
+    --an-flip: #6a5acd;
+    --an-cover: #2a78d6;
+    --an-track: #e9e9e6;
+    --an-hairline: #e1e0d9;
+    --an-muted: #6b6a66;
+}
+
+#tab-analytics [hidden] { display: none; }
+
+/* Filter bar */
+
+#an-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+}
+
+.an-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--an-muted);
+}
+
+/* Pico gives form controls 15px of padding top and bottom. Combined with a
+   fixed 40px border-box height that leaves a 10px content box for a 27px line,
+   and `overflow: clip` then hides the text entirely — the control looks empty.
+   Zeroing the block padding is what makes the fixed height safe. */
+#tab-analytics .an-field input,
+#tab-analytics .an-field select {
+    margin: 0;
+    height: 40px;
+    padding-block: 0;
+    line-height: 1.2;
+    font-size: 0.9rem;
+    --pico-font-size: 0.9rem;
+}
+
+#an-bar .an-field input { width: 13rem; }
+#an-bar .an-field select { width: 11.5rem; }
+#an-bar .an-custom-range input { width: 9rem; }
+
+.an-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+#tab-analytics .an-actions button {
+    height: 40px;
+    width: auto;
+    margin: 0;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+/* Sub-view switcher */
+
+#an-views {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--an-hairline);
+    margin-bottom: 1.1rem;
+}
+
+#an-views button {
+    margin: 0;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--an-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    width: auto;
+}
+
+#an-views button.active {
+    color: var(--pico-primary, #1095c1);
+    border-bottom-color: var(--pico-primary, #1095c1);
+}
+
+.an-error {
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--an-fail);
+    background: #fdf0f0;
+    font-size: 0.9rem;
+}
+
+/* Hero figure and stat tiles */
+
+.an-hero {
+    margin-bottom: 1.4rem;
+}
+
+.an-hero-value {
+    font-size: 3rem;
+    line-height: 1.05;
+    font-weight: 600;
+}
+
+.an-hero-label {
+    font-size: 1rem;
+    color: var(--an-muted);
+}
+
+.an-hero-span {
+    margin-top: 0.2rem;
+    font-size: 0.8rem;
+    color: var(--an-muted);
+}
+
+.an-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1.6rem;
+}
+
+.an-tile {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--an-hairline);
+    border-radius: 6px;
+}
+
+.an-tile-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.an-tile-label {
+    font-size: 0.8rem;
+    color: var(--an-muted);
+}
+
+.an-tile-hint {
+    font-size: 0.7rem;
+    color: var(--an-muted);
+    opacity: 0.8;
+}
+
+.an-section-title {
+    margin: 1.6rem 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.an-note {
+    margin: 0 0 0.8rem;
+    font-size: 0.8rem;
+    color: var(--an-muted);
+}
+
+/* Stacked part-to-whole bar. 2px surface gaps between segments, rounded outer
+   ends only — the interior joins stay square so the bar reads as one length. */
+
+.an-stack {
+    display: flex;
+    gap: 2px;
+    height: 22px;
+    margin-bottom: 0.6rem;
+}
+
+.an-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2px;
+    overflow: hidden;
+}
+
+.an-seg:first-child { border-radius: 4px 0 0 4px; }
+.an-seg:last-child  { border-radius: 0 4px 4px 0; }
+.an-seg:only-child  { border-radius: 4px; }
+
+.an-seg-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    padding: 0 0.3rem;
+}
+
+.an-seg-pass,    .an-swatch.an-seg-pass    { background: var(--an-pass); }
+.an-seg-fail,    .an-swatch.an-seg-fail    { background: var(--an-fail); }
+.an-seg-error,   .an-swatch.an-seg-error   { background: var(--an-error); }
+.an-seg-skipped, .an-swatch.an-seg-skipped { background: var(--an-skipped); }
+
+.an-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.an-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+}
+
+.an-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex: none;
+}
+
+.an-legend-name { color: var(--an-muted); }
+.an-legend-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.an-legend-share { color: var(--an-muted); font-variant-numeric: tabular-nums; }
+
+/* Meters */
+
+.an-meter-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.an-meter {
+    flex: 1;
+    min-width: 2.5rem;
+    height: 6px;
+    background: var(--an-track);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.an-meter-fill {
+    height: 100%;
+    border-radius: 0 3px 3px 0;
+}
+
+.an-meter-fail  { background: var(--an-fail); }
+.an-meter-error { background: var(--an-error); }
+.an-meter-flip  { background: var(--an-flip); }
+.an-meter-cover { background: var(--an-cover); }
+.an-meter-reliability { background: var(--an-pass); }
+
+.an-num {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.2rem;
+    text-align: right;
+}
+
+.an-num-plain { color: var(--an-muted); display: inline-block; }
+
+.an-rate {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+}
+
+.an-rate .an-num { min-width: 0; }
+
+.an-rate .an-meter {
+    flex: none;
+    width: 100%;
+    height: 6px;
+}
+
+/* Tables */
+
+.an-table-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0.8rem 0 0.4rem;
+    font-size: 0.85rem;
+    color: var(--an-muted);
+}
+
+.an-page-nav { display: flex; gap: 0.3rem; }
+
+.an-page-nav button {
+    margin: 0;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8rem;
+    width: auto;
+}
+
+.an-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.an-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--an-muted);
+    white-space: nowrap;
+}
+
+.an-sortable { cursor: pointer; user-select: none; }
+.an-sortable:hover { color: var(--pico-primary, #1095c1); }
+.an-sorted { color: var(--pico-primary, #1095c1); }
+
+/* A faint arrow on hover says the header is a control, without putting eight
+   arrows on screen at once. */
+#tab-analytics .an-sortable:not(.an-sorted)::after {
+    content: " \25BE";
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+#tab-analytics .an-sortable:not(.an-sorted):hover::after { opacity: 0.55; }
+
+.an-table tbody tr[data-procedure] { cursor: pointer; }
+.an-table tbody tr[data-procedure]:hover { background: rgba(0, 0, 0, 0.03); }
+
+/* The test name takes whatever the fixed columns leave. Rate columns keep one
+   width whether or not they currently hold a meter, so sorting never reflows
+   the table. */
+.an-col-num  { text-align: right; font-variant-numeric: tabular-nums; width: 4rem; }
+.an-col-rate { width: 6.5rem; text-align: right; }
+.an-col-time { width: 8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.an-col-labels { width: 7.5rem; }
+.an-col-test { width: auto; }
+
+.an-test-name {
+    display: block;
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.an-test-repo {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--an-muted);
+}
+
+.an-muted { color: var(--an-muted); }
+
+/* Label chips */
+
+.an-chip {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.an-chip-stable         { background: #e3f3e3; color: #1d661d; }
+.an-chip-always_failing { background: #fbe3e3; color: #9c2020; }
+.an-chip-flaky          { background: #ede9fb; color: #4a3aa7; }
+.an-chip-infra_heavy    { background: #fdeede; color: #9a5410; }
+.an-chip-sparse         { background: #ececea; color: #56554f; }
+
+/* Clusters */
+
+.an-cluster-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.an-cluster-controls .an-field input { width: 8rem; }
+.an-cluster-controls .an-field select { width: 15rem; }
+
+.an-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+}
+
+.an-checkbox input { margin: 0; }
+
+.an-cluster {
+    border: 1px solid var(--an-hairline);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.an-cluster-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.9rem;
+    margin-bottom: 0.4rem;
+}
+
+.an-cluster-title { font-weight: 600; }
+
+.an-cluster-stat {
+    font-size: 0.78rem;
+    color: var(--an-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.an-cluster-members {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+}
+
+.an-cluster-members li {
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.78rem;
+    list-style: none;
+}
+
+.an-cluster-members li::marker { content: ""; }
+
+@media (max-width: 900px) {
+    #an-bar .an-field input,
+    #an-bar .an-field:nth-child(n+3) input { width: 100%; }
+    .an-field { flex: 1 1 12rem; }
+    .an-col-labels, .an-col-time { display: none; }
+}

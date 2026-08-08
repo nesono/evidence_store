@@ -49,6 +49,27 @@ func Finalize(stats []TestStats, th Thresholds) {
 	}
 }
 
+// IsLabel reports whether name is one of the labels Labels can produce.
+func IsLabel(name string) bool {
+	switch name {
+	case LabelStable, LabelAlwaysFailing, LabelFlaky, LabelInfraHeavy, LabelSparse:
+		return true
+	}
+	return false
+}
+
+// WithLabel keeps only the tests carrying the given label. The result is always
+// non-nil so an empty selection renders as [] rather than null.
+func WithLabel(stats []TestStats, label string) []TestStats {
+	kept := make([]TestStats, 0, len(stats))
+	for _, s := range stats {
+		if slices.Contains(s.Labels, label) {
+			kept = append(kept, s)
+		}
+	}
+	return kept
+}
+
 // DefaultSortKey is neutral on purpose: the endpoint answers several different
 // questions and none of them deserves to be the implicit one.
 const DefaultSortKey = "procedure_ref"

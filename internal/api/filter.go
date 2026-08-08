@@ -27,6 +27,9 @@ func parseEvidenceFilter(q url.Values) (model.EvidenceFilter, error) {
 	if v := q.Get("branch"); v != "" {
 		filter.Branch = &v
 	}
+	if v := q.Get("ref"); v != "" {
+		filter.Ref = &v
+	}
 	if v := q.Get("evidence_type"); v != "" {
 		filter.EvidenceType = &v
 	}

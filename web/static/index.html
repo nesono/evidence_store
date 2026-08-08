@@ -13,6 +13,7 @@
             <ul><li><strong>Evidence Store</strong></li></ul>
             <ul>
                 <li><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
+                <li><a href="#" class="nav-tab" data-tab="analytics">Analytics</a></li>
                 <li><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
                 <li id="health-status"></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
@@ -199,6 +200,93 @@
                     <tbody id="inherited-body"></tbody>
                 </table>
             </details>
+        </section>
+
+        <section id="tab-analytics" class="tab-content" hidden>
+            <form id="analytics-filter">
+                <div id="an-bar">
+                    <label class="an-field">Repo
+                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
+                    </label>
+                    <label class="an-field">Branch, tag or commit
+                        <input type="text" name="ref" placeholder="main, v2.0.0 or abc123">
+                    </label>
+                    <label class="an-field">Show
+                        <select name="label" id="an-label">
+                            <option value="">All tests</option>
+                            <option value="always_failing">Always failing</option>
+                            <option value="stable">Never fails</option>
+                            <option value="flaky">Flaky</option>
+                            <option value="infra_heavy">Infra-heavy</option>
+                            <option value="sparse">Too few runs to judge</option>
+                        </select>
+                    </label>
+                    <label class="an-field">Time range
+                        <select name="range" id="an-range">
+                            <option value="3h" selected>Last 3 hours</option>
+                            <option value="12h">Last 12 hours</option>
+                            <option value="24h">Last 24 hours</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="90d">Last 90 days</option>
+                            <option value="all">All time</option>
+                            <option value="custom">Custom range</option>
+                        </select>
+                    </label>
+                    <label class="an-field an-custom-range" hidden>After <small>(UTC)</small>
+                        <input type="text" name="finished_after" placeholder="2026-01-01">
+                    </label>
+                    <label class="an-field an-custom-range" hidden>Before <small>(UTC)</small>
+                        <input type="text" name="finished_before" placeholder="2026-12-31">
+                    </label>
+                    <div class="an-actions">
+                        <button type="submit">Apply</button>
+                        <button type="button" class="secondary" id="an-clear">Clear</button>
+                    </div>
+                </div>
+            </form>
+
+            <div id="an-views" role="tablist" aria-label="Analytics view">
+                <button type="button" role="tab" data-view="overview" class="active" aria-selected="true">Overview</button>
+                <button type="button" role="tab" data-view="tests" aria-selected="false">Tests</button>
+                <button type="button" role="tab" data-view="clusters" aria-selected="false">Clusters</button>
+            </div>
+
+            <div id="an-error" class="an-error" hidden></div>
+
+            <div id="an-overview" class="an-view" data-view="overview"></div>
+
+            <div id="an-tests" class="an-view" data-view="tests" hidden>
+                <div class="an-table-bar">
+                    <span id="an-tests-range"></span>
+                    <div class="an-page-nav">
+                        <button type="button" class="secondary outline" id="an-prev" disabled>&lsaquo; Prev</button>
+                        <button type="button" class="secondary outline" id="an-next" disabled>Next &rsaquo;</button>
+                    </div>
+                </div>
+                <div id="an-tests-body-wrap"></div>
+                <p class="an-note">Select a row to open the matching records in Search.</p>
+            </div>
+
+            <div id="an-clusters-view" class="an-view" data-view="clusters" hidden>
+                <form id="analytics-cluster-controls" class="an-cluster-controls">
+                    <label class="an-field">Similarity
+                        <input type="number" name="threshold" value="0.6" min="0" max="1" step="0.05">
+                    </label>
+                    <label class="an-field">Group runs by
+                        <select name="run_key">
+                            <option value="auto">Invocation, else commit</option>
+                            <option value="invocation">Invocation id</option>
+                            <option value="commit">Commit</option>
+                        </select>
+                    </label>
+                    <label class="an-checkbox">
+                        <input type="checkbox" name="include_errors">
+                        Count infra errors as failures
+                    </label>
+                </form>
+                <div id="an-clusters"></div>
+            </div>
         </section>
 
         <dialog id="template-dialog">

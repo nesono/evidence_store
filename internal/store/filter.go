@@ -76,6 +76,22 @@ func buildFilter(filter model.EvidenceFilter) *sqlFilter {
 		}
 	}
 
+	// A single value matched against either identity column. Commits get prefix
+	// matching so a pasted short SHA finds the full one it abbreviates; branches
+	// and tags are matched whole, since a prefix there would quietly pull in
+	// release/1.10 when the user asked for release/1.1.
+	if v := filter.Ref; v != nil {
+		val := *v
+		if strings.HasPrefix(val, "~") {
+			pattern := f.arg(val[1:])
+			f.add(fmt.Sprintf("(branch ~ %[1]s OR rcs_ref ~ %[1]s)", pattern))
+		} else {
+			exact := f.arg(val)
+			prefix := f.arg(val + "%")
+			f.add(fmt.Sprintf("(branch = %s OR rcs_ref LIKE %s)", exact, prefix))
+		}
+	}
+
 	if len(filter.Result) > 0 {
 		placeholders := make([]string, len(filter.Result))
 		for i, r := range filter.Result {
