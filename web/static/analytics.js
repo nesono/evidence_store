@@ -554,6 +554,18 @@ document.getElementById("an-views")?.addEventListener("click", e => {
   if (btn) setView(btn.dataset.view);
 });
 
+// The export is of the query rather than the visible page, so it reuses the
+// filter and sort but sends no limit or offset.
+document.getElementById("an-export")?.addEventListener("click", () => {
+  const params = query({
+    label: document.getElementById("an-label")?.value,
+    sort: sortKey,
+    order: sortDesc ? "desc" : "asc",
+    format: "csv",
+  });
+  window.location.href = `${API_BASE}/analytics/tests?${params}`;
+});
+
 document.getElementById("an-prev")?.addEventListener("click", () => {
   offset = Math.max(0, offset - PAGE_SIZE);
   refresh();

@@ -451,6 +451,7 @@ curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=stable&so
 | `label` | *(none)* | Keep only tests carrying a label: `stable`, `always_failing`, `flaky`, `infra_heavy`, `sparse` |
 | `order` | `asc` | `asc` or `desc` |
 | `limit`, `offset` | page size config | Windows the sorted set; `total` always describes the whole set |
+| `format` | `json` | `csv` streams every matching row as a spreadsheet, ignoring `limit` and `offset` |
 | `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |
 
 A query matching more than 50,000 distinct tests returns `422` rather than truncating, since a truncated set yields confident-looking numbers computed from part of the data.
@@ -460,6 +461,15 @@ A query matching more than 50,000 distinct tests returns `422` rather than trunc
 Sorting and paging are applied after the aggregation, so clicking a column header re-asks for a result whose inputs did not change. Aggregations are therefore reused for `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` (default 30) against an identical filter, which makes re-sorting and paging instant.
 
 The cache is keyed by the filter and grouping only. Sort key, direction, paging and the labelling thresholds are applied to a fresh copy on every request, so two callers asking the same question with different thresholds still get different answers. The cost is that a window can lag newly ingested evidence by up to the TTL; set it to `0` to disable.
+### CSV export
+
+```bash
+curl -o tests.csv "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&sort=fail_rate&order=desc&format=csv"
+```
+
+The export covers the whole filtered set rather than the requested page — filters and sorting apply, `limit` and `offset` do not. Rates are written as plain decimals (`0.106`) rather than percentages so a spreadsheet reads them as numbers, and labels come through space-separated in one column. The **Export CSV** button on the Analytics tab downloads exactly what the table is currently showing.
+
+Column order is a contract: new columns are appended, existing ones are not reordered or renamed.
 
 ### Co-failure clusters and test selection
 
