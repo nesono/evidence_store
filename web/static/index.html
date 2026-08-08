@@ -100,8 +100,12 @@
                     <label class="fb-field fb-field-repo">Repo
                         <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
                     </label>
-                    <label class="fb-field fb-field-commit">Commit
-                        <input type="text" name="rcs_ref" placeholder="abc123...">
+                    <!-- One box for all three identities. A user pasting what they are
+                         looking at should not have to say first whether it is a branch,
+                         a tag or a commit, and combining them never made sense: a record
+                         has exactly one of each. -->
+                    <label class="fb-field fb-field-ref">Branch, tag or commit
+                        <input type="text" name="ref" placeholder="main, v2.0.0, abc123 or ~^release/">
                     </label>
                     <!-- A checkbox dropdown. There is no native HTML control for this:
                          <select multiple> renders as an always-expanded list box, not a
@@ -129,12 +133,11 @@
                 <div id="filter-advanced" hidden>
                     <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
                     <div class="grid">
-                        <label>Branch <input type="text" name="branch" placeholder="main or ~^release/.*"></label>
                         <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$" list="evidence-types-list"></label>
                         <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
+                        <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                     </div>
                     <div class="grid">
-                        <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                         <label>After <small>(UTC)</small>
                             <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview>
                             <small class="utc-preview" data-preview-for="finished_after"></small>

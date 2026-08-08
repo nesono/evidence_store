@@ -138,22 +138,28 @@ body > main {
     margin-bottom: 0;
 }
 
-/* Both inputs are sized in `ch`, the width of the element's own "0" glyph, so
-   the monospace commit field holds exactly a 40-character hash. Repo is
-   proportional, so its 40ch renders a little narrower. Neither grows: both hold
-   identifiers of bounded length. Longer values (full hashes, or `~` regex
-   filters — which is why there is no maxlength) scroll.
+/* Both inputs are sized in `ch`, the width of the element's own "0" glyph.
+   The ref box gets the 40 a commit hash needs; repo gets fewer, because
+   `org/repo` is short and the two boxes plus the ref field's spelt-out label no
+   longer fit on one line at equal widths — and a wrapped bar costs more than the
+   tail of a long repo name does. Neither grows: both hold identifiers of bounded
+   length. Longer values (or `~` regex filters — which is why there is no
+   maxlength) scroll.
 
    The padding and border are added back explicitly, because under Pico's global
    border-box a plain 40ch would be consumed by them and leave about 38
    characters visible. Doing it this way rather than with content-box keeps
    box-sizing consistent, so the shared height below means the height it says. */
-#filter-bar .fb-field-repo input,
-#filter-bar .fb-field-commit input {
+#filter-bar .fb-field input {
     flex: 0 0 auto;
-    width: calc(40ch
+    --fb-input-chars: 40;
+    width: calc(var(--fb-input-chars) * 1ch
         + 2 * var(--pico-form-element-spacing-horizontal)
         + 2 * var(--pico-border-width));
+}
+
+#filter-bar .fb-field-repo input {
+    --fb-input-chars: 20;
 }
 
 /* Every control in the bar shares one height, so they sit on a common baseline
@@ -161,10 +167,6 @@ body > main {
 #filter-bar .fb-field input,
 #filter-bar .fb-dropdown > summary {
     height: var(--fb-control-height);
-}
-
-#filter-bar .fb-field-commit input {
-    font-family: monospace;
 }
 
 #filter-bar .fb-field {

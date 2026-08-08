@@ -324,7 +324,7 @@ curl "http://localhost:8000/api/v1/evidence?sort=finished_at&order=desc"
 curl "http://localhost:8000/api/v1/evidence?limit=50&offset=50&include_total=false"
 ```
 
-**Query parameters:** `repo`, `branch`, `rcs_ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `notes`, `limit`, `cursor`, `offset`, `sort`, `order`, `include_total`, `include_inherited`.
+**Query parameters:** `repo`, `branch`, `rcs_ref`, `ref`, `evidence_type`, `source`, `procedure_ref`, `result`, `finished_after`, `finished_before`, `tags`, `notes`, `limit`, `cursor`, `offset`, `sort`, `order`, `include_total`, `include_inherited`.
 
 ### Pagination and sorting
 
@@ -377,6 +377,8 @@ curl "http://localhost:8000/api/v1/analytics/tests?ref=~^release/"  # regex, bot
 ```
 
 Commits match by prefix, so a pasted short SHA finds the full one it abbreviates. Branches and tags match whole — a prefix there would answer a request for `release/1.1` with `release/1.10` as well. `ref` is available on every endpoint that takes filters, including `/api/v1/evidence`.
+
+It is what both the **Search** and **Analytics** tabs of the web UI put in their filter bar: one **Branch, tag or commit** box rather than separate fields, since a record has exactly one of each and filtering on a combination of them narrowed to nothing. `branch` and `rcs_ref` remain available to API callers who do want to name the column.
 
 The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-POSIX-REGEXP) (the `~` operator). This supports the POSIX Extended Regular Expression syntax including character classes (`[a-z]`, `[[:digit:]]`), alternation (`a|b`), quantifiers (`*`, `+`, `?`, `{n,m}`), and anchors (`^`, `$`). Matching is case-sensitive.
 
