@@ -32,15 +32,6 @@ const DEFAULT_RANGE = "3h";
 // Mirrors the server's default, used when the threshold box cannot be read.
 const DEFAULT_CLUSTER_THRESHOLD = 0.6;
 
-// Ranked answers to the questions the analytics page exists to ask. Each is
-// just a sort key — the table is one view, not four.
-const PRESETS = {
-  flakiest: { label: "Flakiest", sort: "flip_rate", desc: true },
-  never_fails: { label: "Never fails", sort: "pass_rate_lower", desc: true },
-  always_fails: { label: "Always fails", sort: "fail_rate", desc: true },
-  infra: { label: "Most infra errors", sort: "error_rate", desc: true },
-};
-
 const LABEL_TEXT = {
   stable: "Stable",
   always_failing: "Always failing",
@@ -267,23 +258,56 @@ async function loadOverview() {
 
 // --- Tests ---
 
+// Each question the analytics page exists to answer is one of these columns,
+// so ranking by it is a click on its header. `desc` is the direction a column
+// starts in — the interesting end for a rate is the high one, but for a name
+// it is A first.
 const COLUMNS = [
-  { key: "procedure_ref", label: "Test", sortable: true, cls: "an-col-test" },
+  {
+    key: "procedure_ref", label: "Test", desc: false, cls: "an-col-test",
+    hint: "Sort by test name",
+  },
   { key: null, label: "Labels", cls: "an-col-labels" },
-  { key: "runs", label: "Runs", sortable: true, cls: "an-col-num" },
-  { key: "fail_rate", label: "Fail rate", sortable: true, cls: "an-col-rate" },
-  { key: "error_rate", label: "Infra errors", sortable: true, cls: "an-col-rate" },
-  { key: "flip_rate", label: "Flip rate", sortable: true, cls: "an-col-rate" },
-  { key: "last_seen", label: "Last seen", sortable: true, cls: "an-col-time" },
+  {
+    key: "runs", label: "Runs", desc: true, cls: "an-col-num",
+    hint: "Sort by how many times the test ran",
+  },
+  {
+    key: "fail_rate", label: "Fail rate", desc: true, cls: "an-col-rate",
+    hint: "Share of verdicts that failed. Sort descending for the chronically broken.",
+  },
+  {
+    key: "error_rate", label: "Infra errors", desc: true, cls: "an-col-rate",
+    hint: "Share of runs lost to infrastructure rather than a verdict.",
+  },
+  {
+    key: "flip_rate", label: "Flip rate", desc: true, cls: "an-col-rate",
+    hint: "How often consecutive runs changed verdict. Sort descending for the flakiest.",
+  },
+  {
+    key: "pass_rate_lower", label: "Reliability", desc: true, cls: "an-col-rate",
+    hint: "Wilson 95% lower bound on the pass rate. Sort descending for tests that never "
+        + "fail, best-evidenced first — a clean 500-run record outranks a clean 8-run one.",
+  },
+  {
+    key: "last_seen", label: "Last seen", desc: true, cls: "an-col-time",
+    hint: "Sort by when the test last ran",
+  },
 ];
+
+function columnFor(key) {
+  return COLUMNS.find(c => c.key === key);
+}
 
 function headerHTML() {
   return COLUMNS.map(c => {
-    if (!c.sortable) return `<th class="${c.cls}">${esc(c.label)}</th>`;
+    if (!c.key) return `<th class="${c.cls}">${esc(c.label)}</th>`;
     const active = c.key === sortKey;
     const arrow = active ? (sortDesc ? " ▾" : " ▴") : "";
     return `<th class="${c.cls} an-sortable${active ? " an-sorted" : ""}"
-                data-sort="${c.key}">${esc(c.label)}${arrow}</th>`;
+                data-sort="${c.key}" title="${esc(c.hint)}"
+                aria-sort="${active ? (sortDesc ? "descending" : "ascending") : "none"}"
+                >${esc(c.label)}${arrow}</th>`;
   }).join("");
 }
 
@@ -300,6 +324,7 @@ function testRowHTML(t) {
       <td class="an-col-rate">${rateCell(t.fail_rate, "fail", sortKey === "fail_rate")}</td>
       <td class="an-col-rate">${rateCell(t.error_rate, "error", sortKey === "error_rate")}</td>
       <td class="an-col-rate">${rateCell(t.flip_rate, "flip", sortKey === "flip_rate")}</td>
+      <td class="an-col-rate">${rateCell(t.pass_rate_lower, "reliability", sortKey === "pass_rate_lower")}</td>
       <td class="an-col-time">${formatTime(t.last_seen)}</td>
     </tr>`;
 }
@@ -307,6 +332,7 @@ function testRowHTML(t) {
 async function loadTests() {
   loading("an-tests-body-wrap");
   const data = await getJSON("/analytics/tests", query({
+    label: document.getElementById("an-label")?.value,
     sort: sortKey,
     order: sortDesc ? "desc" : "asc",
     limit: PAGE_SIZE,
@@ -336,10 +362,10 @@ async function loadTests() {
   document.querySelectorAll("#an-tests-body-wrap .an-sortable").forEach(th => {
     th.addEventListener("click", () => {
       const key = th.dataset.sort;
-      // Re-clicking the active column flips it; a new column starts descending,
-      // which is the interesting end for every rate here.
+      // Re-clicking the active column flips it; a new column opens in whichever
+      // direction is the interesting one for that column.
       if (key === sortKey) sortDesc = !sortDesc;
-      else { sortKey = key; sortDesc = true; }
+      else { sortKey = key; sortDesc = columnFor(key).desc; }
       offset = 0;
       refresh();
     });
@@ -526,19 +552,6 @@ document.getElementById("an-clear")?.addEventListener("click", () => {
 document.getElementById("an-views")?.addEventListener("click", e => {
   const btn = e.target.closest("button[data-view]");
   if (btn) setView(btn.dataset.view);
-});
-
-document.getElementById("an-presets")?.addEventListener("click", e => {
-  const btn = e.target.closest("button[data-preset]");
-  if (!btn) return;
-  const preset = PRESETS[btn.dataset.preset];
-  sortKey = preset.sort;
-  sortDesc = preset.desc;
-  offset = 0;
-  document.querySelectorAll("#an-presets button").forEach(b => {
-    b.classList.toggle("active", b === btn);
-  });
-  refresh();
 });
 
 document.getElementById("an-prev")?.addEventListener("click", () => {

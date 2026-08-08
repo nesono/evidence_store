@@ -105,6 +105,19 @@ func (h *AnalyticsHandler) Tests(w http.ResponseWriter, r *http.Request) {
 	}
 
 	analytics.Finalize(stats, thresholds)
+
+	// Labels are derived, not stored, so filtering by one happens here rather
+	// than in SQL. This is the honest way to ask "which tests always fail":
+	// ranking by fail rate only shows the worst, which on a healthy suite is
+	// still nowhere near always.
+	if label := q.Get("label"); label != "" {
+		if !analytics.IsLabel(label) {
+			writeError(w, http.StatusBadRequest, "unknown label "+label)
+			return
+		}
+		stats = analytics.WithLabel(stats, label)
+	}
+
 	if err := analytics.Sort(stats, sortKey, desc); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

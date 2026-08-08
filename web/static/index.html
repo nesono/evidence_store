@@ -211,6 +211,16 @@
                     <label class="an-field">Branch, tag or commit
                         <input type="text" name="ref" placeholder="main, v2.0.0 or abc123">
                     </label>
+                    <label class="an-field">Show
+                        <select name="label" id="an-label">
+                            <option value="">All tests</option>
+                            <option value="always_failing">Always failing</option>
+                            <option value="stable">Never fails</option>
+                            <option value="flaky">Flaky</option>
+                            <option value="infra_heavy">Infra-heavy</option>
+                            <option value="sparse">Too few runs to judge</option>
+                        </select>
+                    </label>
                     <label class="an-field">Time range
                         <select name="range" id="an-range">
                             <option value="3h" selected>Last 3 hours</option>
@@ -247,13 +257,6 @@
             <div id="an-overview" class="an-view" data-view="overview"></div>
 
             <div id="an-tests" class="an-view" data-view="tests" hidden>
-                <div id="an-presets" class="an-presets">
-                    <span class="an-presets-label">Show</span>
-                    <button type="button" data-preset="always_fails" class="active">Always fails</button>
-                    <button type="button" data-preset="never_fails">Never fails</button>
-                    <button type="button" data-preset="infra">Most infra errors</button>
-                    <button type="button" data-preset="flakiest">Flakiest</button>
-                </div>
                 <div class="an-table-bar">
                     <span id="an-tests-range"></span>
                     <div class="an-page-nav">

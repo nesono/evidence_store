@@ -827,52 +827,13 @@ body > main {
     gap: 0.4rem;
 }
 
-/* The filter-bar actions and the preset buttons are the same kind of control
-   and have to stay the same size, so they share one rule rather than two that
-   drift apart. */
-#tab-analytics .an-actions button,
-#tab-analytics .an-presets button {
+#tab-analytics .an-actions button {
     height: 40px;
     width: auto;
     margin: 0;
     padding: 0 1rem;
     font-size: 0.9rem;
     line-height: 1.2;
-}
-
-/* Presets */
-
-.an-presets {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.6rem;
-}
-
-.an-presets-label {
-    font-size: 0.8rem;
-    color: var(--an-muted);
-    margin-right: 0.2rem;
-}
-
-/* Only the applied preset is filled in; the rest read as the alternatives they
-   are, so the current ranking is visible at a glance. */
-#tab-analytics .an-presets button {
-    background: transparent;
-    border: 1px solid var(--an-hairline);
-    color: var(--an-muted);
-}
-
-#tab-analytics .an-presets button:hover {
-    border-color: var(--pico-primary, #1095c1);
-    color: var(--pico-primary, #1095c1);
-}
-
-#tab-analytics .an-presets button.active {
-    background: var(--pico-primary, #1095c1);
-    border-color: var(--pico-primary, #1095c1);
-    color: #fff;
 }
 
 /* Sub-view switcher */
@@ -1062,6 +1023,7 @@ body > main {
 .an-meter-error { background: var(--an-error); }
 .an-meter-flip  { background: var(--an-flip); }
 .an-meter-cover { background: var(--an-cover); }
+.an-meter-reliability { background: var(--an-pass); }
 
 .an-num {
     font-size: 0.8rem;
@@ -1127,16 +1089,26 @@ body > main {
 .an-sortable:hover { color: var(--pico-primary, #1095c1); }
 .an-sorted { color: var(--pico-primary, #1095c1); }
 
+/* A faint arrow on hover says the header is a control, without putting eight
+   arrows on screen at once. */
+#tab-analytics .an-sortable:not(.an-sorted)::after {
+    content: " \25BE";
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+#tab-analytics .an-sortable:not(.an-sorted):hover::after { opacity: 0.55; }
+
 .an-table tbody tr[data-procedure] { cursor: pointer; }
 .an-table tbody tr[data-procedure]:hover { background: rgba(0, 0, 0, 0.03); }
 
 /* The test name takes whatever the fixed columns leave. Rate columns keep one
    width whether or not they currently hold a meter, so sorting never reflows
    the table. */
-.an-col-num  { text-align: right; font-variant-numeric: tabular-nums; width: 4.5rem; }
-.an-col-rate { width: 8rem; text-align: right; }
-.an-col-time { width: 8.5rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.an-col-labels { width: 8.5rem; }
+.an-col-num  { text-align: right; font-variant-numeric: tabular-nums; width: 4rem; }
+.an-col-rate { width: 6.5rem; text-align: right; }
+.an-col-time { width: 8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.an-col-labels { width: 7.5rem; }
 .an-col-test { width: auto; }
 
 .an-test-name {

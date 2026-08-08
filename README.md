@@ -381,9 +381,13 @@ The regex engine is [PostgreSQL POSIX regular expressions](https://www.postgresq
 ## Analytics
 
 The web UI's **Analytics** tab is the front end for everything below: an overview
-of the filtered window, a sortable per-test table with presets for the four
-questions this feature exists to answer, and the co-failure clusters. Selecting a
-row opens the matching raw records in Search.
+of the filtered window, a sortable per-test table, and the co-failure clusters.
+Selecting a row opens the matching raw records in Search.
+
+Every column in the table is a sort key — click a header to rank by it, click
+again to reverse. Each of the questions this feature exists to answer is one of
+those columns, so ranking by fail rate, infra errors, flip rate or reliability is
+a single click.
 
 The tab does not query until **Apply** is pressed — these aggregations scan far
 more evidence than a search does, so the page waits to be asked rather than
@@ -431,11 +435,19 @@ Each test carries a list of labels, not one category — a test can be both flak
 
 Thresholds are query parameters (`min_runs`, `always_failing_rate`, `flip_rate`, `error_rate`, `min_errors`), because what counts as "almost always failing" is a judgement about a particular suite. The defaults are echoed back in every response.
 
+Use `label=` to *filter* by one, which is a different question from sorting. Ranking by fail rate shows the worst tests, but on a healthy suite the worst may still fail only one run in ten; `label=always_failing` returns the ones that actually meet the threshold, and `label=stable` the ones that genuinely never fail:
+
+```bash
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=always_failing"
+curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=stable&sort=pass_rate_lower&order=desc"
+```
+
 ### Other parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `sort` | `procedure_ref` | `fail_rate`, `error_rate`, `flip_rate`, `pass_rate_lower`, `runs`, `pass`, `fail`, `error`, `flaky_commits`, `last_seen`, … |
+| `label` | *(none)* | Keep only tests carrying a label: `stable`, `always_failing`, `flaky`, `infra_heavy`, `sparse` |
 | `order` | `asc` | `asc` or `desc` |
 | `limit`, `offset` | page size config | Windows the sorted set; `total` always describes the whole set |
 | `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |

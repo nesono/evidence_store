@@ -497,3 +497,61 @@ func TestRefFilterMatchingNothingReturnsEmpty(t *testing.T) {
 	repo := seedRefFixture(t)
 	assert.Empty(t, refProcedures(t, repo, "no-such-ref"))
 }
+
+// ---------------------------------------------------------------------------
+// Label filtering
+//
+// Ranking by fail rate answers "which are worst"; only a label answers "which
+// always fail", because on a healthy suite the worst is nowhere near always.
+// ---------------------------------------------------------------------------
+
+func labelledProcedures(t *testing.T, f analyticsFixture, label string) []string {
+	t.Helper()
+	body := f.get(t, url.Values{"label": {label}})
+
+	out := make([]string, 0, len(body.Tests))
+	for _, s := range body.Tests {
+		out = append(out, s.ProcedureRef)
+	}
+	return out
+}
+
+func TestAnalyticsFilterByAlwaysFailingLabel(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	assert.Equal(t, []string{"//broken:test"}, labelledProcedures(t, f, analytics.LabelAlwaysFailing))
+}
+
+func TestAnalyticsFilterByStableLabel(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	assert.Equal(t, []string{"//stable:test"}, labelledProcedures(t, f, analytics.LabelStable))
+}
+
+func TestAnalyticsFilterByFlakyLabel(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	assert.ElementsMatch(t,
+		[]string{"//flaky:test", "//disagree:test"},
+		labelledProcedures(t, f, analytics.LabelFlaky))
+}
+
+func TestAnalyticsFilterByInfraHeavyLabel(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	assert.Equal(t, []string{"//infra:test"}, labelledProcedures(t, f, analytics.LabelInfraHeavy))
+}
+
+// The total has to describe the filtered set, or paging through it lies.
+func TestAnalyticsLabelFilterNarrowsTheTotal(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+
+	all := f.get(t, nil)
+	assert.Equal(t, 6, all.Total)
+
+	filtered := f.get(t, url.Values{"label": {analytics.LabelAlwaysFailing}})
+	assert.Equal(t, 1, filtered.Total)
+}
+
+func TestAnalyticsRejectsUnknownLabel(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	resp := getJSON(t, "/api/v1/analytics/tests?repo="+url.QueryEscape(f.repo)+"&label=brittle")
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
