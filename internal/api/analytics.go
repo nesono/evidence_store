@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nesono/evidence-store/internal/analytics"
@@ -120,6 +122,13 @@ func (h *AnalyticsHandler) Tests(w http.ResponseWriter, r *http.Request) {
 
 	if err := analytics.Sort(stats, sortKey, desc); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// An export is of the query, not of the window you happen to be looking at,
+	// so it ignores limit and offset and writes every matching row.
+	if q.Get("format") == "csv" {
+		writeTestStatsCSV(w, stats)
 		return
 	}
 
@@ -276,6 +285,68 @@ func (h *AnalyticsHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		FailRate:      counts.FailRate(),
 		ErrorRate:     counts.ErrorRate(),
 	})
+}
+
+// csvColumns is the export's contract: adding a column is safe, reordering or
+// renaming one breaks whatever is parsing it downstream.
+var csvColumns = []string{
+	"repo", "procedure_ref", "evidence_type",
+	"runs", "verdict_runs", "pass", "fail", "error", "skipped",
+	"fail_rate", "error_rate", "flip_rate", "pass_rate_lower",
+	"flips", "transitions", "flaky_commits",
+	"first_seen", "last_seen", "last_pass_at", "last_fail_at", "last_result",
+	"labels",
+}
+
+func writeTestStatsCSV(w http.ResponseWriter, stats []analytics.TestStats) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="evidence-analytics.csv"`)
+
+	out := csv.NewWriter(w)
+	if err := out.Write(csvColumns); err != nil {
+		slog.Error("failed to write CSV header", "error", err)
+		return
+	}
+
+	for _, t := range stats {
+		record := []string{
+			t.Repo, t.ProcedureRef, t.EvidenceType,
+			strconv.Itoa(t.Runs), strconv.Itoa(t.VerdictRuns),
+			strconv.Itoa(t.Counts.Pass), strconv.Itoa(t.Counts.Fail),
+			strconv.Itoa(t.Counts.Error), strconv.Itoa(t.Counts.Skipped),
+			formatRate(t.FailRate), formatRate(t.ErrorRate),
+			formatRate(t.FlipRate), formatRate(t.PassRateLower),
+			strconv.Itoa(t.Counts.Flips), strconv.Itoa(t.Counts.Transitions),
+			strconv.Itoa(t.Counts.FlakyCommits),
+			t.FirstSeen.Format(time.RFC3339), t.LastSeen.Format(time.RFC3339),
+			formatTimePtr(t.LastPassAt), formatTimePtr(t.LastFailAt), t.LastResult,
+			strings.Join(t.Labels, " "),
+		}
+		if err := out.Write(record); err != nil {
+			// The status line is long gone by now, so there is nothing to do but
+			// stop and say why the file is short.
+			slog.Error("failed to write CSV row", "error", err)
+			return
+		}
+	}
+
+	out.Flush()
+	if err := out.Error(); err != nil {
+		slog.Error("failed to flush CSV", "error", err)
+	}
+}
+
+// Rates are written as plain decimals rather than percentages so a spreadsheet
+// or script reads them as numbers without stripping a sign.
+func formatRate(v float64) string {
+	return strconv.FormatFloat(v, 'f', 6, 64)
+}
+
+func formatTimePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func summarizeWindow(stats []analytics.TestStats) analyticsWindow {
