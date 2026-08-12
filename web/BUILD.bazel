@@ -9,6 +9,8 @@ go_library(
         "static/style.css",
         "static/analytics.js",
         "static/common.js",
+        "static/datetime.js",
+        "static/datepicker.js",
     ],
     importpath = "github.com/nesono/evidence-store/web",
     visibility = ["//visibility:public"],
