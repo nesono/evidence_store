@@ -749,8 +749,18 @@ body > main {
 
 .dt-open-wrap {
     position: relative;
-    /* Aligns the button with the boxes rather than their labels. */
-    align-self: end;
+}
+
+/* Each box sits under a label line and above a UTC preview that only appears
+   once there is something to preview. Aligning the trigger to the bottom of its
+   cell therefore dropped it the moment a date was entered. It gets a blank line
+   of the same size as the label text above it instead, so it starts where the
+   boxes start and stays there whatever appears below them. */
+.dt-open-wrap::before {
+    content: "";
+    display: block;
+    font-size: 0.8em;
+    height: 1lh;
 }
 
 .dt-open-wrap > button {
@@ -795,17 +805,44 @@ body > main {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
+/* Arrows, label, arrows — twice, year over month, with the jump-to-today button
+   across the foot of it. Three columns rather than a flex row so the year and
+   month labels centre on the same axis and the arrows line up in a column. */
 .dt-head {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5em;
+    row-gap: 0.1em;
     margin-bottom: 0.4em;
+    text-align: center;
 }
 
+.dt-head .dt-year,
 .dt-head .dt-month {
     font-size: 0.85em;
     font-weight: bold;
+}
+
+.dt-head .dt-year {
+    font-variant-numeric: tabular-nums;
+}
+
+.dt-today {
+    grid-column: 1 / -1;
+    width: auto;
+    justify-self: center;
+    padding: 0.1em 0.5em;
+    margin: 0.15em 0 0;
+    border: none;
+    background: none;
+    color: var(--pico-muted-color);
+    font-size: 0.7em;
+    text-decoration: underline;
+}
+
+.dt-today:hover {
+    background: none;
+    color: inherit;
 }
 
 .dt-nav {
@@ -975,8 +1012,10 @@ body > main {
         grid-template-columns: 1fr;
     }
 
-    .dt-open-wrap {
-        align-self: start;
+    /* Stacked, there is no row of boxes to line the trigger up with, so the
+       blank line that does the lining up is just a gap. */
+    .dt-open-wrap::before {
+        display: none;
     }
 
     #window-bar .wb-controls {

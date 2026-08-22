@@ -16,6 +16,7 @@ import {
   joinUTC,
   monthLabel,
   monthMatrix,
+  monthName,
   nextSelection,
   parseUserDateTime,
   readRange,
@@ -131,11 +132,25 @@ test("covers a leap February", () => {
 test("steps a month forward and back across the year boundary", () => {
   assert.deepEqual(shiftMonth({ year: 2026, month: 11 }, 1), { year: 2027, month: 0 });
   assert.deepEqual(shiftMonth({ year: 2026, month: 0 }, -1), { year: 2025, month: 11 });
+});
+
+// The year arrows are the month step taken twelve at a time, which has to land
+// on the same month of another year rather than drifting.
+test("steps a year forward and back without moving the month", () => {
   assert.deepEqual(shiftMonth({ year: 2026, month: 2 }, 12), { year: 2027, month: 2 });
+  assert.deepEqual(shiftMonth({ year: 2026, month: 2 }, -12), { year: 2025, month: 2 });
+  assert.deepEqual(shiftMonth({ year: 2028, month: 1 }, 12), { year: 2029, month: 1 });
 });
 
 test("labels a month for the header", () => {
   assert.equal(monthLabel({ year: 2026, month: 2 }), "March 2026");
+});
+
+// The header carries the year on its own row, so the month row names the month
+// alone — repeating the year under it would just be noise.
+test("names a month without its year", () => {
+  assert.equal(monthName({ year: 2026, month: 2 }), "March");
+  assert.equal(monthName({ year: 2026, month: 11 }), "December");
 });
 
 // --- nextSelection ---

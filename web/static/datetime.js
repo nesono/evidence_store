@@ -93,6 +93,10 @@ export function monthLabel({ year, month }) {
   return `${MONTH_NAMES[month]} ${year}`;
 }
 
+export function monthName({ month }) {
+  return MONTH_NAMES[month];
+}
+
 // What clicking `day` does to the current selection.
 //
 // With one end already set the click completes the range, but only if it lands

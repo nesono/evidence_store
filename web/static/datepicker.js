@@ -16,6 +16,7 @@ import {
   dayInRange,
   monthLabel,
   monthMatrix,
+  monthName,
   nextSelection,
   readRange,
   shiftMonth,
@@ -40,8 +41,10 @@ export function attachRangePicker({ root, fromInput, toInput, onApply }) {
   let focusDay = todayUTC();
 
   buildSkeleton(popup);
+  const yearLabelEl = popup.querySelector(".dt-year");
   const monthLabelEl = popup.querySelector(".dt-month");
-  const gridBody = popup.querySelector(".dt-grid tbody");
+  const gridEl = popup.querySelector(".dt-grid");
+  const gridBody = gridEl.querySelector("tbody");
 
   // --- State plumbing ---
 
@@ -84,7 +87,11 @@ export function attachRangePicker({ root, fromInput, toInput, onApply }) {
   // --- Rendering ---
 
   function renderCalendar() {
-    monthLabelEl.textContent = monthLabel(month);
+    yearLabelEl.textContent = String(month.year);
+    monthLabelEl.textContent = monthName(month);
+    // The two rows read as one thing to anyone looking at them; a screen reader
+    // walking into the grid gets the whole of it in one go.
+    gridEl.setAttribute("aria-label", monthLabel(month));
     const today = todayUTC();
 
     gridBody.innerHTML = monthMatrix(month.year, month.month).map(week => {
@@ -174,6 +181,16 @@ export function attachRangePicker({ root, fromInput, toInput, onApply }) {
       renderCalendar();
       return;
     }
+    if (e.target.closest("[data-dt-today]")) {
+      // Only the view moves. Focus follows it into the grid, so today is one
+      // Enter away for anyone who did want to pick it — but nothing is picked
+      // until they say so.
+      focusDay = todayUTC();
+      month = visibleMonth({ from: focusDay, to: "" });
+      renderCalendar();
+      focusGridDay();
+      return;
+    }
     const clear = e.target.closest("[data-dt-clear]");
     if (clear) {
       clearEnd(clear.dataset.dtClear);
@@ -253,11 +270,24 @@ export function attachRangePicker({ root, fromInput, toInput, onApply }) {
 }
 
 function buildSkeleton(popup) {
+  // The year gets its own pair of arrows above the month's. Reaching last
+  // December from August is one click that way; paging month by month it is
+  // eight, and a range a year back is nobody's idea of a scroll.
+  //
+  // Both rows step the same value — a year is twelve months — so the two sit on
+  // one handler and there is no second notion of "where the calendar is".
   popup.innerHTML = `
-    <div class="dt-head">
+    <div class="dt-head" aria-live="polite">
+      <button type="button" class="dt-nav" data-dt-month="-12" aria-label="Previous year">&laquo;</button>
+      <span class="dt-year"></span>
+      <button type="button" class="dt-nav" data-dt-month="12" aria-label="Next year">&raquo;</button>
       <button type="button" class="dt-nav" data-dt-month="-1" aria-label="Previous month">&lsaquo;</button>
-      <span class="dt-month" aria-live="polite"></span>
+      <span class="dt-month"></span>
       <button type="button" class="dt-nav" data-dt-month="1" aria-label="Next month">&rsaquo;</button>
+      <!-- Moves the calendar, not the filter. Losing your place after paging
+           back through a few years should not cost a selection to get out of. -->
+      <button type="button" class="dt-today" data-dt-today
+              title="Show the current month. Does not change the selection.">Go to today</button>
     </div>
     <table class="dt-grid">
       <thead><tr>${WEEKDAY_NAMES.map(d => `<th scope="col">${d}</th>`).join("")}</tr></thead>
