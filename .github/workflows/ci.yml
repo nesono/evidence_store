@@ -29,6 +29,20 @@ jobs:
       - name: Run unit tests
         run: go test ./internal/... -v -count=1
 
+  # The web UI ships as plain ES modules with no build step, so its testable
+  # parts — the date arithmetic behind the range picker — run under node's own
+  # test runner. No dependencies, no package.json, nothing to install.
+  frontend-tests:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Run frontend unit tests
+        run: node --test web/tests/*_test.mjs
+
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest

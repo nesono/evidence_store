@@ -137,15 +137,35 @@
                         <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
                         <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                     </div>
-                    <div class="grid">
+                    <!-- The two fields and the calendar that fills them are one
+                         control. A range is a pair: picking one end on a calendar
+                         that cannot show the other is how you end up with a window
+                         matching nothing. The boxes stay text, because typing or
+                         pasting a datetime is often quicker than clicking to it,
+                         and a shared link's dates have to land somewhere visible
+                         and editable. -->
+                    <div class="grid dt-range" id="finished-range">
                         <label>After <small>(UTC)</small>
-                            <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview>
+                            <span class="input-with-button">
+                                <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview autocomplete="off">
+                                <button type="button" class="dt-field-clear" data-clears="finished_after" title="Clear the start of the range" aria-label="Clear the start of the range">&times;</button>
+                            </span>
                             <small class="utc-preview" data-preview-for="finished_after"></small>
                         </label>
                         <label>Before <small>(UTC)</small>
-                            <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview>
+                            <span class="input-with-button">
+                                <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview autocomplete="off">
+                                <button type="button" class="dt-field-clear" data-clears="finished_before" title="Clear the end of the range" aria-label="Clear the end of the range">&times;</button>
+                            </span>
                             <small class="utc-preview" data-preview-for="finished_before"></small>
                         </label>
+                        <div class="dt-open-wrap">
+                            <!-- Filled in by datepicker.js: the calendar is drawn
+                                 from the selection, so there is no static markup
+                                 for it to fall out of sync with. -->
+                            <button type="button" class="secondary outline" data-dt-open aria-expanded="false" aria-haspopup="dialog">Pick range</button>
+                            <div class="dt-popup" data-dt-popup role="dialog" aria-label="Pick a date and time range" hidden></div>
+                        </div>
                     </div>
                     <div class="grid">
                         <label>Tags <input type="text" name="tags" placeholder="ci,nightly or ~^reg.*"></label>
