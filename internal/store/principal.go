@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -174,6 +175,100 @@ func (s *PrincipalStore) RotateKey(ctx context.Context, id uuid.UUID, keyHash st
 		return nil, nil
 	}
 	return s.FindByID(ctx, id)
+}
+
+// ErrSubjectTaken means a login wanted a name that already belongs to a
+// different principal — an API key somebody happened to call
+// "user:alice@example.com", say. Rather than guess whether they are the same
+// party, the login fails and says so.
+var ErrSubjectTaken = errors.New("subject already belongs to another principal")
+
+// IdPLogin is what a verified identity token amounts to, once the group claims
+// have been mapped to roles.
+type IdPLogin struct {
+	// ExternalID is the provider's own name for this person, "<issuer>|<sub>",
+	// and the only thing the upsert matches on.
+	ExternalID string
+	// Subject is the readable name they file evidence under. It is corrected on
+	// every login, so someone who changes their email address stays one
+	// principal instead of becoming two.
+	Subject     string
+	DisplayName string
+	// Roles are those derived from the provider's groups. They replace the
+	// previously derived set and leave locally granted roles alone.
+	Roles []string
+}
+
+// UpsertFromIdP turns a login into a principal, and reconciles the roles their
+// group membership implies.
+//
+// One transaction, because a login that created the person but not their roles
+// would drop them at the front door with an account that can do nothing, and
+// they have no way to tell that from being denied.
+func (s *PrincipalStore) UpsertFromIdP(ctx context.Context, in IdPLogin) (*model.Principal, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin upsert principal: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	// Matching on external_id and updating the subject is what lets a rename at
+	// the provider follow the person here, instead of splitting their history
+	// across two principals.
+	var id uuid.UUID
+	err = tx.QueryRow(ctx, `
+		INSERT INTO principals (subject, kind, display_name, external_id)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (external_id) WHERE external_id IS NOT NULL
+		DO UPDATE SET subject = EXCLUDED.subject, display_name = EXCLUDED.display_name
+		RETURNING id
+	`, in.Subject, model.PrincipalKindUser, in.DisplayName, in.ExternalID).Scan(&id)
+	if err != nil {
+		// The other unique column. Someone already answers to this name and is
+		// not this person; a login is the wrong place to resolve that.
+		if strings.Contains(err.Error(), "principals_subject_key") {
+			return nil, fmt.Errorf("%w: %s", ErrSubjectTaken, in.Subject)
+		}
+		return nil, fmt.Errorf("upsert principal: %w", err)
+	}
+
+	if err := reconcileIdPRoles(ctx, tx, id, in.Roles); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit upsert principal: %w", err)
+	}
+	return s.FindByID(ctx, id)
+}
+
+// reconcileIdPRoles makes the IdP-derived grants match the token exactly, and
+// touches nothing else.
+//
+// Removing somebody from eng-leads at the provider has to take admin away here
+// at their next login, or the group mapping is decoration. Equally, a role an
+// administrator granted through the Access tab must survive a login, or the
+// two ways of granting access would fight — and an IdP exposing no useful
+// groups would leave nobody able to grant anything at all.
+func reconcileIdPRoles(ctx context.Context, tx pgx.Tx, principalID uuid.UUID, roles []string) error {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM role_bindings
+		WHERE principal_id = $1 AND scope = $2 AND source = $3
+		  AND role <> ALL($4::text[])
+	`, principalID, model.ScopeStoreWide, model.GrantSourceIdP, roles); err != nil {
+		return fmt.Errorf("remove stale idp roles: %w", err)
+	}
+
+	for _, role := range roles {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO role_bindings (principal_id, role, scope, source)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (principal_id, role, scope) DO NOTHING
+		`, principalID, role, model.ScopeStoreWide, model.GrantSourceIdP); err != nil {
+			return fmt.Errorf("grant idp role %q: %w", role, err)
+		}
+	}
+	return nil
 }
 
 // CountOtherEnabledAdmins reports how many principals besides this one can

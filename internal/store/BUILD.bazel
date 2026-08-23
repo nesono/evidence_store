@@ -11,6 +11,7 @@ go_library(
         "inheritance.go",
         "pagination.go",
         "principal.go",
+        "session.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/store",
     visibility = ["//:__subpackages__"],

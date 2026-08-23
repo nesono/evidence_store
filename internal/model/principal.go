@@ -22,6 +22,11 @@ type Principal struct {
 	DisabledAt  *time.Time `json:"disabled_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastSeenAt  *time.Time `json:"last_seen_at,omitempty"`
+	// ExternalID is the identity provider's own name for this person,
+	// "<issuer>|<sub>". Empty for an API key, which answers to nobody but this
+	// store. It is what a login matches on, so that a changed email address
+	// corrects the subject rather than creating a second principal.
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // Disabled reports whether the principal has been revoked. A disabled
@@ -63,3 +68,23 @@ const (
 // ScopeStoreWide is the only role-binding scope written today. Per-repo scoping
 // is reserved but inert; see migration 000006.
 const ScopeStoreWide = "*"
+
+// Where a role binding came from. IdP-derived grants are reconciled to the
+// caller's claims on every login; local ones are an administrator's decision
+// and a login must not undo them.
+const (
+	GrantSourceLocal = "local"
+	GrantSourceIdP   = "idp"
+)
+
+// Session is a logged-in browser. It is a row rather than a signed cookie so
+// that revoking a principal, or logging somebody out, takes effect on their
+// next request — the same promise API keys have had since phase 2.
+type Session struct {
+	ID          uuid.UUID  `json:"id"`
+	PrincipalID uuid.UUID  `json:"principal_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	LastSeenAt  *time.Time `json:"last_seen_at,omitempty"`
+	UserAgent   string     `json:"user_agent,omitempty"`
+}

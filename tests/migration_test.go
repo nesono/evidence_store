@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,7 +54,14 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	version, dirty, err := m.Version()
 	require.NoError(t, err)
 	assert.False(t, dirty)
-	assert.Equal(t, uint(7), version, "the round trip should end at the latest migration")
+
+	// Counted rather than hardcoded: a number written here is a number every
+	// future migration has to remember to bump, and the failure when somebody
+	// forgets says nothing about what is actually wrong.
+	ups, err := filepath.Glob(filepath.Join(testMigrationsPath, "*.up.sql"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ups)
+	assert.Equal(t, uint(len(ups)), version, "the round trip should end at the latest migration")
 }
 
 // ---------------------------------------------------------------------------

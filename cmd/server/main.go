@@ -79,7 +79,21 @@ func main() {
 	}
 	slog.Info("blob store ready", "backend", cfg.Blob.Options.Backend)
 
-	srv := server.New(cfg, pool, blobs)
+	// Discovering the identity provider is the first honest check that the SSO
+	// configuration works. Failing here beats mounting a login button that
+	// fails the first time somebody presses it.
+	var sso *auth.OIDCProvider
+	if cfg.Auth.OIDC.Enabled() {
+		sso, err = auth.NewOIDCProvider(ctx, cfg.Auth.OIDC)
+		if err != nil {
+			slog.Error("failed to configure single sign-on", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("single sign-on ready", "issuer", cfg.Auth.OIDC.Issuer,
+			"mapped_groups", len(cfg.Auth.OIDC.RoleMap))
+	}
+
+	srv := server.New(cfg, pool, blobs, sso)
 
 	// Start retention worker if configured.
 	if retentionPath := os.Getenv("EVIDENCE_RETENTION_CONFIG"); retentionPath != "" {

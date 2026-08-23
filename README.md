@@ -28,6 +28,15 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
 | `EVIDENCE_AUTH_DB` | `false` | Authenticate against the `principals` table (see [Database-backed principals](#database-backed-principals)) |
 | `EVIDENCE_BOOTSTRAP_ADMIN` | *(empty)* | Subject of an administrator seeded on first start; its key is logged once |
+| `EVIDENCE_OIDC_ISSUER` | *(empty — SSO off)* | Identity provider to log people in with (see [Single sign-on](#single-sign-on)) |
+| `EVIDENCE_OIDC_CLIENT_ID` | *(empty)* | Client id registered with the provider |
+| `EVIDENCE_OIDC_CLIENT_SECRET` | *(empty)* | Client secret, for a confidential client |
+| `EVIDENCE_OIDC_REDIRECT_URL` | *(empty)* | Where the provider sends the browser back, e.g. `https://evidence.example.com/auth/callback` |
+| `EVIDENCE_OIDC_SCOPES` | `openid,profile,email` | Scopes to request |
+| `EVIDENCE_OIDC_GROUPS_CLAIM` | `groups` | Claim carrying group membership (Entra calls it `roles`) |
+| `EVIDENCE_OIDC_ROLE_MAP` | *(empty)* | `group:role` pairs, e.g. `eng-all:contributor,eng-leads:admin` |
+| `EVIDENCE_SESSION_TTL_HOURS` | `12` | How long a login lasts |
+| `EVIDENCE_COOKIE_SECURE` | `true` | `false` only for local development over plain HTTP |
 | `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
@@ -174,6 +183,60 @@ Otherwise one click could leave a deployment with no way in but `psql`.
 `GET /api/v1/me` reports the calling principal, its roles and its permissions.
 It is the one route under `/api/v1` that asserts no permission of its own — the
 web UI uses it to decide what to offer.
+
+### Single sign-on
+
+Point the store at your identity provider and people log in with the account
+they already have. Set `EVIDENCE_OIDC_ISSUER` and the client credentials it
+issued you:
+
+```bash
+export EVIDENCE_AUTH_DB=true            # sessions resolve to principals
+export EVIDENCE_OIDC_ISSUER="https://login.example.com/realms/engineering"
+export EVIDENCE_OIDC_CLIENT_ID="evidence-store"
+export EVIDENCE_OIDC_CLIENT_SECRET="…"
+export EVIDENCE_OIDC_REDIRECT_URL="https://evidence.example.com/auth/callback"
+export EVIDENCE_OIDC_ROLE_MAP="eng-all:contributor,eng-leads:admin"
+```
+
+Register the redirect URL with the provider, and make sure the ID token carries
+a groups claim — in Keycloak that is a *group membership* mapper, and most
+providers need it switched on explicitly.
+
+The flow is Authorization Code with PKCE. `GET /auth/login` sends the browser
+out, `GET /auth/callback` verifies the ID token and starts a session, and
+`POST /auth/logout` ends it. The session is a **row**, not a signed cookie, so
+revoking somebody stops the browser they left open rather than waiting for a
+token to expire. `GET /auth/config` reports whether a login flow exists, which
+is how the UI knows to offer one.
+
+**Roles come from groups.** A group with no entry in `EVIDENCE_OIDC_ROLE_MAP`
+grants nothing, so pointing this store at a company directory does not hand
+every employee an account that can write. On each login the roles derived from
+group claims are reconciled to what the token now says — losing a group loses
+the role — while roles an administrator granted in the **Access** tab are left
+alone. Someone whose groups map to nothing is authenticated and permitted
+nothing, which is a deliberate state and not an error.
+
+**People are matched on the provider's `sub` claim**, not their address. Someone
+who changes their email stays one principal with their history intact; their
+`subject` here is corrected at the next login. If an API key already answers to
+the name a login wants, the login is refused with `409` rather than guessing
+they are the same party — rename the key.
+
+**Writes need a CSRF token.** A cookie is sent by the browser whether or not the
+page meant to send it, so session-authenticated writes must echo the
+`evidence_csrf` cookie in an `X-CSRF-Token` header. Bearer-token callers are
+unaffected: CI has no cookies and needs none of this.
+
+Signing in also settles the `source` question for humans. A logged-in person's
+Source box is filled in with their own subject and locked, because that is the
+only value the server will accept from them — see
+[`source` is bound to the caller](#source-is-bound-to-the-caller).
+
+SAML is the same shape with a different front end and has not been built yet;
+everything from `Principal` inward is already independent of where a caller came
+from.
 
 See [docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including
 where SSO/SAML plugs in.

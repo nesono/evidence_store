@@ -52,7 +52,41 @@ type Auth struct {
 	// whose one-time key is logged. Without it a fresh database has no way in,
 	// since issuing the first key is itself an administrator's operation.
 	BootstrapAdmin string
+	// OIDC lets people log in with the identity provider they already use.
+	OIDC OIDC
 }
+
+// OIDC configures single sign-on. Empty Issuer switches it off, which is the
+// default: a store nobody has pointed at an identity provider has no login
+// flow, and its API keys work exactly as before.
+type OIDC struct {
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	// RedirectURL is where the provider sends the browser back, and must match
+	// what is registered with them. It is spelled out rather than derived from
+	// the request because behind a proxy the request's own host is whatever the
+	// proxy chose to forward, and guessing it wrong sends people to a URL the
+	// provider will refuse.
+	RedirectURL string
+	Scopes      []string
+	// GroupsClaim is the token claim carrying group membership. Providers
+	// disagree: "groups" is common, Entra says "roles".
+	GroupsClaim string
+	// RoleMap turns a group the provider reports into a role here. A group with
+	// no entry grants nothing, so adding the store to an IdP does not hand
+	// every employee an account that can write.
+	RoleMap map[string]string
+	// SessionTTL is how long a login lasts before the person signs in again.
+	SessionTTL time.Duration
+	// CookieSecure keeps the session cookie off plain HTTP. On by default and
+	// only worth turning off for local development, which is the one place a
+	// store is legitimately reached without TLS.
+	CookieSecure bool
+}
+
+// Enabled reports whether a login flow should be mounted at all.
+func (o OIDC) Enabled() bool { return o.Issuer != "" }
 
 // Weather configures the one lookup this store makes to a service outside it.
 //
@@ -178,9 +212,52 @@ func Load() (*Config, error) {
 		cfg.APIKeys = keys
 	}
 
+	oidc := OIDC{
+		Issuer:       strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_ISSUER")),
+		ClientID:     strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_CLIENT_ID")),
+		ClientSecret: os.Getenv("EVIDENCE_OIDC_CLIENT_SECRET"),
+		RedirectURL:  strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_REDIRECT_URL")),
+		Scopes:       splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
+		GroupsClaim:  envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
+		SessionTTL: time.Duration(
+			envOrDefaultInt("EVIDENCE_SESSION_TTL_HOURS", 12)) * time.Hour,
+		// Secure unless explicitly turned off, so that forgetting the variable
+		// fails towards the safe posture rather than away from it.
+		CookieSecure: os.Getenv("EVIDENCE_COOKIE_SECURE") != "false",
+	}
+
+	roleMap, err := ParseRoleMap(os.Getenv("EVIDENCE_OIDC_ROLE_MAP"))
+	if err != nil {
+		return nil, fmt.Errorf("EVIDENCE_OIDC_ROLE_MAP: %w", err)
+	}
+	oidc.RoleMap = roleMap
+
 	cfg.Auth = Auth{
 		DB:             os.Getenv("EVIDENCE_AUTH_DB") == "true",
 		BootstrapAdmin: strings.TrimSpace(os.Getenv("EVIDENCE_BOOTSTRAP_ADMIN")),
+		OIDC:           oidc,
+	}
+
+	if oidc.Enabled() {
+		// Half-configured SSO is worse than none: the login button exists and
+		// every attempt to use it fails somewhere the operator cannot see.
+		for name, value := range map[string]string{
+			"EVIDENCE_OIDC_CLIENT_ID":    oidc.ClientID,
+			"EVIDENCE_OIDC_REDIRECT_URL": oidc.RedirectURL,
+		} {
+			if value == "" {
+				return nil, fmt.Errorf("%s is required when EVIDENCE_OIDC_ISSUER is set", name)
+			}
+		}
+		if oidc.SessionTTL <= 0 {
+			return nil, fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
+		}
+		// Sessions resolve to principals, which is the table EVIDENCE_AUTH_DB
+		// turns on. Logging in without it would mint an identity nothing
+		// consults.
+		if !cfg.Auth.DB {
+			return nil, fmt.Errorf("EVIDENCE_OIDC_ISSUER requires EVIDENCE_AUTH_DB=true")
+		}
 	}
 
 	// Refuse rather than ignore. A subject named here and quietly dropped
@@ -229,6 +306,45 @@ func ParseAPIKeys(raw string) ([]APIKey, error) {
 		}
 	}
 	return keys, nil
+}
+
+// ParseRoleMap reads "group:role,group:role" — which group at the identity
+// provider grants which role here.
+//
+// Role names are not validated against the four this binary defines: that
+// belongs to internal/auth, and this package is deliberately below it. An entry
+// naming a role that does not exist grants nothing, which is the same thing a
+// role_bindings row naming one does.
+func ParseRoleMap(raw string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		group, role, ok := strings.Cut(entry, ":")
+		group, role = strings.TrimSpace(group), strings.TrimSpace(role)
+		if !ok || group == "" || role == "" {
+			return nil, fmt.Errorf("invalid entry %q: expected group:role (e.g. eng-leads:admin)", entry)
+		}
+		if existing, dup := out[group]; dup && existing != role {
+			// Silently keeping one of them would hand somebody the wrong access
+			// and give the operator nothing to look at.
+			return nil, fmt.Errorf("group %q is mapped to both %q and %q", group, existing, role)
+		}
+		out[group] = role
+	}
+	return out, nil
+}
+
+func splitAndTrim(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func envOrDefault(key, fallback string) string {

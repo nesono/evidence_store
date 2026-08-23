@@ -3,12 +3,16 @@ module github.com/nesono/evidence-store
 go 1.26.2
 
 require (
+	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
+	github.com/minio/minio-go/v7 v7.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -46,7 +50,6 @@ require (
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/minio-go/v7 v7.3.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
 	github.com/moby/moby/api v1.54.1 // indirect

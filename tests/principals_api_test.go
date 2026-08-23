@@ -356,6 +356,8 @@ type meBody struct {
 	Roles         []string `json:"roles"`
 	Permissions   []string `json:"permissions"`
 	AuthDBEnabled bool     `json:"auth_db_enabled"`
+	SSOEnabled    bool     `json:"sso_enabled"`
+	ViaSession    bool     `json:"via_session"`
 }
 
 func TestMeDescribesTheCaller(t *testing.T) {
