@@ -470,6 +470,10 @@ The local adapter determines `rcs_ref` from the current HEAD commit (or working-
 | **Read access** | All authenticated clients can read all evidence |
 | **Admin operations** | Retention policy changes, inheritance declarations require elevated role |
 
+The table above is the target. [docs/rbac-design.md](docs/rbac-design.md) works
+it out in detail — principals, a closed permission set, the four roles, and the
+schema — and marks the slot that SSO/SAML (#15) fills in.
+
 ---
 
 ## 9. Deployment Considerations
