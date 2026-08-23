@@ -56,7 +56,13 @@ func TestMain(m *testing.M) {
 				"POSTGRES_USER":     "evidence",
 				"POSTGRES_PASSWORD": "evidence",
 			},
-			WaitingFor: wait.ForListeningPort("5432/tcp").WithStartupTimeout(60 * time.Second),
+			// The postgres image binds 5432 twice — once for the temporary initdb
+			// server, then again for the real one — so waiting on the port can
+			// return while the database is still starting up. The readiness log's
+			// second occurrence is the real server.
+			WaitingFor: wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60 * time.Second),
 		},
 		Started: true,
 	})
