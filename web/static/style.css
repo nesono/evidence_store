@@ -667,6 +667,36 @@ body > main {
     margin-bottom: 0 !important;
 }
 
+/* Location. Every other field in the form is spaced by its own input's bottom
+   margin, which .input-with-button zeroes to sit the button beside the box — so
+   this label carries the gap to Notes itself. Written against #add-form because
+   that is what zeroes label margins above. */
+#add-form .location-field {
+    margin-bottom: var(--pico-spacing, 1rem);
+}
+
+/* What the Locate button has to say for itself, under the field */
+.location-status:empty {
+    display: none;
+}
+
+.location-status {
+    display: block;
+    margin-top: 0.15em;
+    color: var(--pico-muted-color);
+    font-size: 0.8em;
+}
+
+.location-status-error {
+    color: var(--pico-del-color, #c0392b);
+}
+
+/* The margin of a fix, next to the point it qualifies in the record dialog */
+.location-accuracy {
+    color: var(--pico-muted-color);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Custom metadata fields */
 .custom-fields {
     border: 1px solid var(--pico-muted-border-color);

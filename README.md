@@ -389,6 +389,51 @@ Deleting evidence therefore removes its images unless another record still shows
 them, and deletion is not immediate: it happens on the next sweep after the
 grace period.
 
+### Where a test was run
+
+A manual result is made somewhere, and for a test on a rig, a vehicle or a
+proving ground the place is part of what the record proves. It goes in
+`metadata.location`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/evidence \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "repo": "myorg/myrepo",
+    "branch": "main",
+    "rcs_ref": "abc123",
+    "procedure_ref": "manual/brake-check",
+    "evidence_type": "manual",
+    "source": "j.tester",
+    "result": "PASS",
+    "finished_at": "2026-01-01 14:00",
+    "metadata": {
+      "location": "52.51631, 13.37771",
+      "location_accuracy_m": 12.5
+    }
+  }'
+```
+
+One field takes both a coordinate pair and a place name — `Lab 2, bay 4` is as
+valid a value as `52.51631, 13.37771` — because a tester at a bench has the one
+and a tester in a field has the other, and a field that insists on coordinates
+is a field that gets left empty. The value is stored as written; the store never
+parses, rounds or reorders it.
+
+In the web UI's **Add Result** tab, **Locate** next to the field fills it with
+this device's position, to five decimals (about a metre) and with the receiver's
+own margin recorded alongside in `location_accuracy_m`. The margin is only filed
+while the text is still the device's: correcting the field by hand makes it the
+tester's account of the place, and a metre count from a reading nobody can see
+any more would say more than the record knows. The button needs a secure context
+(HTTPS, or localhost) and the browser's permission; without either, the field is
+still typed in as normal.
+
+The record dialog in **Search** shows the location with the record's own fields
+rather than inside the metadata dump, and links a coordinate pair to a map. The
+link is only followed when a reader clicks it — opening a record tells no map
+service what is being read.
+
 ### Querying evidence
 
 ```bash

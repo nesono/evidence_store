@@ -14,6 +14,13 @@ import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
 import { renderMarkdown } from "./markdown.js";
 import { attachImageUploads, hydrateImages, releaseImages } from "./images.js";
+import {
+  formatAccuracy,
+  formatCoordinates,
+  mapURL,
+  parseCoordinates,
+  requestPosition,
+} from "./location.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -408,8 +415,41 @@ function renderWindowNav() {
   document.getElementById("last-window").disabled = atEnd;
 }
 
+// Where the test was run, as a detail field. Returns "" when the record does
+// not say, and — as with the log below — leaves anything that is not a string
+// alone, since that is some other client's field and not a place.
+function renderLocation(metadata) {
+  if (typeof metadata.location !== "string" || !metadata.location.trim()) return "";
+  const text = metadata.location.trim();
+
+  let html = esc(text);
+  // Only a coordinate pair gets a map link, and the link is never followed
+  // until the reader clicks it: showing a record must not tell a map service
+  // what someone is reading.
+  const coords = parseCoordinates(text);
+  if (coords) {
+    html += ` <a href="${mapURL(coords)}" target="_blank" rel="noopener noreferrer">map</a>`;
+  }
+  // A point without its margin reads as certainty the device never had.
+  const accuracy = formatAccuracy(metadata.location_accuracy_m);
+  if (accuracy) html += ` <small class="location-accuracy">${accuracy}</small>`;
+  return html;
+}
+
 function renderDetail(record) {
   const el = document.getElementById("detail-content");
+  const metadata = record.metadata || {};
+  const rest = { ...metadata };
+
+  // Location sits with the record's own fields rather than in the metadata dump:
+  // where a manual test was run is part of what it proves, and a reader looking
+  // for it should not have to read JSON to find out.
+  const location = renderLocation(metadata);
+  if (location) {
+    delete rest.location;
+    delete rest.location_accuracy_m;
+  }
+
   const fields = [
     ["ID", record.id],
     ["Result", resultBadge(record.result)],
@@ -419,6 +459,7 @@ function renderDetail(record) {
     ["Procedure", esc(record.procedure_ref)],
     ["Type", esc(record.evidence_type)],
     ["Source", esc(record.source)],
+    ...(location ? [["Location", location]] : []),
     ["Finished", record.finished_at],
     ["Ingested", record.ingested_at],
     ["Inherited", record.inherited ? "Yes" : "No"],
@@ -437,8 +478,7 @@ function renderDetail(record) {
   // the substance of a manual result, and the fields above are just its label.
   // It is lifted out of the metadata dump below because a log rendered as one
   // JSON string of escaped newlines is a log nobody reads.
-  const metadata = record.metadata || {};
-  const rest = { ...metadata };
+  //
   // Anything but a string under `observations` is some other client's field and
   // stays in the dump, where it is at least visible, rather than being rendered
   // as a log or silently dropped from both places.
@@ -721,6 +761,18 @@ async function submitEvidence(andAnother) {
   // tester's own account of the run.
   const observations = form.observations.value.trim();
   if (observations) metadata.observations = observations;
+  const location = form.location.value.trim();
+  if (location) {
+    metadata.location = location;
+    // The margin belongs to the fix, not to the field: it is filed only while
+    // the text is still the one the device produced. Typing over it — even to
+    // correct it — makes it a place the tester named, and a metre count from a
+    // reading that is no longer shown would be a claim about someone else's.
+    const accuracy = Number(form.location.dataset.accuracyM);
+    if (form.location.dataset.fromDevice === location && Number.isFinite(accuracy)) {
+      metadata.location_accuracy_m = accuracy;
+    }
+  }
   Object.assign(metadata, readCustomFields());
 
   const record = {
@@ -757,6 +809,9 @@ async function submitEvidence(andAnother) {
       form.querySelector('[name="result"]:checked').checked = false;
       form.notes.value = "";
       form.observations.value = "";
+      // Location is deliberately kept: a tester filing several runs in a row is
+      // still standing where they were, and re-locating for each one is how the
+      // field stops being filled.
       updateTestLogPreview();
       const currentTpl = document.getElementById("template-select").value;
       if (currentTpl) {
@@ -844,6 +899,51 @@ document.getElementById("fill-now").addEventListener("click", () => {
   const input = document.querySelector('#add-form [name="finished_at"]');
   input.value = formatTime(new Date().toISOString());
   updateUtcPreview(input);
+});
+
+// --- Location ---
+
+// The button fills the field rather than replacing it: what it writes is text
+// the tester can correct, add a bay number to, or throw away. The field works
+// with the button never pressed, which is also what happens on a desktop with
+// no receiver in it.
+document.getElementById("fill-location").addEventListener("click", async (e) => {
+  const input = document.querySelector('#add-form [name="location"]');
+  const status = document.getElementById("location-status");
+  const btn = e.currentTarget;
+
+  status.classList.remove("location-status-error");
+  status.textContent = "Locating…";
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+
+  try {
+    const { lat, lon, accuracy } = await requestPosition();
+    input.value = formatCoordinates(lat, lon);
+    input.dataset.fromDevice = input.value;
+    input.dataset.accuracyM = accuracy;
+    status.textContent = formatAccuracy(accuracy)
+      ? `This device's position, ${formatAccuracy(accuracy)}`
+      : "This device's position";
+  } catch (err) {
+    status.textContent = err.message;
+    status.classList.add("location-status-error");
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+});
+
+// An edited field is the tester's own account of the place again, so the
+// device's margin stops applying to it and the note about where it came from
+// stops being true.
+document.querySelector('#add-form [name="location"]').addEventListener("input", (e) => {
+  if (e.target.dataset.fromDevice === e.target.value) return;
+  delete e.target.dataset.fromDevice;
+  delete e.target.dataset.accuracyM;
+  const status = document.getElementById("location-status");
+  status.textContent = "";
+  status.classList.remove("location-status-error");
 });
 
 function updateUtcPreview(input) {

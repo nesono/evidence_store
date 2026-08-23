@@ -79,8 +79,12 @@ Common optional fields (any type):
 |---|---|---|
 | `observations` | string | Free-text observations from the tester |
 | `photo_uris` | URI[] | Links to photos or screenshots. Images embedded in `observations` are listed here automatically (see 4.4) |
+| `location` | string | Where the test was run, as written: a decimal `lat, lon` pair or a place name |
+| `location_accuracy_m` | float | Radius in metres the fix is good to. Present only when `location` came from the device's receiver and was not edited afterwards |
 | `weather_conditions` | string | Weather conditions during the test |
 | `video_uris` | URI[] | Links to video recordings |
+
+`location` is one string and not a structured point, because the two things a tester has to record are not the same shape: someone on a proving ground has a fix from the device, someone at a bench has "Lab 2, bay 4", and a schema that demands coordinates gets an empty field from the second. Clients that need a point parse the pair back out; a value that is not one is a place name and was never meant to be a point. The store itself does not read the field — a value that came back rounded or reordered would be a claim about the place that the tester never made.
 
 ### 2.3 Result Inheritance
 
