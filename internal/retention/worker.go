@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/store"
 )
@@ -21,6 +22,12 @@ type Worker struct {
 	inherit   *store.InheritanceStore
 	interval  time.Duration
 	logger    *slog.Logger
+
+	// Blob sweeping is optional: a deployment with no object store configured
+	// runs retention exactly as before.
+	blobs       blob.Store
+	blobRefs    *store.BlobRefStore
+	orphanGrace time.Duration
 }
 
 // NewWorker creates a new retention worker.
@@ -38,17 +45,22 @@ func NewWorker(cfg *Config, evidence *store.EvidenceStore, inherit *store.Inheri
 	}, nil
 }
 
+// WithBlobs makes the worker sweep unreferenced blobs after each retention
+// pass. Records have to be deleted before their blobs become unreachable, so
+// the two belong on the same schedule and in that order.
+func (w *Worker) WithBlobs(blobs blob.Store, refs *store.BlobRefStore, grace time.Duration) *Worker {
+	w.blobs = blobs
+	w.blobRefs = refs
+	w.orphanGrace = grace
+	return w
+}
+
 // Start runs the retention worker on a ticker. Blocks until ctx is cancelled.
 func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("retention worker started", "interval", w.interval)
 
 	// Run once immediately on start.
-	deleted, err := w.RunOnce(ctx)
-	if err != nil {
-		w.logger.Error("retention run failed", "error", err)
-	} else {
-		w.logger.Info("retention run completed", "deleted", deleted)
-	}
+	w.runPass(ctx)
 
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -59,13 +71,27 @@ func (w *Worker) Start(ctx context.Context) {
 			w.logger.Info("retention worker stopped")
 			return
 		case <-ticker.C:
-			deleted, err := w.RunOnce(ctx)
-			if err != nil {
-				w.logger.Error("retention run failed", "error", err)
-			} else {
-				w.logger.Info("retention run completed", "deleted", deleted)
-			}
+			w.runPass(ctx)
 		}
+	}
+}
+
+// runPass expires records and then collects whatever blobs that left
+// unreachable. The order matters: sweeping first would do the same work against
+// a set of references that is about to shrink.
+func (w *Worker) runPass(ctx context.Context) {
+	deleted, err := w.RunOnce(ctx)
+	if err != nil {
+		w.logger.Error("retention run failed", "error", err)
+	} else {
+		w.logger.Info("retention run completed", "deleted", deleted)
+	}
+
+	swept, err := w.SweepBlobs(ctx)
+	if err != nil {
+		w.logger.Error("blob sweep failed", "error", err)
+	} else if swept > 0 {
+		w.logger.Info("blob sweep completed", "deleted", swept)
 	}
 }
 

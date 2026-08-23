@@ -34,18 +34,22 @@ func NewEvidenceStoreWithCache(pool *pgxpool.Pool, ttl time.Duration) *EvidenceS
 }
 
 func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*model.Evidence, error) {
-	metadata := e.Metadata
-	if metadata == nil {
-		metadata = json.RawMessage(`{}`)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	ev, err := insertOne(ctx, tx, e)
+	if err != nil {
+		return nil, err
 	}
 
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-	`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
 
-	return scanEvidence(row)
+	return ev, nil
 }
 
 func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.EvidenceCreate) ([]model.Evidence, error) {
@@ -57,18 +61,7 @@ func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.Evidenc
 
 	results := make([]model.Evidence, 0, len(records))
 	for _, e := range records {
-		metadata := e.Metadata
-		if metadata == nil {
-			metadata = json.RawMessage(`{}`)
-		}
-
-		row := tx.QueryRow(ctx, `
-			INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-		`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
-
-		ev, err := scanEvidence(row)
+		ev, err := insertOne(ctx, tx, &e)
 		if err != nil {
 			return nil, fmt.Errorf("insert record: %w", err)
 		}
@@ -80,6 +73,33 @@ func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.Evidenc
 	}
 
 	return results, nil
+}
+
+// insertOne stores one record and the references to whatever blobs its test log
+// points at. The two happen in one transaction because a record that mentions a
+// blob without a reference row would have its images swept out from under it.
+func insertOne(ctx context.Context, tx pgx.Tx, e *model.EvidenceCreate) (*model.Evidence, error) {
+	metadata, refs, err := annotateBlobRefs(e.Metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	row := tx.QueryRow(ctx, `
+		INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
+	`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
+
+	ev, err := scanEvidence(row)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := recordBlobRefs(ctx, tx, ev.ID, refs); err != nil {
+		return nil, err
+	}
+
+	return ev, nil
 }
 
 func (s *EvidenceStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Evidence, error) {

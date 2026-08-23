@@ -12,6 +12,7 @@ import (
 
 	"github.com/nesono/evidence-store/internal/api"
 	"github.com/nesono/evidence-store/internal/auth"
+	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/ratelimit"
 	"github.com/nesono/evidence-store/internal/store"
@@ -23,7 +24,7 @@ type Server struct {
 	pool       *pgxpool.Pool
 }
 
-func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
+func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -46,6 +47,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
 	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
+	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.APIKeys))
@@ -63,17 +65,27 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 		r.Get("/analytics/summary", analyticsAPI.Summary)
 		r.Get("/analytics/tests", analyticsAPI.Tests)
 		r.Get("/analytics/clusters", analyticsAPI.Clusters)
+
+		// Uploading is a write, reading is a read, so the API-key roles and the
+		// rate limiter's buckets already apply the right rules to both.
+		r.Post("/blobs", blobAPI.Upload)
+		r.Get("/blobs/{ref}", blobAPI.Get)
 	})
 
 	r.Handle("/*", web.StaticHandler())
 
 	return &Server{
 		httpServer: &http.Server{
-			Addr:         cfg.ListenAddr,
-			Handler:      r,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  60 * time.Second,
+			Addr:    cfg.ListenAddr,
+			Handler: r,
+			// The body may now be a few megabytes of screenshot from a tester on
+			// a phone tether, which the previous 10s read timeout would cut off
+			// mid-upload. Headers keep the short deadline, so a connection that
+			// dawdles before saying anything is still dropped promptly.
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       60 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		},
 		pool: pool,
 	}

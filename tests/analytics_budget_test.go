@@ -30,9 +30,10 @@ func serverWithBudget(t *testing.T, budget time.Duration) *httptest.Server {
 		MaxBatchSize:          1000,
 		LogLevel:              "ERROR",
 		AnalyticsQueryTimeout: budget,
+		Blob:                  testBlobConfig,
 	}
 
-	srv := httptest.NewServer(server.New(cfg, testPool).Handler())
+	srv := httptest.NewServer(server.New(cfg, testPool, testBlobStore).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }
