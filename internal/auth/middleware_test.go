@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/model"
 )
 
 func okHandler() http.Handler {
@@ -291,18 +292,91 @@ func TestChainSkipsAuthenticatorsWithNothingToRead(t *testing.T) {
 	assert.Equal(t, 1, secondCalls)
 }
 
-// A presented-but-wrong credential is an answer, not an absence: the chain
-// stops rather than letting a later scheme accept the same request.
-func TestChainStopsOnInvalidCredentials(t *testing.T) {
+// Two key sources read the same Authorization header, and whichever is asked
+// first has never heard of the other's keys. A rejection therefore has to wait
+// until every scheme has looked — phase 1 stopped at the first one, which was
+// indistinguishable from correct while only one scheme read that header.
+func TestChainLetsALaterSchemeRecogniseARejectedCredential(t *testing.T) {
+	var firstCalls, secondCalls int
+	want := NewPrincipal("user:alice", KindUser, "", RoleAdmin)
+	chain := Chain{
+		stubAuthenticator{err: ErrInvalidCredentials, calls: &firstCalls},
+		stubAuthenticator{principal: want, calls: &secondCalls},
+	}
+
+	got, err := chain.Authenticate(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	assert.Equal(t, 1, secondCalls)
+}
+
+// Deferring the rejection is not the same as dropping it. A credential nobody
+// recognises is still rejected, with the first rejection's reason.
+func TestChainRejectsWhenNoSchemeRecognisesTheCredential(t *testing.T) {
 	var firstCalls, secondCalls int
 	chain := Chain{
 		stubAuthenticator{err: ErrInvalidCredentials, calls: &firstCalls},
-		stubAuthenticator{principal: NewPrincipal("user:alice", KindUser, "", RoleAdmin), calls: &secondCalls},
+		stubAuthenticator{err: ErrNoCredentials, calls: &secondCalls},
 	}
 
 	_, err := chain.Authenticate(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
+	assert.Equal(t, 1, secondCalls, "the later scheme still gets its look")
+}
+
+// An outage is the one thing that does stop the chain: asking the remaining
+// schemes could only turn "we cannot check" into "your key is wrong".
+func TestChainStopsWhenABackendIsUnavailable(t *testing.T) {
+	var firstCalls, secondCalls int
+	chain := Chain{
+		stubAuthenticator{err: ErrAuthUnavailable, calls: &firstCalls},
+		stubAuthenticator{err: ErrInvalidCredentials, calls: &secondCalls},
+	}
+
+	_, err := chain.Authenticate(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	assert.ErrorIs(t, err, ErrAuthUnavailable)
 	assert.Equal(t, 0, secondCalls)
+}
+
+// The migration posture: env keys and database keys live at once, and each is
+// unknown to the other's authenticator.
+func TestChainAcceptsEitherKeySource(t *testing.T) {
+	lookup := newFakeLookup()
+	dbKey, err := GenerateKey()
+	require.NoError(t, err)
+	lookup.add(dbKey, &model.Principal{
+		Subject: "ci:nightly", Kind: model.PrincipalKindAPIKey, Roles: []string{"ci"},
+	})
+
+	chain := Chain{
+		NewStaticKeyAuthenticator([]config.APIKey{{Key: "legacy-rw"}}),
+		NewDBKeyAuthenticator(lookup, quietLogger()),
+	}
+
+	fromEnv, err := chain.Authenticate(context.Background(), bearerRequest("legacy-rw"))
+	require.NoError(t, err)
+	assert.True(t, fromEnv.HasRole(RoleAdmin), "an env rw key keeps every endpoint it had")
+
+	fromDB, err := chain.Authenticate(context.Background(), bearerRequest(dbKey))
+	require.NoError(t, err)
+	assert.Equal(t, "ci:nightly", fromDB.Subject)
+	assert.False(t, fromDB.HasRole(RoleAdmin), "a database key holds only what it was granted")
+
+	_, err = chain.Authenticate(context.Background(), bearerRequest("neither-of-them"))
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
+}
+
+// Database-backed authentication never falls open. An empty principals table
+// means nobody may in, not that everybody may.
+func TestChainWithOnlyDBKeysIsNotDisabled(t *testing.T) {
+	chain := Chain{
+		NewStaticKeyAuthenticator(nil),
+		NewDBKeyAuthenticator(newFakeLookup(), quietLogger()),
+	}
+
+	_, err := chain.Authenticate(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	assert.ErrorIs(t, err, ErrNoCredentials)
+	assert.NotErrorIs(t, err, ErrAuthDisabled)
 }
 
 func TestChainIsDisabledOnlyWhenEveryMemberIs(t *testing.T) {

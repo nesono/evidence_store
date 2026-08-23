@@ -63,7 +63,16 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	// permission it needs. Rate limiting stays after authentication so its
 	// buckets can eventually key on the principal rather than the token, and so
 	// an unauthenticated flood is still rejected before it costs anything.
-	authenticator := auth.NewStaticKeyAuthenticator(cfg.APIKeys)
+	//
+	// Both key sources are live at once when both are configured, and the env
+	// keys come first because checking them costs no round trip. That is the
+	// migration path: issue database keys, move pipelines over one at a time,
+	// and clear EVIDENCE_API_KEYS when the last one has moved.
+	authenticator := auth.Chain{auth.NewStaticKeyAuthenticator(cfg.APIKeys)}
+	if cfg.Auth.DB {
+		authenticator = append(authenticator,
+			auth.NewDBKeyAuthenticator(store.NewPrincipalStore(pool), slog.Default()))
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Authenticate(authenticator))

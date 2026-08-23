@@ -26,6 +26,12 @@ var (
 	// "no keys configured means the API is open" posture travels from config to
 	// the middleware.
 	ErrAuthDisabled = errors.New("authentication not configured")
+
+	// ErrAuthUnavailable means the authenticator could not reach what it checks
+	// against — the database is down, not the credential wrong. It fails the
+	// request closed like any other error, but as a 503 rather than a 401, so
+	// an outage does not present itself to every caller as a bad key.
+	ErrAuthUnavailable = errors.New("authentication backend unavailable")
 )
 
 // Authenticator resolves a request to a principal. Implementations report
@@ -102,15 +108,29 @@ func (a *StaticKeyAuthenticator) Authenticate(_ context.Context, r *http.Request
 	return matched, nil
 }
 
-// Chain tries each authenticator in order and returns the first one that
-// resolves a principal or rejects the credentials it was given. Authenticators
-// that see nothing of their own are skipped.
+// Chain tries every authenticator in order and returns the first principal any
+// of them resolves. Authenticators that see nothing of their own are skipped.
+//
+// A rejection does not stop the chain; it is remembered and returned only if
+// nothing later recognises the caller. Phase 1 stopped at the first rejection,
+// on the reasoning that a presented-but-wrong credential is an answer rather
+// than an absence. That was indistinguishable from correct while one scheme
+// read the Authorization header, and is wrong now that two do: an env-var key
+// and a database key arrive in the same header, and whichever authenticator is
+// asked first has never heard of the other's keys. Deferring is what phase 5
+// needs too, where a stale bearer token should not shadow a valid session
+// cookie on the same request.
+//
+// Nothing is loosened by this. A credential no scheme accepts is still
+// rejected, with the first rejection's reason; it just takes every scheme
+// having looked to conclude that.
 type Chain []Authenticator
 
 func (c Chain) Authenticate(ctx context.Context, r *http.Request) (*Principal, error) {
 	// The chain is only disabled if every member is: one configured scheme is
 	// enough to close the door.
 	allDisabled := true
+	var rejected error
 	for _, a := range c {
 		p, err := a.Authenticate(ctx, r)
 		switch {
@@ -120,10 +140,19 @@ func (c Chain) Authenticate(ctx context.Context, r *http.Request) (*Principal, e
 			continue
 		case errors.Is(err, ErrNoCredentials):
 			allDisabled = false
-			continue
-		default:
+		case errors.Is(err, ErrAuthUnavailable):
+			// Not an answer about the credential at all. Asking the remaining
+			// schemes would risk reporting "wrong key" during an outage.
 			return nil, err
+		default:
+			allDisabled = false
+			if rejected == nil {
+				rejected = err
+			}
 		}
+	}
+	if rejected != nil {
+		return nil, rejected
 	}
 	if allDisabled {
 		return nil, ErrAuthDisabled

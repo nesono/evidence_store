@@ -19,7 +19,7 @@ rewrite of every handler. Section 9 marks the slot it fills.
 ## Existing State
 
 This section describes the tree as it stood when this document was written —
-that is, before phase 1. Sections 1-3 and 6 are now implemented; see the phase
+that is, before phase 1. Sections 1-6 and 8 are now implemented; see the phase
 list at the end.
 
 - `internal/auth/middleware.go` is the whole authorization system. It compares
@@ -134,8 +134,8 @@ CREATE TABLE principals (
     subject      TEXT NOT NULL UNIQUE,  -- "ci:nightly" | "user:alice@example.com"
     kind         TEXT NOT NULL CHECK (kind IN ('api_key', 'user')),
     display_name TEXT NOT NULL DEFAULT '',
-    -- Non-null only for kind='api_key'. Argon2id; the plaintext key is shown
-    -- once at creation and never stored.
+    -- Non-null only for kind='api_key'. Hex SHA-256 (amended in phase 2, below);
+    -- the plaintext key is shown once at creation and never stored.
     key_hash     TEXT,
     disabled_at  TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -157,6 +157,19 @@ CREATE TABLE role_bindings (
 
 CREATE INDEX idx_role_bindings_principal ON role_bindings(principal_id);
 ```
+
+*Amended in phase 2 — key hashing.* `key_hash` holds a hex SHA-256 of the token,
+not Argon2id. A slow, salted hash earns its cost against a secret a human chose,
+where the guessable space is small; these keys are minted by the server from 256
+bits of `crypto/rand` and never supplied by a caller, so there is no space to
+search and a dump yields nothing to either hash. What Argon2id would cost is
+real: a salted hash cannot be looked up by value, so authentication would need a
+key ID in the token and a second lookup, and every request would burn ~64 MiB
+and tens of milliseconds on the hot path of a store sized for CI write volume.
+As it stands, authenticating is one indexed equality check. This holds *only*
+while keys are server-minted — an API letting a caller choose its own key would
+put a guessable secret behind a fast hash and would have to bring Argon2id back
+with it. Open question 3 is where that would surface.
 
 The `scope` column is the one piece of forward-planning here. Permissions are
 store-wide now, matching `DESIGN.md:470` ("all authenticated clients can read all
@@ -185,8 +198,27 @@ Two implementations at first:
   honouring `disabled_at` and updating `last_seen_at`.
 
 `OIDCAuthenticator` is the third, in section 9. A `Chain` tries each in order and
-returns the first non-`ErrNoCredentials` result, which is what lets CI keys and
+returns the first principal any of them resolves, which is what lets CI keys and
 human SSO sessions coexist on the same endpoints.
+
+*Amended in phase 2 — the chain defers rejection.* Phase 1's chain stopped at
+the first authenticator that rejected a credential, on the reasoning that a
+presented-but-wrong credential is an answer rather than an absence. That was
+indistinguishable from correct while one scheme read the `Authorization` header.
+It is wrong with two: an env-var key and a database key arrive identically, and
+whichever authenticator is asked first has never heard of the other's keys, so
+`StaticKeyAuthenticator` would reject every `DBKeyAuthenticator` key before it
+was looked at. The chain now remembers a rejection, keeps looking, and returns
+the remembered one only if nothing later resolves the caller. Nothing is
+loosened — a credential no scheme accepts is still `401`, with the first
+rejection's reason — and section 9 needs the same behaviour, where a stale
+bearer token should not shadow a valid session cookie on the same request.
+
+The one error that does stop the chain is `ErrAuthUnavailable`: the backend
+could not be reached, so asking the remaining schemes could only turn "we cannot
+check" into "your key is wrong". It surfaces as `503`, not `401`, so a database
+outage does not send every pipeline in the building rotating credentials that
+were fine.
 
 ### 6. Middleware split
 
@@ -251,6 +283,16 @@ The upgrade must not lock anyone out. Three postures, in precedence order:
 Posture 2 is the compatibility bridge and should stay supported for at least one
 release after 3 exists.
 
+*Clarified in phase 2:* postures 2 and 3 are not exclusive. With both set, both
+key sources are live and the env list is checked first, because it costs no
+round trip. That is the migration: issue database keys, move pipelines over one
+at a time, clear `EVIDENCE_API_KEYS` when the last has moved. What posture 3
+does make authoritative is the *closed* door — the DB authenticator is never
+`ErrAuthDisabled`, so an empty `principals` table means nobody may in rather
+than everybody. That is also why the bootstrap admin exists: the API for issuing
+the first key is itself behind `principal:admin`, so without it a fresh database
+would have no way in at all.
+
 ### 9. The SSO slot — what fills in later
 
 This design is deliberately unfinished at exactly one point: `OIDCAuthenticator`.
@@ -285,8 +327,10 @@ Each phase is independently shippable and leaves the tree green.
    `StaticKeyAuthenticator` and the posture-2 mapping. Routes converted from
    method-based to permission-based. No migration. *This phase alone delivers
    the elevated role for `POST /inheritance`.*
-2. **Migration 000006 + `DBKeyAuthenticator`.** Principals and bindings in
-   Postgres, key hashing, bootstrap admin.
+2. **Migration 000006 + `DBKeyAuthenticator`.** ✅ Landed. Principals and
+   bindings in Postgres, key minting and hashing, bootstrap admin. *This phase
+   is what makes the four roles individually grantable, and a key revocable
+   without a redeploy.*
 3. **`source` binding.** Enforce section 7.
 4. **Principal admin API + UI.** `/api/v1/principals` CRUD behind
    `principal:admin`; a UI tab for issuing and revoking keys.

@@ -3,7 +3,10 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "auth",
     srcs = [
+        "apikey.go",
         "authenticator.go",
+        "bootstrap.go",
+        "dbkey.go",
         "middleware.go",
         "permission.go",
         "principal.go",
@@ -11,15 +14,26 @@ go_library(
     ],
     importpath = "github.com/nesono/evidence-store/internal/auth",
     visibility = ["//:__subpackages__"],
-    deps = ["//internal/config"],
+    deps = [
+        "//internal/config",
+        "//internal/model",
+        "@com_github_google_uuid//:uuid",
+    ],
 )
 
 go_test(
     name = "auth_test",
-    srcs = ["middleware_test.go"],
+    srcs = [
+        "apikey_test.go",
+        "bootstrap_test.go",
+        "dbkey_test.go",
+        "middleware_test.go",
+    ],
     embed = [":auth"],
     deps = [
         "//internal/config",
+        "//internal/model",
+        "@com_github_google_uuid//:uuid",
         "@com_github_stretchr_testify//assert",
         "@com_github_stretchr_testify//require",
     ],

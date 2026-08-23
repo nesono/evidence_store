@@ -1,0 +1,156 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/nesono/evidence-store/internal/model"
+)
+
+// PrincipalStore reads and writes the identities behind API keys.
+//
+// It answers who a credential belongs to and nothing about what that identity
+// may do: roles come back as the strings the database holds, and internal/auth
+// decides what they grant. Keeping the decision there is what lets a binding
+// naming a role this binary has never heard of fail closed instead of erroring
+// out a request.
+type PrincipalStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewPrincipalStore(pool *pgxpool.Pool) *PrincipalStore {
+	return &PrincipalStore{pool: pool}
+}
+
+// principalColumns is shared by the two lookups so they cannot drift apart.
+//
+// The join asserts scope = '*'. Per-repo scoping is reserved and inert
+// (migration 000006), and reading a scoped binding as though it were store-wide
+// is exactly the silent widening the column's default exists to prevent.
+const principalColumns = `
+	SELECT p.id, p.subject, p.kind, p.display_name,
+	       p.disabled_at, p.created_at, p.last_seen_at,
+	       COALESCE(
+	           ARRAY_AGG(rb.role ORDER BY rb.role) FILTER (WHERE rb.role IS NOT NULL),
+	           '{}'
+	       ) AS roles
+	FROM principals p
+	LEFT JOIN role_bindings rb
+	       ON rb.principal_id = p.id AND rb.scope = '*'
+`
+
+// FindByKeyHash resolves a hashed bearer token to its principal. This is the
+// authentication hot path: one indexed equality check plus the roles.
+//
+// A token that matches nothing returns (nil, nil). That is an answer, not a
+// failure — most callers presenting an unknown key are simply not ours — and it
+// keeps a database outage, which does return an error, distinguishable from a
+// wrong key.
+func (s *PrincipalStore) FindByKeyHash(ctx context.Context, keyHash string) (*model.Principal, error) {
+	return s.queryOne(ctx, principalColumns+` WHERE p.key_hash = $1 GROUP BY p.id`, keyHash)
+}
+
+// FindBySubject resolves a principal by name. Used by bootstrapping and, from
+// phase 4, by the principal admin API.
+func (s *PrincipalStore) FindBySubject(ctx context.Context, subject string) (*model.Principal, error) {
+	return s.queryOne(ctx, principalColumns+` WHERE p.subject = $1 GROUP BY p.id`, subject)
+}
+
+func (s *PrincipalStore) queryOne(ctx context.Context, query string, arg any) (*model.Principal, error) {
+	var p model.Principal
+	err := s.pool.QueryRow(ctx, query, arg).Scan(
+		&p.ID, &p.Subject, &p.Kind, &p.DisplayName,
+		&p.DisabledAt, &p.CreatedAt, &p.LastSeenAt, &p.Roles,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query principal: %w", err)
+	}
+	return &p, nil
+}
+
+// Insert creates a principal and its role bindings, or reports that the
+// subject is already taken.
+//
+// Identity and roles go in one transaction. Split across two statements, a
+// failure between them would leave a credential that has been handed to
+// somebody and can do nothing — and by then the plaintext key exists nowhere
+// to hand out again.
+//
+// A taken subject returns (nil, nil) rather than an error: two replicas
+// starting at once both try to seed the bootstrap admin, and the one that loses
+// has nothing to report — the identity it wanted exists.
+func (s *PrincipalStore) Insert(ctx context.Context, in model.PrincipalCreate) (*model.Principal, error) {
+	var keyHash *string
+	if in.KeyHash != "" {
+		keyHash = &in.KeyHash
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin insert principal: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	var p model.Principal
+	err = tx.QueryRow(ctx, `
+		INSERT INTO principals (subject, kind, display_name, key_hash)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (subject) DO NOTHING
+		RETURNING id, subject, kind, display_name, disabled_at, created_at, last_seen_at
+	`, in.Subject, in.Kind, in.DisplayName, keyHash).Scan(
+		&p.ID, &p.Subject, &p.Kind, &p.DisplayName,
+		&p.DisabledAt, &p.CreatedAt, &p.LastSeenAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("insert principal: %w", err)
+	}
+
+	p.Roles = make([]string, 0, len(in.Roles))
+	for _, role := range in.Roles {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO role_bindings (principal_id, role, scope, granted_by)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (principal_id, role, scope) DO NOTHING
+		`, p.ID, role, model.ScopeStoreWide, in.GrantedBy); err != nil {
+			return nil, fmt.Errorf("grant role %q: %w", role, err)
+		}
+		p.Roles = append(p.Roles, role)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit insert principal: %w", err)
+	}
+	return &p, nil
+}
+
+// touchInterval is how stale last_seen_at is allowed to get. The column exists
+// to answer "is this key still in use", which a minute's resolution answers as
+// well as a millisecond's — and a write per request on a store sized for CI
+// traffic would cost far more than the answer is worth.
+const touchInterval = "1 minute"
+
+// TouchLastSeen records that a principal authenticated. The predicate does the
+// throttling in the database, so replicas do not each need their own clock.
+func (s *PrincipalStore) TouchLastSeen(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE principals
+		SET last_seen_at = now()
+		WHERE id = $1
+		  AND (last_seen_at IS NULL OR last_seen_at < now() - INTERVAL '`+touchInterval+`')
+	`, id)
+	if err != nil {
+		return fmt.Errorf("touch principal last_seen_at: %w", err)
+	}
+	return nil
+}

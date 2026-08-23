@@ -11,6 +11,7 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 )
 
@@ -31,6 +32,12 @@ func Authenticate(authenticator Authenticator) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(withAuthDisabled(r.Context())))
 			case errors.Is(err, ErrNoCredentials):
 				writeAuthError(w, http.StatusUnauthorized, "missing or invalid Authorization header")
+			case errors.Is(err, ErrAuthUnavailable):
+				// The caller's key may well be fine. Telling them it is not
+				// would send perfectly good CI pipelines rotating credentials
+				// to fix a database outage.
+				slog.Error("authentication backend unavailable", "error", err)
+				writeAuthError(w, http.StatusServiceUnavailable, "authentication temporarily unavailable")
 			case err != nil:
 				writeAuthError(w, http.StatusUnauthorized, "invalid API key")
 			default:

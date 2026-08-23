@@ -2,10 +2,59 @@ package tests
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// ---------------------------------------------------------------------------
+// Tests: migrations
+// ---------------------------------------------------------------------------
+
+// Every down migration is a rollback somebody will run at three in the morning,
+// which is a poor time to discover that it drops a table another one still
+// references — or that it never worked at all.
+//
+// This gets a database of its own. Tearing the shared schema down and back up
+// underneath the rest of the suite would test the migrations by breaking
+// everything else.
+func TestMigrationsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+
+	// Not parameterisable, and safe: the name is a constant, not input.
+	const scratchDB = "evidence_migration_roundtrip"
+	_, err := testPool.Exec(ctx, `DROP DATABASE IF EXISTS `+scratchDB)
+	require.NoError(t, err)
+	_, err = testPool.Exec(ctx, `CREATE DATABASE `+scratchDB)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := testPool.Exec(context.Background(), `DROP DATABASE IF EXISTS `+scratchDB+` WITH (FORCE)`)
+		assert.NoError(t, err)
+	})
+
+	scratchURL := strings.Replace(testDatabaseURL, "/evidence_test?", "/"+scratchDB+"?", 1)
+	require.Contains(t, scratchURL, scratchDB, "failed to point the connection string at the scratch database")
+
+	m, err := migrate.New("file://"+testMigrationsPath, scratchURL)
+	require.NoError(t, err)
+	defer m.Close()
+
+	require.NoError(t, m.Up(), "up on an empty database")
+	require.NoError(t, m.Down(), "down from the head")
+	// The one that catches a down migration that only half undid its up: the
+	// second time through, every CREATE runs against what the rollback left.
+	require.NoError(t, m.Up(), "up again on what the rollback left behind")
+
+	version, dirty, err := m.Version()
+	require.NoError(t, err)
+	assert.False(t, dirty)
+	assert.Equal(t, uint(6), version, "the round trip should end at the latest migration")
+}
 
 // ---------------------------------------------------------------------------
 // Tests: schema constraints
