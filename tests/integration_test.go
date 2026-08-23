@@ -29,8 +29,13 @@ import (
 )
 
 var (
-	testServer           *httptest.Server
-	testPool             *pgxpool.Pool
+	testServer *httptest.Server
+	testPool   *pgxpool.Pool
+	// testDatabaseURL is the container's connection string. Kept so a test that
+	// must not disturb the shared schema — the migration round trip — can build
+	// a scratch database of its own alongside it.
+	testDatabaseURL      string
+	testMigrationsPath   string
 	testEvidenceStore    *store.EvidenceStore
 	testInheritanceStore *store.InheritanceStore
 	testBlobRefStore     *store.BlobRefStore
@@ -79,6 +84,7 @@ func TestMain(m *testing.M) {
 
 	// Find migrations directory (relative to this test file).
 	migrationsPath, _ := filepath.Abs(filepath.Join("..", "migrations"))
+	testDatabaseURL, testMigrationsPath = dbURL, migrationsPath
 	if err := migrate.Run(dbURL, migrationsPath); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to run migrations: %v\n", err)
 		os.Exit(1)

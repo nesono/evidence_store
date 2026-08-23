@@ -1,9 +1,13 @@
 package auth
 
-import "context"
+import (
+	"context"
 
-// Kind distinguishes a machine credential from a human one. Phase 1 only ever
-// mints KindAPIKey; KindUser is what an SSO login will produce.
+	"github.com/google/uuid"
+)
+
+// Kind distinguishes a machine credential from a human one. Phases 1 and 2 only
+// ever mint KindAPIKey; KindUser is what an SSO login will produce.
 type Kind string
 
 const (
@@ -11,11 +15,26 @@ const (
 	KindUser   Kind = "user"
 )
 
+// ParseKind reads the kind column. An unrecognised value is treated as a
+// machine credential: the column is CHECK-constrained to the two, so anything
+// else is a database from the future, and the conservative reading of an
+// unknown caller is the one that is not a person.
+func ParseKind(s string) Kind {
+	if Kind(s) == KindUser {
+		return KindUser
+	}
+	return KindAPIKey
+}
+
 // Principal is the caller's identity, as resolved by an Authenticator. It
 // replaces the bare role that used to sit in the request context: everything
 // downstream of authentication can now tell one caller from another, which is
 // what binding a record's source to its author (phase 3) needs.
 type Principal struct {
+	// ID is the principals row this caller came from. Zero for a principal
+	// that has no row: an env-var key, which is a secret rather than a record
+	// of anybody.
+	ID          uuid.UUID
 	Subject     string // "ci:nightly-build" or "user:alice@example.com"
 	Kind        Kind
 	DisplayName string

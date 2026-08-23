@@ -26,6 +26,8 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` | `30` | How long an analytics aggregation is reused for an identical filter (`0` disables) |
 | `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` | `15` | Budget for one analytics aggregation before it is refused (`0` disables) |
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication)) |
+| `EVIDENCE_AUTH_DB` | `false` | Authenticate against the `principals` table (see [Database-backed principals](#database-backed-principals)) |
+| `EVIDENCE_BOOTSTRAP_ADMIN` | *(empty)* | Subject of an administrator seeded on first start; its key is logged once |
 | `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
@@ -80,9 +82,9 @@ indistinguishable from posting a test result.
 
 Configured keys map onto those roles so that nothing that worked before stops
 working: `ro` becomes `viewer`, and `rw` becomes `ci` **and** `admin`, since an
-`rw` key can reach every endpoint today. Granting the finer roles individually
-arrives with database-backed principals; see
-[docs/rbac-design.md](docs/rbac-design.md) for where this is heading (SSO/SAML).
+`rw` key can reach every endpoint today. To grant the finer roles individually,
+give keys names and owners, or revoke one without a redeploy, use
+database-backed principals below.
 
 Clients authenticate by sending the key as a Bearer token:
 
@@ -92,6 +94,56 @@ curl -H "Authorization: Bearer my-secret-key" \
 ```
 
 The Bazel adapter supports this via `--api-key` or `EVIDENCE_STORE_API_KEY`. The web UI prompts for a key on first 401 and stores it in `localStorage`.
+
+### Database-backed principals
+
+An entry in `EVIDENCE_API_KEYS` is a shared secret: no name, no owner, no
+expiry, and no way to revoke one short of a redeploy. Setting
+`EVIDENCE_AUTH_DB=true` turns on the `principals` table instead, where a key
+belongs to somebody, holds exactly the roles it was granted, and stops working
+on the next request when it is disabled.
+
+| Variable | Default | Description |
+|---|---|---|
+| `EVIDENCE_AUTH_DB` | `false` | `true` to authenticate bearer tokens against the `principals` table |
+| `EVIDENCE_BOOTSTRAP_ADMIN` | *(empty)* | Subject of an administrator seeded on first start, e.g. `user:ops@example.com`. Requires `EVIDENCE_AUTH_DB=true` |
+
+Switching it on **closes the API**. An empty `principals` table means nobody may
+in, not that everybody may — so seed the first administrator at the same time:
+
+```bash
+export EVIDENCE_AUTH_DB=true
+export EVIDENCE_BOOTSTRAP_ADMIN="user:ops@example.com"
+```
+
+On first start the server mints that principal a key and logs it once:
+
+```
+WARN bootstrap admin API key issued - copy it now, it is not stored and will not
+     be shown again subject=user:ops@example.com api_key=evs_...
+```
+
+Only a SHA-256 digest of the key is stored, so that line is the single moment it
+can be read. Miss it and the remedy is to disable the principal and seed
+another. Restarts are safe: an existing subject is left alone and no second key
+is minted.
+
+Keys are always minted by the server, never chosen by a caller — 256 bits from
+`crypto/rand`, prefixed `evs_`. That is what makes a fast digest the right one
+to store; see the comment on `principals.key_hash` in
+[migration 000006](migrations/000006_add_rbac.up.sql).
+
+**Both key sources run at once**, which is the migration path: leave
+`EVIDENCE_API_KEYS` in place, issue database keys, move pipelines over one at a
+time, and clear the variable when the last has moved. Environment keys are
+checked first because they cost no round trip. A token neither source
+recognises is `401`; if the database cannot be reached at all, requests get
+`503` rather than being told their key is wrong.
+
+Issuing and revoking keys is `psql` for now — the `/api/v1/principals` API and a
+UI tab for it are the next phase. See
+[docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including where
+SSO/SAML plugs in.
 
 ### Rate limiting
 

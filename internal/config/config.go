@@ -24,6 +24,7 @@ type Config struct {
 	MaxBatchSize    int
 	LogLevel        string
 	APIKeys         []APIKey
+	Auth            Auth
 	RateLimit       RateLimit
 	// AnalyticsCacheTTL is how long an aggregation is reused for an identical
 	// filter. Zero disables caching. Sorting and paging are applied after the
@@ -35,6 +36,22 @@ type Config struct {
 	AnalyticsQueryTimeout time.Duration
 	Blob                  Blob
 	Weather               Weather
+}
+
+// Auth configures database-backed identities — principals with names, roles
+// granted one at a time, and revocation that takes effect on the next request.
+//
+// It is off by default, and off is not the same as open: with DB set the store
+// still honours APIKeys, and with neither the API is unauthenticated as it has
+// always been.
+type Auth struct {
+	// DB turns on the principals table as a source of credentials. It never
+	// falls open: once set, an empty table means nobody may in.
+	DB bool
+	// BootstrapAdmin is the subject of an administrator seeded on first start,
+	// whose one-time key is logged. Without it a fresh database has no way in,
+	// since issuing the first key is itself an administrator's operation.
+	BootstrapAdmin string
 }
 
 // Weather configures the one lookup this store makes to a service outside it.
@@ -159,6 +176,18 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("EVIDENCE_API_KEYS: %w", err)
 		}
 		cfg.APIKeys = keys
+	}
+
+	cfg.Auth = Auth{
+		DB:             os.Getenv("EVIDENCE_AUTH_DB") == "true",
+		BootstrapAdmin: strings.TrimSpace(os.Getenv("EVIDENCE_BOOTSTRAP_ADMIN")),
+	}
+
+	// Refuse rather than ignore. A subject named here and quietly dropped
+	// leaves an operator waiting for a key that is never going to be logged,
+	// on a store they have just locked themselves out of.
+	if cfg.Auth.BootstrapAdmin != "" && !cfg.Auth.DB {
+		return nil, fmt.Errorf("EVIDENCE_BOOTSTRAP_ADMIN requires EVIDENCE_AUTH_DB=true")
 	}
 
 	cfg.RateLimit = RateLimit{

@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nesono/evidence-store/internal/auth"
 	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/migrate"
@@ -52,6 +53,24 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("database connected")
+
+	// Seed the first administrator before the server starts taking requests:
+	// with EVIDENCE_AUTH_DB on, every endpoint is closed, and the API for
+	// issuing keys is itself an administrator's.
+	if cfg.Auth.DB && cfg.Auth.BootstrapAdmin != "" {
+		key, err := auth.BootstrapAdmin(ctx, store.NewPrincipalStore(pool), cfg.Auth.BootstrapAdmin, slog.Default())
+		if err != nil {
+			slog.Error("failed to bootstrap admin principal", "error", err)
+			os.Exit(1)
+		}
+		if key != "" {
+			// The one moment this value is readable. It is deliberately in the
+			// log and nowhere else: there is no second copy to leak, and an
+			// operator who misses it disables the principal and seeds another.
+			slog.Warn("bootstrap admin API key issued - copy it now, it is not stored and will not be shown again",
+				"subject", cfg.Auth.BootstrapAdmin, "api_key", key)
+		}
+	}
 
 	blobs, err := blob.Open(ctx, cfg.Blob.Options)
 	if err != nil {

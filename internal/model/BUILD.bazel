@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "evidence.go",
         "inheritance.go",
+        "principal.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/model",
     visibility = ["//:__subpackages__"],
