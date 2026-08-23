@@ -25,7 +25,10 @@ type Server struct {
 	pool       *pgxpool.Pool
 }
 
-func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
+// New builds the router. sso is nil unless an identity provider is configured;
+// discovering one is network I/O that can fail, so it happens at startup in
+// cmd/server rather than here, where there would be nowhere to report it.
+func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso *auth.OIDCProvider) *Server {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -46,6 +49,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	inheritanceStore := store.NewInheritanceStore(pool)
 
 	principalStore := store.NewPrincipalStore(pool)
+	sessionStore := store.NewSessionStore(pool)
 
 	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
@@ -55,7 +59,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	// flipping the switch is a reasonable way to prepare a cutover, so the
 	// handler reports the setting rather than refusing to work without it.
 	principalAPI := api.NewPrincipalHandler(principalStore, cfg.Auth.DB)
-	meAPI := api.NewMeHandler(cfg.Auth.DB)
+	meAPI := api.NewMeHandler(cfg.Auth.DB, sso != nil)
 
 	// An empty endpoint means the operator has switched the lookup off, and the
 	// handler is given no provider rather than not being routed: a form whose
@@ -80,9 +84,36 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 		authenticator = append(authenticator,
 			auth.NewDBKeyAuthenticator(principalStore, slog.Default()))
 	}
+	// A session reads a cookie where the others read a header, which is the
+	// case the chain was built for: CI keys and human logins on one endpoint.
+	// Mounted whenever the principals table is live, so a session outlives a
+	// change to the login configuration rather than stranding everyone who is
+	// already signed in.
+	if cfg.Auth.DB {
+		authenticator = append(authenticator,
+			auth.NewSessionAuthenticator(sessionStore, slog.Default()))
+	}
+
+	// What ways in this deployment has, for a caller who has not come in yet.
+	// Mounted whether or not SSO is configured, because "no" is an answer the
+	// page needs just as much as "yes".
+	r.Get("/auth/config", meAPI.AuthConfig)
+
+	// The login flow, outside /api/v1: these are browser navigations, not API
+	// calls, and /auth/login has to be reachable by somebody who is not yet
+	// authenticated — which is the whole point of it.
+	if sso != nil {
+		ssoAPI := api.NewSSOHandler(sso, principalStore, sessionStore, cfg.Auth.OIDC, slog.Default())
+		r.Get("/auth/login", ssoAPI.Login)
+		r.Get("/auth/callback", ssoAPI.Callback)
+		r.Post("/auth/logout", ssoAPI.Logout)
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Authenticate(authenticator))
+		// After authentication, because it only applies to callers who arrived
+		// with a cookie, and only authentication knows which those are.
+		r.Use(auth.RequireCSRF)
 		r.Use(ratelimit.Middleware(cfg.RateLimit))
 
 		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/evidence", evidenceAPI.Create)

@@ -11,6 +11,7 @@ go_library(
         "me.go",
         "principals.go",
         "response.go",
+        "sso.go",
         "weather.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/api",

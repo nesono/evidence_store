@@ -40,6 +40,11 @@ type Principal struct {
 	Kind        Kind
 	DisplayName string
 	Roles       []Role
+	// ViaSession records that this caller arrived with a cookie rather than a
+	// bearer token. It is what the CSRF check keys on: a cookie is sent by the
+	// browser whether or not the page meant to send it, and an Authorization
+	// header never is.
+	ViaSession bool
 
 	perms permSet // flattened from Roles once, at authentication time
 }

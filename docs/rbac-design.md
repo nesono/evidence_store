@@ -275,12 +275,12 @@ source from a `ci` caller stays a `422` rather than being filled in — the usef
 attribution for a build result is the build URL, and writing the robot's own
 name there would dress a misconfigured adapter up as provenance.
 
-*Known gap.* `web/static/app.js:862` sends whatever the tester typed into the
-Source box, so a human principal that is not `ci` must type their own subject or
-leave the box empty. Nothing breaks today, because the web UI authenticates with
-an `EVIDENCE_API_KEYS` entry and every `rw` key is `ci`. The UI has no idea who
-it is; giving it one is phase 5, and that is where the box should stop being a
-free-text field for a logged-in user.
+*Gap closed in phase 5.* The Source box used to be free text asking a tester to
+type their own name, which a caller without `source:any` could only get wrong.
+Now that the page knows who it is, it fills the box in with the caller's subject
+and locks it. A caller holding `source:any` is left alone — writing a source
+that is not its own name is what the permission is for — and an unauthenticated
+store is unchanged.
 
 ### 8. Configuration and compatibility
 
@@ -362,10 +362,40 @@ Each phase is independently shippable and leaves the tree green.
    `principal:admin`, and an Access tab for issuing, rotating and revoking keys.
    Also `GET /api/v1/me`, without which a client can only render every control
    and let the server refuse half of them.
-5. **OIDC** (#15 proper), then SAML.
+5. **OIDC** (#15 proper) ✅ Landed — sessions, the login flow, group-to-role
+   mapping, CSRF, and the web UI. **SAML** is the remaining step: the same shape
+   with an Assertion Consumer Service in place of the callback.
 
 Phases 1-3 are the RBAC foundation this document is for; 4 and 5 are what it
 was built to carry.
+
+### What phase 5 settled that this document had not
+
+- **A person is their `sub` claim, not their address.** Section 9 said the
+  upsert is keyed on `sub`, and section 1 shows a subject of
+  `user:alice@example.com`. Both are true: `principals.external_id` holds
+  `<issuer>|<sub>` and is what the upsert matches, while `subject` stays the
+  readable name evidence is filed under and is corrected on each login. A
+  rename at the provider follows the person rather than splitting their history
+  in two.
+- **A subject collision refuses the login.** If an API key already answers to
+  the name a login wants, treating them as the same party would hand a
+  credential somebody else's roles. `409`, and an administrator renames one.
+- **Where a grant came from is recorded.** `role_bindings.source` distinguishes
+  `idp` from `local`, which is what lets a login reconcile its own grants and
+  leave the Access tab's alone. Without the column the two ways of granting
+  access would silently fight.
+- **`/auth/config` exists.** Section 9 assumed the UI could act on a 401, but
+  with credentials configured `/me` refuses an anonymous caller — precisely the
+  caller who needs to know whether there is anywhere to log in. One
+  unauthenticated endpoint answers that; it exposes nothing the login page does
+  not.
+- **Reads need no CSRF token.** Section 9 asked for one "on writes". A
+  cross-site page can cause a GET anyway, so requiring a token on reads would
+  buy nothing and break ordinary links.
+- **Nothing is disabled by a change in login configuration.** The session
+  authenticator is mounted whenever `EVIDENCE_AUTH_DB` is on, not only when SSO
+  is, so turning an issuer off does not strand everyone already signed in.
 
 ### What phase 4 settled that this document had not
 
@@ -416,10 +446,12 @@ auth tests are a good model to extend):
 
 ## Open Questions
 
-1. **Session storage for SSO.** Stateless signed cookie (simple, but revocation
-   waits for expiry) versus a `sessions` table (immediate revocation, one more
-   read per request). Deferrable to phase 5, but it decides whether "log this
-   user out now" is possible.
+1. ~~**Session storage for SSO.**~~ **Settled in phase 5: a `sessions` table.**
+   The store has promised immediate revocation since phase 2 — disabling a
+   principal stops their API key on the next request — and it would be strange
+   for the same person's browser to keep working until a token expired. The cost
+   is one indexed read per request from a human, against CI traffic that already
+   does its own lookup. Migration 000008.
 2. **Per-repo scoping trigger.** The `scope` column is reserved but inert. Worth
    confirming whether multi-company trials will share one deployment — if they
    will, scoping is phase 4 rather than someday, and it touches

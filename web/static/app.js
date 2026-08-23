@@ -4,10 +4,11 @@ import {
   esc,
   formatTime,
   getStoredAPIKey,
+  goToLogin,
+  logout,
   promptForAPIKey,
   resultBadge,
-  setStoredAPIKey,
-  updateAuthUI,
+  setAuthMode,
 } from "./common.js";
 import { showAnalytics } from "./analytics.js";
 import { mount as mountAccess, showAccess } from "./access.js";
@@ -1170,7 +1171,8 @@ function applyTemplate(templateId) {
   if (!templateId) {
     for (const f of TEMPLATE_DEFAULT_FIELDS) {
       const input = form.querySelector(`[name="${f}"]`);
-      if (input) input.value = f === "evidence_type" ? DEFAULT_EVIDENCE_TYPE : "";
+      // A pinned source is the server's answer, not a field to clear.
+      if (input && !input.readOnly) input.value = f === "evidence_type" ? DEFAULT_EVIDENCE_TYPE : "";
     }
     cfList.innerHTML = "";
     return;
@@ -1181,7 +1183,7 @@ function applyTemplate(templateId) {
 
   for (const f of TEMPLATE_DEFAULT_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
-    if (!input) continue;
+    if (!input || input.readOnly) continue;
     const saved = (tpl.defaults && tpl.defaults[f]) || "";
     input.value = f === "evidence_type" ? evidenceTypeOr(saved) : saved;
   }
@@ -1445,11 +1447,20 @@ function importTemplates(file) {
 
 // --- Auth UI ---
 
-document.getElementById("auth-logout")?.addEventListener("click", () => {
-  setStoredAPIKey("");
+document.getElementById("auth-logout")?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  await logout();
 });
 
-document.getElementById("auth-login")?.addEventListener("click", () => {
+document.getElementById("auth-login")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  // Where there is an identity provider, that is what "log in" means. The API
+  // key path stays for CI, for scripts, and for anyone who reaches this page
+  // holding a key rather than an account.
+  if (ssoAvailable) {
+    goToLogin();
+    return;
+  }
   promptForAPIKey("Enter your API key:");
 });
 
@@ -1458,9 +1469,53 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
 // Asking the server who we are is what lets the page offer only what this
 // caller can actually do. A store with nothing configured answers
 // "not authenticated", which means open rather than locked out.
+// ssoAvailable is what the "log in" button branches on.
+let ssoAvailable = false;
+
+// /auth/config answers whether there is anywhere to log in. It has to be a
+// separate request from /me because /me refuses an anonymous caller — which is
+// precisely the caller asking the question.
+async function loadAuthConfig() {
+  try {
+    const resp = await fetch("/auth/config");
+    if (resp.ok) return await resp.json();
+  } catch { /* offline or mid-restart; fall through */ }
+  return { sso_enabled: false };
+}
+
+// The Source box used to be a free-text field asking a tester to type their
+// own name, which the server has refused to take on trust since the source
+// binding landed: anyone without source:any may only file under their own
+// subject. Now that the page knows who it is, it fills the box in and locks it
+// rather than letting somebody type a name that will come back a 403.
+//
+// A caller holding source:any — a build robot, or an admin who also holds ci —
+// is left alone: writing a source that is not its own name is exactly what
+// that permission is for.
+function pinSourceToCaller(me) {
+  const input = document.querySelector('#add-form [name="source"]');
+  if (!input || !me.authenticated) return;
+  if ((me.permissions || []).includes("source:any")) return;
+
+  input.value = me.subject;
+  input.readOnly = true;
+  input.title = `Filed as ${me.subject}, the account you are signed in as`;
+
+  const label = input.closest("label");
+  const hint = label?.querySelector("small");
+  if (hint) hint.textContent = "(you)";
+}
+
 async function loadIdentity() {
   try {
-    const resp = await apiFetch(`${API_BASE}/me`);
+    // Plain fetch, not apiFetch: a 401 here is the ordinary state of a page
+    // nobody has logged into yet, and bouncing it straight to the identity
+    // provider would make the store impossible to look at anonymously — or to
+    // reach with an API key.
+    const key = getStoredAPIKey();
+    const resp = await fetch(`${API_BASE}/me`, {
+      headers: key ? { Authorization: `Bearer ${key}` } : {},
+    });
     if (resp.ok) return await resp.json();
   } catch { /* offline or mid-restart; fall through */ }
   return { authenticated: false, permissions: [] };
@@ -1468,8 +1523,12 @@ async function loadIdentity() {
 
 (async function init() {
   startHealthPolling();
-  updateAuthUI();
-  mountAccess(await loadIdentity());
+
+  const [authConfig, me] = await Promise.all([loadAuthConfig(), loadIdentity()]);
+  ssoAvailable = !!authConfig.sso_enabled;
+  setAuthMode({ sso: ssoAvailable, session: me.via_session });
+  mountAccess(me);
+  pinSourceToCaller(me);
   refreshTemplateDropdown();
   refreshDatalists();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());
