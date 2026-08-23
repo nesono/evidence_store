@@ -13,6 +13,7 @@ go_test(
         "distinct_test.go",
         "integration_test.go",
         "list_offset_sort_test.go",
+        "location_test.go",
         "regex_search_test.go",
         "retention_integration_test.go",
         "search_ref_test.go",

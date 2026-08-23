@@ -78,6 +78,18 @@
                         <input type="text" name="tags" placeholder="manual,regression">
                     </label>
                 </div>
+                <!-- Where the test was run. One field for both a coordinate pair
+                     and a place name, because a tester at a bench has the one and
+                     a tester in a field has the other. Stored as
+                     metadata.location. -->
+                <label class="location-field">Location
+                    <small>(where you ran it &mdash; coordinates or a place name)</small>
+                    <span class="input-with-button">
+                        <input type="text" name="location" placeholder="52.51631, 13.37771 or Test track, bay 4">
+                        <button type="button" id="fill-location" class="secondary outline" title="Use this device's current position">Locate</button>
+                    </span>
+                    <small class="location-status" id="location-status"></small>
+                </label>
                 <label>Notes
                     <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>
                 </label>
