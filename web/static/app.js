@@ -10,6 +10,8 @@ import {
   updateAuthUI,
 } from "./common.js";
 import { showAnalytics } from "./analytics.js";
+import { attachRangePicker } from "./datepicker.js";
+import { parseUserDateTime } from "./datetime.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -329,21 +331,6 @@ function renderTags(metadata) {
   return metadata.tags.map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(" ");
 }
 
-// Parse a user-entered datetime string. Zoneless values are treated as UTC.
-function parseUserDateTime(str) {
-  str = str.trim();
-  if (!str) return null;
-  // If the string has a timezone suffix (Z or +/-HH:MM), parse directly.
-  if (/Z$|[+-]\d{2}:?\d{2}$/.test(str)) {
-    const d = new Date(str);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  // Zoneless — treat as UTC by appending Z (normalize separators first).
-  const normalized = str.replace(" ", "T");
-  const d = new Date(normalized + "Z");
-  return isNaN(d.getTime()) ? null : d;
-}
-
 function rowHTML(r) {
   const branch = r.branch || "";
   return `
@@ -518,12 +505,46 @@ document.getElementById("clear-filters").addEventListener("click", () => {
   form.reset();
   form.querySelectorAll("input[data-utc-preview]").forEach(updateUtcPreview);
   refreshResultSummary();
+  // An open calendar still showing the range that was just cleared would be
+  // reading from a form that no longer says that.
+  rangePicker.close({ restoreFocus: false });
   search();
 });
 
 document.getElementById("toggle-advanced").addEventListener("click", () => {
   setAdvancedExpanded(!advancedExpanded());
 });
+
+// --- Finished-at range ---
+
+const finishedRange = document.getElementById("finished-range");
+
+const rangePicker = attachRangePicker({
+  root: finishedRange,
+  fromInput: finishedRange.querySelector('[name="finished_after"]'),
+  toInput: finishedRange.querySelector('[name="finished_before"]'),
+  // Picking a range is the whole interaction; making the user find the Search
+  // button afterwards would be a step with nothing in it.
+  onApply: search,
+});
+
+// The × on each box. Dropping one end of the range is a single click, and the
+// other end stays where it is — going back to "no start" or "no end" should not
+// cost the user the half of the filter they still want.
+finishedRange.addEventListener("click", (e) => {
+  const clear = e.target.closest("[data-clears]");
+  if (!clear) return;
+  const input = finishedRange.querySelector(`[name="${clear.dataset.clears}"]`);
+  if (!input.value) return;
+  input.value = "";
+  updateUtcPreview(input);
+  refreshAdvancedToggle();
+  search();
+});
+
+// The boxes are still typed into directly, and the badge on the collapsed panel
+// has to count what is in them either way.
+finishedRange.addEventListener("input", refreshAdvancedToggle);
 
 // --- Result dropdown ---
 
@@ -570,6 +591,9 @@ document.addEventListener("keydown", (e) => {
   const tag = e.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
   if (document.querySelector("dialog[open]")) return;
+  // The calendar's own PageUp/PageDown page it by month; paging the results
+  // window underneath at the same time would be nobody's intent.
+  if (rangePicker.isOpen()) return;
   if (document.getElementById("tab-search").hidden) return;
 
   switch (e.key) {
