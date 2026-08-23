@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,6 +62,22 @@ type recordOptions struct {
 	DryRun       bool
 }
 
+// How the evidence was collected, as the store defines it: three values, no
+// more. `bazel` used to be one of them, which conflated the collection method
+// with the runner — anything Bazel executed ran unattended, which is what `ci`
+// means. Which runner it was belongs in metadata.collector, and the ingest and
+// watch paths set it; this subcommand does not, because a verdict decided
+// outside Bazel's test runner was not collected by Bazel either.
+const (
+	evidenceTypeCI = "ci"
+)
+
+var evidenceTypes = []string{evidenceTypeCI, "manual_test", "demonstration"}
+
+func validEvidenceType(s string) bool {
+	return slices.Contains(evidenceTypes, s)
+}
+
 // buildRecord validates options and constructs a single EvidenceRecord.
 // The caller is responsible for populating Repo/Branch/RCSRef (typically via
 // gitinfo.Detect).
@@ -108,7 +125,15 @@ func buildRecord(opts recordOptions) (client.EvidenceRecord, error) {
 
 	evidenceType := opts.EvidenceType
 	if evidenceType == "" {
-		evidenceType = "bazel_manual"
+		evidenceType = evidenceTypeCI
+	}
+	// The server takes three collection methods and nothing else. Checking here
+	// turns a rejected upload — after the test ran, in the middle of a loop
+	// filing hundreds of records — into an argument error before anything is
+	// sent.
+	if !validEvidenceType(evidenceType) {
+		return client.EvidenceRecord{}, fmt.Errorf("--evidence-type must be one of %s (got %q)",
+			strings.Join(evidenceTypes, ", "), opts.EvidenceType)
 	}
 
 	rec := client.EvidenceRecord{
@@ -176,7 +201,7 @@ func runRecord(args []string) {
 	rcsRef := fs.String("rcs-ref", "", "RCS reference / commit hash (auto-detected from git HEAD)")
 	source := fs.String("source", "", "Source identifier: CI build URL or username (auto-detected)")
 	procedureRef := fs.String("procedure-ref", "", "Procedure / test identifier (required)")
-	evidenceType := fs.String("evidence-type", "bazel_manual", "Evidence type (e.g. bazel_failure_test). Must match ^[a-z][a-z0-9_]{0,63}$.")
+	evidenceType := fs.String("evidence-type", evidenceTypeCI, "How the evidence was collected: ci, manual_test or demonstration.")
 	result := fs.String("result", "", "Result: PASS, FAIL, ERROR, or SKIPPED (required)")
 	notes := fs.String("notes", "", "Free-text context stored under metadata.notes")
 	tags := fs.String("tags", cfgTags, "Comma-separated tags stored under metadata.tags")

@@ -7,7 +7,14 @@ CREATE TABLE evidence (
     rcs_ref        TEXT NOT NULL,
     branch         TEXT NOT NULL,
     result         evidence_result NOT NULL,
-    evidence_type  TEXT NOT NULL,
+    -- How the evidence was collected, which is what tells a reader what the
+    -- metadata means (DESIGN.md 2.2). A closed set, but TEXT with a CHECK
+    -- rather than an enum type: adding a fourth collection method should be one
+    -- migration, not an ALTER TYPE every reader of the column is redeployed
+    -- around. The API validates too; this is what keeps the column from
+    -- drifting away from it through a bulk load or a second writer.
+    evidence_type  TEXT NOT NULL
+                   CHECK (evidence_type IN ('ci', 'manual_test', 'demonstration')),
     procedure_ref  TEXT NOT NULL,
     source         TEXT NOT NULL,
     ingested_at    TIMESTAMPTZ NOT NULL DEFAULT now(),

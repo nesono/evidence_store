@@ -160,6 +160,9 @@ func (w *Watcher) poll(ctx context.Context) error {
 		metadata := map[string]any{
 			"duration_s":        r.duration,
 			"result_was_cached": r.entry.WasCached,
+			// See the ingest path: the type says a machine ran it, the
+			// collector says which one.
+			"collector": "bazel",
 		}
 		if len(w.cfg.Tags) > 0 {
 			metadata["tags"] = w.cfg.Tags
@@ -170,7 +173,7 @@ func (w *Watcher) poll(ctx context.Context) error {
 			Branch:       info.Branch,
 			RCSRef:       info.Ref,
 			ProcedureRef: r.entry.BazelTarget,
-			EvidenceType: "bazel",
+			EvidenceType: "ci",
 			Source:       source,
 			Result:       r.result,
 			FinishedAt:   snapshotTime.Format(time.RFC3339),

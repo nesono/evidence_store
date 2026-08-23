@@ -134,6 +134,10 @@ func main() {
 		metadata := map[string]any{
 			"duration_s":        durationS,
 			"result_was_cached": entry.WasCached,
+			// Which runner produced this. The type says only that a machine
+			// ran it, which is what a reader filtering for automated evidence
+			// wants; the runner is what a reader debugging one of them wants.
+			"collector": "bazel",
 		}
 		if *invocationID != "" {
 			metadata["invocation_id"] = *invocationID
@@ -147,7 +151,7 @@ func main() {
 			Branch:       *branch,
 			RCSRef:       *rcsRef,
 			ProcedureRef: entry.BazelTarget,
-			EvidenceType: "bazel",
+			EvidenceType: "ci",
 			Source:       *source,
 			Result:       result,
 			FinishedAt:   time.Now().UTC().Format(time.RFC3339),

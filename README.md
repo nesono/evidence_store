@@ -168,11 +168,18 @@ bazel run @evidence_store_bazel//cmd/evidence-bazel -- record \
     --procedure-ref "//fire/starlark/failure_test:version_too_old_basic" \
     --result PASS \
     --notes "expected 'static_assert' pattern found in stderr" \
-    --tags failure_test,version_too_old \
-    --evidence-type bazel_failure_test
+    --tags failure_test,version_too_old
 ```
 
-`--evidence-type` must match `^[a-z][a-z0-9_]{0,63}$` (lowercase, underscores, no hyphens).
+`--evidence-type` defaults to `ci` — a failure test is still something a machine
+ran — and accepts only `ci`, `manual_test` or `demonstration`. It is checked
+before anything is uploaded, so a wrong value fails the command instead of being
+rejected record by record halfway through a loop. What kind of automated test it
+was belongs in `--tags`, which is where it is filterable anyway.
+
+Unlike the ingest and watch paths, `record` does not set `metadata.collector`:
+a verdict decided outside Bazel's test runner was not collected by Bazel either.
+Pass one yourself if it is worth recording — `--metadata '{"collector":"shell"}'`.
 
 For calls in tight loops, avoid `bazel run` in the inner loop — its per-invocation configuration (and any differing `--action_env` flags on your other builds) churns the analysis cache. Build once up-front and exec the binary directly:
 
@@ -191,7 +198,7 @@ done
 |------|---------|-------------|
 | `--procedure-ref` | | Target label / test identifier (required) |
 | `--result` | | `PASS`, `FAIL`, `ERROR`, or `SKIPPED` (required, case-insensitive) |
-| `--evidence-type` | `bazel-manual` | Evidence type string |
+| `--evidence-type` | `ci` | How it was collected: `ci`, `manual_test` or `demonstration` |
 | `--notes` | | Free-text stored under `metadata.notes` |
 | `--tags` | | Comma-separated tags stored under `metadata.tags` |
 | `--duration-ms` | | Duration in milliseconds (optional) |
@@ -295,7 +302,7 @@ curl -X POST http://localhost:8000/api/v1/evidence \
     "repo": "myorg/myrepo",
     "rcs_ref": "abc123",
     "procedure_ref": "//pkg:my_test",
-    "evidence_type": "bazel",
+    "evidence_type": "ci",
     "source": "ci",
     "result": "PASS",
     "finished_at": "2026-01-01T00:00:00Z"
@@ -303,6 +310,21 @@ curl -X POST http://localhost:8000/api/v1/evidence \
 ```
 
 Result must be one of: `PASS`, `FAIL`, `ERROR`, `SKIPPED`.
+
+`evidence_type` must be one of three, and says **how** the evidence was collected — which is what tells a reader what its metadata means:
+
+| Value | Meaning |
+|---|---|
+| `ci` | A machine ran it unattended: a pipeline, a watch mode, a developer's `bazel test`. |
+| `manual_test` | A person carried out a procedure and reported what they saw. |
+| `demonstration` | The thing was shown working — to a customer, an auditor, a room — rather than tested. |
+
+Anything else is refused with `422` and an error naming the three, and the column
+carries a `CHECK` so a bulk load or a seeding script cannot get around that. The
+field was free text at first, which is how `bazel`, `pytest`, `gotest` and
+`junit` ended up in it: four spellings of "a machine ran it" that no query could
+treat as one thing. *Which* runner produced a record is a separate question with
+its own answer in `metadata.collector`, which the Bazel adapter sets.
 
 `finished_at` accepts RFC3339 (`2026-01-01T00:00:00Z`, `2026-01-01T12:00:00+02:00`) as well as shorter forms (`2026-01-01 14:00`, `2026-01-01`). Values without a timezone are interpreted as **UTC**. All timestamps are normalized to UTC on storage.
 
@@ -319,7 +341,7 @@ curl -X POST http://localhost:8000/api/v1/evidence \
     "branch": "main",
     "rcs_ref": "abc123",
     "procedure_ref": "manual/brake-check",
-    "evidence_type": "manual",
+    "evidence_type": "manual_test",
     "source": "j.tester",
     "result": "PASS",
     "finished_at": "2026-01-01 14:00",
@@ -403,7 +425,7 @@ curl -X POST http://localhost:8000/api/v1/evidence \
     "branch": "main",
     "rcs_ref": "abc123",
     "procedure_ref": "manual/brake-check",
-    "evidence_type": "manual",
+    "evidence_type": "manual_test",
     "source": "j.tester",
     "result": "PASS",
     "finished_at": "2026-01-01 14:00",
@@ -490,8 +512,8 @@ curl "http://localhost:8000/api/v1/evidence?branch=main"
 # Regex match — all release branches
 curl "http://localhost:8000/api/v1/evidence?branch=~^release/.*"
 
-# Regex on multiple fields — bazel-* types on org repos
-curl "http://localhost:8000/api/v1/evidence?evidence_type=~^bazel&repo=~^myorg/"
+# Regex on multiple fields — everything a person filed, on org repos
+curl "http://localhost:8000/api/v1/evidence?evidence_type=~^(manual_test|demonstration)$&repo=~^myorg/"
 
 # Regex on tags — match any tag starting with "nightly-"
 curl "http://localhost:8000/api/v1/evidence?tags=~^nightly-"
@@ -593,7 +615,7 @@ curl "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&label=stable&so
 | `order` | `asc` | `asc` or `desc` |
 | `limit`, `offset` | page size config | Windows the sorted set; `total` always describes the whole set |
 | `format` | `json` | `csv` streams every matching row as a spreadsheet, ignoring `limit` and `offset` |
-| `group_by` | *(none)* | `evidence_type` splits a procedure into one row per harness |
+| `group_by` | *(none)* | `evidence_type` splits a procedure into one row per collection method, for a procedure that is both run by CI and checked by hand |
 
 A query matching more than 50,000 distinct tests returns `422` rather than truncating, since a truncated set yields confident-looking numbers computed from part of the data.
 

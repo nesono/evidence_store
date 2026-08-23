@@ -33,7 +33,7 @@ Every ingested record MUST contain:
 | `branch` | string | Branch name the test was run against (e.g. `main`, `feature/foo`) |
 | `rcs_ref` | string | Revision control identifier (commit hash, tag, etc.) within `repo` |
 | `procedure_ref` | string | Reference to the test procedure: a Bazel target (e.g. `//pkg:my_test`) or a repo-relative file path (e.g. `tests/integration/smoke.py`) |
-| `evidence_type` | string | Collection method that determines the metadata schema (see 2.2) |
+| `evidence_type` | enum | How the evidence was collected, which determines the metadata schema: `ci`, `manual_test`, `demonstration` (see 2.2) |
 | `source` | string | Provenance of the run: a URL to the CI build logs (e.g. Jenkins build URL) **or** the username of the developer who triggered the test locally |
 | `result` | enum | `PASS`, `FAIL`, `ERROR`, `SKIPPED` |
 | `finished_at` | datetime (UTC) | When the test finished |
@@ -54,6 +54,16 @@ Extended fields live in a semi-structured `metadata` JSONB object. The store doe
 
 The `evidence_type` reflects **how the evidence was collected** (which determines the metadata shape), not what kind of test it is. A Bazel-run unit test and a Bazel-run HiL system test produce the same output format — they share the same `evidence_type`. The test category (unit, integration, system, etc.) is a property of the test procedure itself, expressible via `tags` or derivable from `procedure_ref`.
 
+There are exactly three, and the API rejects anything else (a `CHECK` constraint keeps the column from drifting away from that):
+
+| Value | Meaning |
+|---|---|
+| `ci` | A machine ran it unattended — a pipeline, a watch mode, a developer's `bazel test`. Nobody was watching it happen. |
+| `manual_test` | A person carried out a procedure and reported what they saw. |
+| `demonstration` | Evidence produced by showing the thing working — to a customer, an auditor, a room — rather than by testing it. |
+
+The field was free text at first, which produced `bazel`, `pytest`, `gotest` and `junit` in the same column: four spellings of "a machine ran it" that no query could treat as one thing, and that a reader could not tell apart from a category of test. **Which** runner produced a record is a different question and keeps its own answer in `metadata.collector`, where it does not have to carry the meaning of the type as well.
+
 Common optional fields (any type):
 
 | Field | Type | Description |
@@ -62,18 +72,19 @@ Common optional fields (any type):
 | `duration_s` | float | Duration in seconds |
 | `log_uri` | URI | Link to full log in external storage |
 | `tags` | string[] | Free-form labels for filtering |
+| `collector` | string | What produced the evidence, where the type does not say it: `bazel`, `pytest`, a rig's name. Set by the collecting client |
 | `target_hw_type` | string | Hardware target type (e.g. `hil`, `pil`, `vehicle`) |
 | `vehicle_id` | string | Vehicle identifier |
 | `hw_generation` | string | Hardware generation identifier |
 
-**`bazel`** type — additional fields:
+**`ci`** type — additional fields:
 
 | Field | Type | Description |
 |---|---|---|
-| `invocation_id` | string | Bazel invocation ID — groups all test results from a single `bazel test` call |
+| `invocation_id` | string | Groups all test results from a single run — e.g. one `bazel test` call |
 | `result_was_cached` | bool | Whether the result was served from cache rather than executed |
 
-**`manual`** type — additional fields:
+**`manual_test`** and **`demonstration`** types — additional fields:
 
 | Field | Type | Description |
 |---|---|---|
@@ -172,7 +183,11 @@ CREATE TABLE evidence (
     rcs_ref        TEXT NOT NULL,
     branch         TEXT NOT NULL,
     result         evidence_result NOT NULL,
-    evidence_type  TEXT NOT NULL,
+    -- a closed set, but TEXT with a CHECK rather than an enum type: adding a
+    -- fourth collection method should be one migration, not an ALTER TYPE that
+    -- every reader of the column has to be redeployed around
+    evidence_type  TEXT NOT NULL
+                   CHECK (evidence_type IN ('ci','manual_test','demonstration')),
     procedure_ref  TEXT NOT NULL,        -- bazel target or repo-relative path
     source         TEXT NOT NULL,        -- CI build URL or username
     ingested_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -272,7 +287,7 @@ Content-Type: application/json
   "finished_at": "2026-03-08T14:23:00Z",
   "rcs_ref": "abc123def",
   "result": "PASS",
-  "evidence_type": "bazel",
+  "evidence_type": "ci",
   "procedure_ref": "//pkg:my_test",
   "source": "https://jenkins.example.com/job/nightly/42",
   "metadata": {
@@ -292,7 +307,7 @@ Developer workstation example:
   "finished_at": "2026-03-08T16:05:12Z",
   "rcs_ref": "e7f2a91",
   "result": "FAIL",
-  "evidence_type": "bazel",
+  "evidence_type": "ci",
   "procedure_ref": "//pkg:my_test",
   "source": "jdoe",
   "metadata": {
@@ -475,6 +490,6 @@ Retention becomes `DROP TABLE evidence_2025_q1` — instantaneous, no row-by-row
 |---|---|---|
 | 1 | Should inheritance declarations expire, or are they permanent until manually revoked? | Affects retention logic |
 | 2 | Is there a need for real-time streaming of ingested evidence (e.g. WebSocket/SSE for dashboards)? | Affects architecture (adds event bus) |
-| 3 | Should the store enforce a known list of `evidence_type` values (currently `bazel`, `manual`), or accept any string? | Strictness vs. flexibility trade-off |
+| 3 | ~~Should the store enforce a known list of `evidence_type` values, or accept any string?~~ **Resolved:** three values — `ci`, `manual_test`, `demonstration` — enforced by the API and a `CHECK` (see 2.2). Which runner produced a record moved to `metadata.collector`. | Settled |
 | 4 | What is the expected peak ingestion rate (records/sec)? | Determines whether batch ingestion alone suffices or a queue (Kafka/NATS) is needed in front |
 | 5 | Are there compliance requirements for evidence immutability (e.g. records must never be mutated after ingestion)? | Affects update/delete API surface |

@@ -14,7 +14,7 @@ func validEvidence() *model.EvidenceCreate {
 		Branch:       "main",
 		RCSRef:       "abc123",
 		ProcedureRef: "//pkg:test",
-		EvidenceType: "bazel",
+		EvidenceType: "ci",
 		Source:       "ci-bot",
 		Result:       model.ResultPass,
 		FinishedAt:   model.FlexibleTime{Time: time.Now()},
@@ -64,9 +64,12 @@ func TestEvidenceCreateInvalidResult(t *testing.T) {
 	assert.Contains(t, errs[0], "result")
 }
 
+// evidence_type is a closed set of three: how the evidence was collected, which
+// is what tells a reader what the metadata means. It used to be any lowercase
+// word, and the store filled up with `bazel`, `pytest`, `gotest` and `junit` —
+// four spellings of "a machine ran it" that no query could treat as one thing.
 func TestEvidenceTypeValidation(t *testing.T) {
-	valid := []string{"bazel", "manual", "junit_xml", "a", "a1b2c3"}
-	for _, et := range valid {
+	for _, et := range []string{"ci", "manual_test", "demonstration"} {
 		e := validEvidence()
 		e.EvidenceType = et
 		errs := EvidenceCreate(e)
@@ -74,13 +77,15 @@ func TestEvidenceTypeValidation(t *testing.T) {
 	}
 
 	invalid := []string{
-		"BAZEL",      // uppercase
-		"bazel-test", // hyphen
-		"1bazel",     // starts with digit
-		"bazel test", // space
-		"bazel.test", // dot
-		"a!b",        // special char
-		"",           // empty (caught as required)
+		"bazel",       // a runner, not a collection method — now metadata.collector
+		"pytest",      // ditto
+		"manual",      // the old spelling of manual_test
+		"CI",          // the label, not the value
+		"Manual Test", // ditto
+		"manual-test", // hyphen
+		"ci ",         // stray whitespace
+		"demonstration2",
+		"", // empty (caught as required)
 	}
 	for _, et := range invalid {
 		e := validEvidence()
@@ -90,11 +95,16 @@ func TestEvidenceTypeValidation(t *testing.T) {
 	}
 }
 
-func TestEvidenceTypeTooLong(t *testing.T) {
+// The error has to name the three, because a client sending `bazel` cannot
+// otherwise tell what it is supposed to send instead.
+func TestEvidenceTypeErrorNamesTheAllowedValues(t *testing.T) {
 	e := validEvidence()
-	e.EvidenceType = "a" + string(make([]byte, 64)) // 65 chars
+	e.EvidenceType = "bazel"
 	errs := EvidenceCreate(e)
-	assert.NotEmpty(t, errs)
+	assert.Len(t, errs, 1)
+	for _, want := range []string{"bazel", "ci", "manual_test", "demonstration"} {
+		assert.Contains(t, errs[0], want)
+	}
 }
 
 func TestInheritanceCreateValid(t *testing.T) {
