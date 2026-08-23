@@ -2,7 +2,13 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "auth",
-    srcs = ["middleware.go"],
+    srcs = [
+        "authenticator.go",
+        "middleware.go",
+        "permission.go",
+        "principal.go",
+        "role.go",
+    ],
     importpath = "github.com/nesono/evidence-store/internal/auth",
     visibility = ["//:__subpackages__"],
     deps = ["//internal/config"],
@@ -15,5 +21,6 @@ go_test(
     deps = [
         "//internal/config",
         "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
     ],
 )

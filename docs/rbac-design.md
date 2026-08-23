@@ -18,6 +18,10 @@ rewrite of every handler. Section 9 marks the slot it fills.
 
 ## Existing State
 
+This section describes the tree as it stood when this document was written —
+that is, before phase 1. Sections 1-3 and 6 are now implemented; see the phase
+list at the end.
+
 - `internal/auth/middleware.go` is the whole authorization system. It compares
   the bearer token against `config.APIKey` entries in constant time and puts a
   `Role` (`rw` or `ro`) in the request context.
@@ -72,8 +76,10 @@ func PrincipalFrom(ctx context.Context) (*Principal, bool)
 ```
 
 Permissions are flattened once per request rather than recomputed per check.
-`GetRole` is kept as a thin shim over `Principal.Roles` for one release so the
-change lands without touching unrelated call sites, then removed.
+
+*As implemented (phase 1):* `GetRole` was removed rather than kept as a shim.
+It had no callers outside its own test, and the old `Role` type it returned
+(`rw`/`ro`) is the name the four roles now need.
 
 ### 2. Permissions
 
@@ -226,10 +232,18 @@ The upgrade must not lock anyone out. Three postures, in precedence order:
 
 1. **No keys, no SSO** — pass-through, API open. Unchanged; still the default.
 2. **`EVIDENCE_API_KEYS` set** (today's env var) — keys keep working. `rw` maps
-   to `ci`, `ro` maps to `viewer`. `rw` becomes `ci` rather than `contributor`
-   because today's `rw` keys are overwhelmingly CI writers that set their own
-   `source`, and mapping them to `contributor` would start rejecting writes that
-   worked yesterday.
+   to `ci` *and* `admin`, `ro` maps to `viewer`. `rw` includes `ci` rather than
+   just `contributor` because today's `rw` keys are overwhelmingly CI writers
+   that set their own `source`, and mapping them to `contributor` would start
+   rejecting writes that worked yesterday.
+
+   *Amended in phase 1:* `rw` also carries `admin`. An `rw` key can post an
+   inheritance declaration today, and section 6 moves that behind
+   `inheritance:write`, which only `admin` holds — so `ci` alone would lock out
+   exactly the operators this posture exists to protect. An env var full of
+   store-wide shared secrets is an administrator's credential either way. The
+   finer split is available from phase 2 on, where roles are granted per
+   principal.
 3. **`EVIDENCE_AUTH_DB=true`** — `principals` becomes authoritative; a bootstrap
    admin is seeded on first start from `EVIDENCE_BOOTSTRAP_ADMIN` and its
    one-time key is logged.
@@ -266,11 +280,11 @@ Landing #15 on top of it means:
 
 Each phase is independently shippable and leaves the tree green.
 
-1. **`Principal` and permissions.** Introduce the types, the role table, and
-   `Require`. Back it with the existing static keys via `StaticKeyAuthenticator`
-   and the posture-2 mapping. Convert routes from method-based to
-   permission-based. No migration yet. *This phase alone delivers the elevated
-   role for `POST /inheritance`.*
+1. **`Principal` and permissions.** ✅ Landed. Introduces the types, the role
+   table, and `Require`. Backed by the existing static keys via
+   `StaticKeyAuthenticator` and the posture-2 mapping. Routes converted from
+   method-based to permission-based. No migration. *This phase alone delivers
+   the elevated role for `POST /inheritance`.*
 2. **Migration 000006 + `DBKeyAuthenticator`.** Principals and bindings in
    Postgres, key hashing, bootstrap admin.
 3. **`source` binding.** Enforce section 7.

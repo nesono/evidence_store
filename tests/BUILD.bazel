@@ -29,6 +29,7 @@ go_test(
     ],
     deps = [
         "//internal/analytics",
+        "//internal/auth",
         "//internal/blob",
         "//internal/config",
         "//internal/migrate",

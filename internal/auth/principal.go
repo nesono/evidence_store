@@ -1,0 +1,100 @@
+package auth
+
+import "context"
+
+// Kind distinguishes a machine credential from a human one. Phase 1 only ever
+// mints KindAPIKey; KindUser is what an SSO login will produce.
+type Kind string
+
+const (
+	KindAPIKey Kind = "api_key"
+	KindUser   Kind = "user"
+)
+
+// Principal is the caller's identity, as resolved by an Authenticator. It
+// replaces the bare role that used to sit in the request context: everything
+// downstream of authentication can now tell one caller from another, which is
+// what binding a record's source to its author (phase 3) needs.
+type Principal struct {
+	Subject     string // "ci:nightly-build" or "user:alice@example.com"
+	Kind        Kind
+	DisplayName string
+	Roles       []Role
+
+	perms permSet // flattened from Roles once, at authentication time
+}
+
+// NewPrincipal flattens roles into the permission set the request will be
+// checked against. Duplicate and unknown roles are harmless: the former
+// collapse, the latter contribute nothing.
+func NewPrincipal(subject string, kind Kind, displayName string, roles ...Role) *Principal {
+	perms := permSet{}
+	for _, r := range roles {
+		for p := range rolePermissions[r] {
+			perms[p] = struct{}{}
+		}
+	}
+	return &Principal{
+		Subject:     subject,
+		Kind:        kind,
+		DisplayName: displayName,
+		Roles:       roles,
+		perms:       perms,
+	}
+}
+
+// Can reports whether the principal holds perm.
+func (p *Principal) Can(perm Permission) bool {
+	if p == nil {
+		return false
+	}
+	_, ok := p.perms[perm]
+	return ok
+}
+
+// HasRole reports whether the principal was granted role directly.
+func (p *Principal) HasRole(role Role) bool {
+	if p == nil {
+		return false
+	}
+	for _, r := range p.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+type contextKey string
+
+const (
+	principalKey    contextKey = "auth_principal"
+	authDisabledKey contextKey = "auth_disabled"
+)
+
+// WithPrincipal returns a context carrying p. Exported for tests and for
+// authenticators living outside this package later on.
+func WithPrincipal(ctx context.Context, p *Principal) context.Context {
+	return context.WithValue(ctx, principalKey, p)
+}
+
+// PrincipalFrom returns the authenticated principal, if any. A request can
+// legitimately have none: with no credentials configured the store runs open,
+// which is the default local-development posture.
+func PrincipalFrom(ctx context.Context) (*Principal, bool) {
+	p, ok := ctx.Value(principalKey).(*Principal)
+	return p, ok && p != nil
+}
+
+// withAuthDisabled marks a request as having passed through an authentication
+// stage that had nothing configured to check. Require honours the marker and
+// nothing else sets it, so a route that is missing Authenticate entirely fails
+// closed rather than falling open.
+func withAuthDisabled(ctx context.Context) context.Context {
+	return context.WithValue(ctx, authDisabledKey, true)
+}
+
+func authDisabled(ctx context.Context) bool {
+	disabled, _ := ctx.Value(authDisabledKey).(bool)
+	return disabled
+}
