@@ -59,31 +59,38 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	}
 	weatherAPI := api.NewWeatherHandler(weatherProvider)
 
+	// Authentication establishes who is calling; each route then states the
+	// permission it needs. Rate limiting stays after authentication so its
+	// buckets can eventually key on the principal rather than the token, and so
+	// an unauthenticated flood is still rejected before it costs anything.
+	authenticator := auth.NewStaticKeyAuthenticator(cfg.APIKeys)
+
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(auth.Middleware(cfg.APIKeys))
+		r.Use(auth.Authenticate(authenticator))
 		r.Use(ratelimit.Middleware(cfg.RateLimit))
 
-		r.Post("/evidence", evidenceAPI.Create)
-		r.Post("/evidence/batch", evidenceAPI.CreateBatch)
-		r.Get("/evidence", evidenceAPI.List)
-		r.Get("/evidence/distinct", evidenceAPI.Distinct)
-		r.Get("/evidence/{id}", evidenceAPI.Get)
+		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/evidence", evidenceAPI.Create)
+		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/evidence/batch", evidenceAPI.CreateBatch)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence", evidenceAPI.List)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence/distinct", evidenceAPI.Distinct)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence/{id}", evidenceAPI.Get)
 
-		r.Post("/inheritance", inheritanceAPI.Create)
-		r.Get("/inheritance", inheritanceAPI.List)
+		// Declaring that one branch inherits another's evidence rewrites what
+		// the store answers about code nobody tested. DESIGN.md section 8 has
+		// always called that an elevated operation; only admin holds it.
+		r.With(auth.Require(auth.PermInheritanceWrite)).Post("/inheritance", inheritanceAPI.Create)
+		r.With(auth.Require(auth.PermInheritanceRead)).Get("/inheritance", inheritanceAPI.List)
 
-		r.Get("/analytics/summary", analyticsAPI.Summary)
-		r.Get("/analytics/tests", analyticsAPI.Tests)
-		r.Get("/analytics/clusters", analyticsAPI.Clusters)
+		r.With(auth.Require(auth.PermAnalyticsRead)).Get("/analytics/summary", analyticsAPI.Summary)
+		r.With(auth.Require(auth.PermAnalyticsRead)).Get("/analytics/tests", analyticsAPI.Tests)
+		r.With(auth.Require(auth.PermAnalyticsRead)).Get("/analytics/clusters", analyticsAPI.Clusters)
 
-		// A read: it writes nothing, and the same key that may read a record
-		// may look up the weather that would go on one.
-		r.Get("/weather", weatherAPI.Get)
+		// A read: it writes nothing, and anyone who may read a record may look
+		// up the weather that would go on one. There is no weather:read.
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/weather", weatherAPI.Get)
 
-		// Uploading is a write, reading is a read, so the API-key roles and the
-		// rate limiter's buckets already apply the right rules to both.
-		r.Post("/blobs", blobAPI.Upload)
-		r.Get("/blobs/{ref}", blobAPI.Get)
+		r.With(auth.Require(auth.PermBlobWrite)).Post("/blobs", blobAPI.Upload)
+		r.With(auth.Require(auth.PermBlobRead)).Get("/blobs/{ref}", blobAPI.Get)
 	})
 
 	r.Handle("/*", web.StaticHandler())

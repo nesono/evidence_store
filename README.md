@@ -43,7 +43,7 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_WEATHER_ENDPOINT` | `https://api.open-meteo.com/v1/forecast` | Forecast API the weather lookup asks. Set it to an empty value to switch the lookup off (see [Weather while a test ran](#weather-while-a-test-ran)) |
 | `EVIDENCE_WEATHER_TIMEOUT_SECONDS` | `10` | Budget for one weather lookup before the tester is told to type the conditions in |
 
-### Authentication
+### Authentication and authorization
 
 Set `EVIDENCE_API_KEYS` to enable API key authentication for all `/api/v1/*` endpoints. The `/healthz` endpoint and static web UI files are always public.
 
@@ -61,6 +61,28 @@ export EVIDENCE_API_KEYS="rw:ingest-key-for-ci,ro:dashboard-viewer-key"
 - **`ro`** keys can only read (GET). POST requests return `403 Forbidden`.
 - Requests without a valid key return `401 Unauthorized`.
 - When `EVIDENCE_API_KEYS` is empty or unset, authentication is disabled (open access).
+
+Behind those two key roles the server authorizes by permission, not by HTTP
+method. Authentication resolves the caller to a **principal** holding one or
+more **roles**, and every route states the **permission** it needs:
+
+| Role | Permissions |
+|---|---|
+| `viewer` | `evidence:read`, `analytics:read`, `blob:read`, `inheritance:read` |
+| `contributor` | `viewer` + `evidence:write`, `blob:write` |
+| `ci` | `contributor` + `source:any` (may write a `source` that is not its own name) |
+| `admin` | `contributor` + `inheritance:write`, `principal:admin`, `retention:admin` |
+
+`POST /inheritance` requires `inheritance:write`, which only `admin` holds —
+declaring that one commit inherits another's evidence is the elevated operation
+[DESIGN.md](DESIGN.md) section 8 has always specified, and it used to be
+indistinguishable from posting a test result.
+
+Configured keys map onto those roles so that nothing that worked before stops
+working: `ro` becomes `viewer`, and `rw` becomes `ci` **and** `admin`, since an
+`rw` key can reach every endpoint today. Granting the finer roles individually
+arrives with database-backed principals; see
+[docs/rbac-design.md](docs/rbac-design.md) for where this is heading (SSO/SAML).
 
 Clients authenticate by sending the key as a Bearer token:
 

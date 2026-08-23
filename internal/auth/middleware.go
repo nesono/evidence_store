@@ -1,110 +1,74 @@
+// Package auth resolves who is calling and what they are allowed to do.
+//
+// The two questions are answered by two middlewares. Authenticate runs once
+// for the whole API and puts a Principal in the request context; Require wraps
+// an individual route and asserts a single Permission. Authorization used to
+// be a property of the HTTP method, which made POST /inheritance — an elevated
+// operation per DESIGN.md section 8 — indistinguishable from posting a test
+// result.
 package auth
 
 import (
-	"context"
-	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strings"
-
-	"github.com/nesono/evidence-store/internal/config"
 )
 
-type contextKey string
-
-const roleKey contextKey = "auth_role"
-
-// Role represents the access level of an authenticated request.
-type Role string
-
-const (
-	RoleReadWrite Role = "rw"
-	RoleReadOnly  Role = "ro"
-)
-
-// GetRole returns the authenticated role from the request context.
-// Returns empty string if not authenticated.
-func GetRole(ctx context.Context) Role {
-	if r, ok := ctx.Value(roleKey).(Role); ok {
-		return r
-	}
-	return ""
-}
-
-type keyEntry struct {
-	key      []byte
-	readOnly bool
-}
-
-// Middleware returns an HTTP middleware that validates Bearer tokens
-// against the configured API keys. If keys is empty, the middleware
-// is a no-op (all requests pass through).
-func Middleware(keys []config.APIKey) func(http.Handler) http.Handler {
-	entries := make([]keyEntry, len(keys))
-	for i, k := range keys {
-		entries[i] = keyEntry{key: []byte(k.Key), readOnly: k.ReadOnly}
-	}
-
+// Authenticate resolves the caller and stores the result in the request
+// context. It answers *who*, never *may they*: a request with valid
+// credentials for a route it has no permission on passes through here and is
+// stopped by Require.
+//
+// A request with no credentials is rejected with 401 unless the authenticator
+// reports that nothing is configured, in which case it passes through
+// unidentified — the default local-development posture, unchanged.
+func Authenticate(authenticator Authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		if len(entries) == 0 {
-			return next
-		}
-
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := extractBearer(r)
-			if token == "" {
+			principal, err := authenticator.Authenticate(r.Context(), r)
+			switch {
+			case errors.Is(err, ErrAuthDisabled):
+				next.ServeHTTP(w, r.WithContext(withAuthDisabled(r.Context())))
+			case errors.Is(err, ErrNoCredentials):
 				writeAuthError(w, http.StatusUnauthorized, "missing or invalid Authorization header")
-				return
-			}
-
-			tokenBytes := []byte(token)
-			matched := -1
-			for i, e := range entries {
-				if len(tokenBytes) == len(e.key) && subtle.ConstantTimeCompare(tokenBytes, e.key) == 1 {
-					matched = i
-					break
-				}
-			}
-
-			if matched < 0 {
+			case err != nil:
 				writeAuthError(w, http.StatusUnauthorized, "invalid API key")
-				return
+			default:
+				next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
 			}
-
-			entry := entries[matched]
-			if entry.readOnly && !isReadMethod(r.Method) {
-				writeAuthError(w, http.StatusForbidden, "read-only API key cannot perform write operations")
-				return
-			}
-
-			role := RoleReadWrite
-			if entry.readOnly {
-				role = RoleReadOnly
-			}
-			ctx := context.WithValue(r.Context(), roleKey, role)
-			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func extractBearer(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
+// Require returns a middleware that admits only callers holding perm. It is
+// mounted per route, so the permission a route needs is stated where the route
+// is declared.
+//
+// 401 and 403 are kept distinct: an anonymous caller is told to authenticate,
+// an authenticated one is told the answer will not change by trying again.
+func Require(perm Permission) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			principal, ok := PrincipalFrom(r.Context())
+			if !ok {
+				if authDisabled(r.Context()) {
+					next.ServeHTTP(w, r)
+					return
+				}
+				writeAuthError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+			if !principal.Can(perm) {
+				writeAuthError(w, http.StatusForbidden, "permission denied: "+string(perm)+" required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
-	const prefix = "Bearer "
-	if len(auth) < len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) {
-		return ""
-	}
-	return auth[len(prefix):]
-}
-
-func isReadMethod(method string) bool {
-	return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
 }
 
 func writeAuthError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
