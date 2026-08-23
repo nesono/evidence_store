@@ -12,6 +12,7 @@ import {
 import { showAnalytics } from "./analytics.js";
 import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
+import { renderMarkdown } from "./markdown.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -431,8 +432,26 @@ function renderDetail(record) {
   }
   html += "</dl>";
 
-  if (record.metadata && Object.keys(record.metadata).length > 0) {
-    html += `<div class="metadata-block"><strong>Metadata</strong><pre><code>${esc(JSON.stringify(record.metadata, null, 2))}</code></pre></div>`;
+  // The tester's log comes up with the record rather than behind a click: it is
+  // the substance of a manual result, and the fields above are just its label.
+  // It is lifted out of the metadata dump below because a log rendered as one
+  // JSON string of escaped newlines is a log nobody reads.
+  const metadata = record.metadata || {};
+  const rest = { ...metadata };
+  // Anything but a string under `observations` is some other client's field and
+  // stays in the dump, where it is at least visible, rather than being rendered
+  // as a log or silently dropped from both places.
+  const log = typeof metadata.observations === "string" ? metadata.observations : "";
+  if (log.trim()) {
+    delete rest.observations;
+    html += `<div class="metadata-block">
+      <strong>Test log</strong>
+      <div class="test-log">${renderMarkdown(log)}</div>
+    </div>`;
+  }
+
+  if (Object.keys(rest).length > 0) {
+    html += `<div class="metadata-block"><strong>Metadata</strong><pre><code>${esc(JSON.stringify(rest, null, 2))}</code></pre></div>`;
   }
 
   el.innerHTML = html;
@@ -690,6 +709,10 @@ async function submitEvidence(andAnother) {
   if (tags) metadata.tags = tags.split(",").map(t => t.trim()).filter(Boolean);
   const notes = form.notes.value.trim();
   if (notes) metadata.notes = notes;
+  // `observations` is the field DESIGN.md gives the manual evidence type for the
+  // tester's own account of the run.
+  const observations = form.observations.value.trim();
+  if (observations) metadata.observations = observations;
   Object.assign(metadata, readCustomFields());
 
   const record = {
@@ -725,6 +748,8 @@ async function submitEvidence(andAnother) {
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code></p>`;
       form.querySelector('[name="result"]:checked').checked = false;
       form.notes.value = "";
+      form.observations.value = "";
+      updateTestLogPreview();
       const currentTpl = document.getElementById("template-select").value;
       if (currentTpl) {
         applyTemplate(currentTpl);
@@ -770,6 +795,30 @@ function readCustomFields() {
   });
   return fields;
 }
+
+// --- Test log preview ---
+
+// Markdown is only worth offering if the tester can see what it will look like
+// before the record is filed; afterwards the log is immutable.
+function updateTestLogPreview() {
+  const preview = document.getElementById("test-log-preview");
+  if (preview.hidden) return;
+  const raw = document.querySelector('#add-form [name="observations"]').value;
+  preview.innerHTML = raw.trim()
+    ? renderMarkdown(raw)
+    : `<p class="test-log-empty">Nothing written yet.</p>`;
+}
+
+document.getElementById("test-log-preview-toggle").addEventListener("click", (e) => {
+  const preview = document.getElementById("test-log-preview");
+  preview.hidden = !preview.hidden;
+  e.target.setAttribute("aria-expanded", String(!preview.hidden));
+  e.target.textContent = preview.hidden ? "Preview" : "Hide preview";
+  updateTestLogPreview();
+});
+
+document.querySelector('#add-form [name="observations"]')
+  .addEventListener("input", updateTestLogPreview);
 
 document.getElementById("fill-now").addEventListener("click", () => {
   const input = document.querySelector('#add-form [name="finished_at"]');

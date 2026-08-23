@@ -265,17 +265,19 @@ func (g *generator) row() []any {
 		g.packages[g.rnd.Intn(len(g.packages))],
 		g.targets[g.rnd.Intn(len(g.targets))])
 
+	evidenceType := g.types[g.rnd.Intn(len(g.types))]
+
 	return []any{
 		repo,
 		g.branches[g.rnd.Intn(len(g.branches))],
 		commit,
 		procedure,
-		g.types[g.rnd.Intn(len(g.types))],
+		evidenceType,
 		g.sources[g.rnd.Intn(len(g.sources))],
 		result,
 		finishedAt,
 		ingestedAt,
-		g.metadata(result, procedure),
+		g.metadata(evidenceType, result, procedure),
 	}
 }
 
@@ -294,10 +296,16 @@ func (g *generator) result() string {
 	}
 }
 
-func (g *generator) metadata(result, procedure string) []byte {
+func (g *generator) metadata(evidenceType, result, procedure string) []byte {
 	meta := map[string]any{
 		"tags":        g.pickTags(),
 		"duration_ms": g.rnd.Intn(120_000) + 40,
+	}
+
+	// Only manual runs carry a test log — a machine has nothing to observe. The
+	// demo set needs some so the record dialog's log viewer has something to show.
+	if evidenceType == "manual" {
+		meta["observations"] = g.observations(result, procedure)
 	}
 
 	switch result {
@@ -321,6 +329,33 @@ func (g *generator) metadata(result, procedure string) []byte {
 		panic(err)
 	}
 	return b
+}
+
+// observations writes the kind of markdown a tester leaves behind: numbered
+// steps, a pasted error, a link to the run — enough shape to show what the
+// record dialog does with a log.
+func (g *generator) observations(result, procedure string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s\n\n", procedure)
+	fmt.Fprintf(&b, "Tester: %s, rig %d.\n\n", g.sources[g.rnd.Intn(len(g.sources))], g.rnd.Intn(8)+1)
+	b.WriteString("1. Powered on the rig — all lights green\n")
+	b.WriteString("2. Ran the procedure end to end\n")
+	b.WriteString("3. Logged the readings\n\n")
+
+	switch result {
+	case "PASS":
+		b.WriteString("No deviations from the expected behaviour.\n")
+	case "FAIL":
+		fmt.Fprintf(&b, "Step 3 deviated:\n\n```\nexpected 200, got %d\n```\n",
+			[]int{400, 403, 404, 409, 500, 503}[g.rnd.Intn(6)])
+	case "ERROR":
+		b.WriteString("> Rig dropped the connection mid-run; result is not trustworthy.\n")
+	case "SKIPPED":
+		b.WriteString("Could not run: the hardware was booked by another team.\n")
+	}
+
+	fmt.Fprintf(&b, "\nPhotos: https://photos.example.com/runs/%d\n", g.rnd.Intn(9000)+1000)
+	return b.String()
 }
 
 func (g *generator) pickTags() []string {

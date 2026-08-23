@@ -296,6 +296,41 @@ Result must be one of: `PASS`, `FAIL`, `ERROR`, `SKIPPED`.
 
 `finished_at` accepts RFC3339 (`2026-01-01T00:00:00Z`, `2026-01-01T12:00:00+02:00`) as well as shorter forms (`2026-01-01 14:00`, `2026-01-01`). Values without a timezone are interpreted as **UTC**. All timestamps are normalized to UTC on storage.
 
+### Test logs
+
+A manual result is only as useful as the account of what the tester saw. That
+account goes in `metadata.observations` as markdown:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/evidence \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "repo": "myorg/myrepo",
+    "branch": "main",
+    "rcs_ref": "abc123",
+    "procedure_ref": "manual/brake-check",
+    "evidence_type": "manual",
+    "source": "j.tester",
+    "result": "PASS",
+    "finished_at": "2026-01-01 14:00",
+    "metadata": {
+      "observations": "## Run 1\n\n1. Powered on the rig — all lights green\n2. Pressed the brake pedal — firm, no travel\n\nSaw `ERR_42` on screen 2, cleared after a restart."
+    }
+  }'
+```
+
+The web UI's **Add Result** tab has a **Test log** box for it, with a preview,
+and the record dialog in **Search** renders the log alongside the record's
+fields rather than leaving it as one long line inside the metadata dump.
+
+Supported markdown: headings, ordered and unordered lists, blockquotes,
+horizontal rules, fenced and inline code, bold, italic, and links. Links are
+restricted to `http`, `https`, `mailto`, and same-site targets; everything else
+in a log is escaped, never interpreted as HTML.
+
+`observations` is plain metadata, so it needs no special handling from any
+client — the Bazel adapter's `--metadata` flag can carry one just as well.
+
 ### Querying evidence
 
 ```bash

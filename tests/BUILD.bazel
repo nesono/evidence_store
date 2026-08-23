@@ -15,6 +15,7 @@ go_test(
         "regex_search_test.go",
         "retention_integration_test.go",
         "search_ref_test.go",
+        "test_log_test.go",
         "utc_normalization_test.go",
     ],
     data = ["//migrations"],
