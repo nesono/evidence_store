@@ -986,6 +986,14 @@ document.getElementById("add-another").addEventListener("click", () => {
 const TEMPLATE_STORAGE_KEY = "evidence_templates";
 const TEMPLATE_DEFAULT_FIELDS = ["repo", "branch", "rcs_ref", "procedure_ref", "evidence_type", "source", "tags"];
 
+// What an untemplated Add Result form starts with — the same values index.html
+// ships the fields with, so clearing the template restores the form rather than
+// emptying it. Everything here is a record filed by hand through this page, and
+// `manual` is what tells it apart from a CI result once it is in the store.
+// A template only stores fields the tester filled in, so a missing value in one
+// falls back to these too.
+const ADD_FORM_DEFAULTS = { evidence_type: "manual", tags: "manual" };
+
 function loadTemplates() {
   try {
     return JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY)) || [];
@@ -1016,7 +1024,7 @@ function applyTemplate(templateId) {
   if (!templateId) {
     for (const f of TEMPLATE_DEFAULT_FIELDS) {
       const input = form.querySelector(`[name="${f}"]`);
-      if (input) input.value = f === "evidence_type" ? "manual" : "";
+      if (input) input.value = ADD_FORM_DEFAULTS[f] || "";
     }
     cfList.innerHTML = "";
     return;
@@ -1027,7 +1035,7 @@ function applyTemplate(templateId) {
 
   for (const f of TEMPLATE_DEFAULT_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
-    if (input) input.value = (tpl.defaults && tpl.defaults[f]) || (f === "evidence_type" ? "manual" : "");
+    if (input) input.value = (tpl.defaults && tpl.defaults[f]) || ADD_FORM_DEFAULTS[f] || "";
   }
 
   cfList.innerHTML = "";

@@ -74,8 +74,12 @@
                         </span>
                         <small class="utc-preview" data-preview-for="finished_at"></small>
                     </label>
+                    <!-- Prefilled with `manual`: everything filed through this
+                         page was run by a person, and the tag is what says so
+                         in a store whose other records come from CI. Editable
+                         like any other field — see ADD_FORM_DEFAULTS. -->
                     <label>Tags
-                        <input type="text" name="tags" placeholder="manual,regression">
+                        <input type="text" name="tags" value="manual" placeholder="manual,regression">
                     </label>
                 </div>
                 <!-- Where the test was run. One field for both a coordinate pair
