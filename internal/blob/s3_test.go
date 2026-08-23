@@ -30,8 +30,16 @@ func newS3(t *testing.T) *S3 {
 				"MINIO_ROOT_USER":     "minioadmin",
 				"MINIO_ROOT_PASSWORD": "minioadmin",
 			},
-			Cmd:        []string{"server", "/data"},
-			WaitingFor: wait.ForListeningPort("9000/tcp").WithStartupTimeout(60 * time.Second),
+			Cmd: []string{"server", "/data"},
+			// MinIO binds the port before it will answer on it, so waiting for
+			// a listening socket returns while the first request still gets a
+			// connection reset. Its own readiness endpoint is the thing worth
+			// waiting for. Same class of bug as the double bind the Postgres
+			// harness works around in tests/integration_test.go, and it made
+			// this suite fail on CI about one run in ten.
+			WaitingFor: wait.ForHTTP("/minio/health/ready").
+				WithPort("9000/tcp").
+				WithStartupTimeout(60 * time.Second),
 		},
 		Started: true,
 	})
