@@ -78,7 +78,7 @@ Common optional fields (any type):
 | Field | Type | Description |
 |---|---|---|
 | `observations` | string | Free-text observations from the tester |
-| `photo_uris` | URI[] | Links to photos or screenshots |
+| `photo_uris` | URI[] | Links to photos or screenshots. Images embedded in `observations` are listed here automatically (see 4.4) |
 | `weather_conditions` | string | Weather conditions during the test |
 | `video_uris` | URI[] | Links to video recordings |
 
@@ -140,7 +140,7 @@ Querying evidence for `target_rcs_ref` will include inherited results, clearly m
 |---|---|
 | **Ingestion API** | Receives evidence records, validates required fields, normalises timestamps to UTC, stores metadata |
 | **Evidence Database** | Structured storage for queryable fields + JSONB for extended metadata |
-| **Blob Store** | Large artifacts (logs, videos, photos) stored externally; database holds URIs |
+| **Blob Store** | Large artifacts (logs, videos, photos) stored outside the database, which holds references. Content-addressed; see 4.4 |
 | **Query API** | Filtered, paginated access to evidence; supports inheritance resolution |
 | **Retention Worker** | Applies retention policies; archives or deletes expired records |
 
@@ -219,6 +219,39 @@ Adding new metadata fields requires **no migration** — they are simply include
 3. Add an index.
 
 This is a routine `ALTER TABLE`, not a schema redesign.
+
+### 4.4 Blob Storage
+
+Images embedded in a manual test log — and, later, videos — are stored outside the database and referenced from it. Blobs are **content-addressed**: a blob is named by the SHA-256 of its bytes and by nothing else.
+
+```
+POST /api/v1/blobs            -> {"ref": "/api/v1/blobs/sha256:<hex>.png", ...}
+GET  /api/v1/blobs/sha256:<hex>[.ext]
+```
+
+The reference written into a log is relative and carries no location, only content. Three consequences follow, and they are the reason for the choice:
+
+- **Evidence is verifiable.** The name of a photo attached to a FAIL is a checksum of that photo.
+- **Moving the data is a copy.** Backends can be swapped, or a bucket migrated, without rewriting a single stored log, and a half-finished copy is safe to re-run.
+- **Deduplication is free.** The same screenshot filed against two records is one object.
+
+The extension on a reference is a rendering hint only: it tells a client whether to build an image or (with #79) a video element, and the media type actually served is sniffed from the bytes. What may be embedded is an allowlist — PNG, JPEG, WebP, GIF — never the uploader's declared type.
+
+**Backends.** `fs` stores blobs in a directory; `s3` stores them in any S3-compatible object store. Which is in use is invisible above the storage layer.
+
+**Lifetime.** Deduplication means a blob has no owner, so it cannot be deleted with a record. Reachability governs instead:
+
+```sql
+CREATE TABLE blob_ref (
+    digest      TEXT NOT NULL,
+    evidence_id UUID NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+    PRIMARY KEY (digest, evidence_id)
+);
+```
+
+References are extracted from `observations` when a record is ingested and written in the same transaction; they are also mirrored into `metadata.photo_uris` so clients need not parse markdown. Retention deleting a record releases its references by cascade, and a sweep on the retention worker's schedule deletes objects no reference names. Objects younger than a grace period are spared: between an upload and the record being filed, a blob is legitimately unreachable.
+
+The alternative — deriving reachability from `metadata` on every sweep — needs no table but scans the evidence table each pass, which is the wrong shape for the volumes this store targets.
 
 ---
 

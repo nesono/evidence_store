@@ -3,11 +3,12 @@ load("@rules_go//go:def.bzl", "go_test")
 go_test(
     name = "tests_test",
     srcs = [
+        "analytics_budget_test.go",
         "analytics_cache_test.go",
         "analytics_csv_test.go",
-        "analytics_budget_test.go",
         "analytics_integration_test.go",
         "auth_integration_test.go",
+        "blobs_test.go",
         "clusters_integration_test.go",
         "distinct_test.go",
         "integration_test.go",
@@ -25,6 +26,7 @@ go_test(
     ],
     deps = [
         "//internal/analytics",
+        "//internal/blob",
         "//internal/config",
         "//internal/migrate",
         "//internal/model",

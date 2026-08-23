@@ -13,6 +13,7 @@ import { showAnalytics } from "./analytics.js";
 import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
 import { renderMarkdown } from "./markdown.js";
+import { attachImageUploads, hydrateImages, releaseImages } from "./images.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -455,6 +456,9 @@ function renderDetail(record) {
   }
 
   el.innerHTML = html;
+  // The log's images are fetched once the markup is in the document: the
+  // renderer leaves them without a src because reading a blob needs the API key.
+  hydrateImages(el);
   document.getElementById("detail-dialog").showModal();
 }
 
@@ -650,6 +654,10 @@ document.getElementById("close-detail").addEventListener("click", () => {
   writeStateToURL(readFormFilters());
 });
 
+// On the dialog itself rather than the close button: Escape closes it too, and
+// the images a closed dialog was showing are worth handing back either way.
+document.getElementById("detail-dialog").addEventListener("close", releaseImages);
+
 window.addEventListener("popstate", () => {
   const { filters } = readStateFromURL();
   applyURLState(filters);
@@ -807,6 +815,7 @@ function updateTestLogPreview() {
   preview.innerHTML = raw.trim()
     ? renderMarkdown(raw)
     : `<p class="test-log-empty">Nothing written yet.</p>`;
+  hydrateImages(preview);
 }
 
 document.getElementById("test-log-preview-toggle").addEventListener("click", (e) => {
@@ -819,6 +828,17 @@ document.getElementById("test-log-preview-toggle").addEventListener("click", (e)
 
 document.querySelector('#add-form [name="observations"]')
   .addEventListener("input", updateTestLogPreview);
+
+// Pasting a screenshot is how a tester attaches one — the alternative is
+// finding a file, naming it, and uploading it somewhere else first, which is
+// how photos end up not being attached at all.
+attachImageUploads(
+  document.querySelector('#add-form [name="observations"]'),
+  msg => {
+    document.getElementById("add-feedback").innerHTML =
+      `<p class="feedback-error">${esc(msg)}</p>`;
+  },
+);
 
 document.getElementById("fill-now").addEventListener("click", () => {
   const input = document.querySelector('#add-form [name="finished_at"]');

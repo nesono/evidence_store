@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//internal/api",
         "//internal/auth",
+        "//internal/blob",
         "//internal/config",
         "//internal/ratelimit",
         "//internal/store",
