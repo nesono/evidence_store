@@ -41,7 +41,7 @@ func TestPostBatch(t *testing.T) {
 			Branch:       "main",
 			RCSRef:       "abc123",
 			ProcedureRef: "//pkg:test",
-			EvidenceType: "bazel",
+			EvidenceType: "ci",
 			Source:       "ci",
 			Result:       "PASS",
 			FinishedAt:   "2026-03-28T10:00:00Z",
@@ -91,7 +91,7 @@ func TestPostBatchChunking(t *testing.T) {
 	for i := range records {
 		records[i] = EvidenceRecord{
 			Repo: "org/repo", Branch: "main", RCSRef: "abc",
-			ProcedureRef: "//pkg:test", EvidenceType: "bazel",
+			ProcedureRef: "//pkg:test", EvidenceType: "ci",
 			Source: "ci", Result: "PASS", FinishedAt: "2026-03-28T10:00:00Z",
 		}
 	}

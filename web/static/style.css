@@ -385,7 +385,10 @@ body > main {
 #results-table .col-repo      { width: 13%; }
 #results-table .col-branch    { width: 10%; }
 #results-table .col-commit    { width: 7em; }
-#results-table .col-type      { width: 6em; }
+/* Wide enough for "Demonstration": the column holds one of three labels now,
+   and a type truncated to "Demonst…" is a column that has stopped answering
+   the question it is there for. */
+#results-table .col-type      { width: 8em; }
 #results-table .col-source    { width: 12%; }
 #results-table .col-finished  { width: 9.5em; }
 

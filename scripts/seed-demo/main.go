@@ -91,7 +91,10 @@ func run(ctx context.Context, databaseURL string, count, batch, days, repoCount 
 
 	if truncate {
 		fmt.Printf("deleting %s existing record(s)...\n", humanize(existing))
-		if _, err := pool.Exec(ctx, "TRUNCATE evidence"); err != nil {
+		// CASCADE because blob_ref references evidence: a reference to a record
+		// that no longer exists is not worth keeping, and without this the
+		// truncate fails outright.
+		if _, err := pool.Exec(ctx, "TRUNCATE evidence CASCADE"); err != nil {
 			return fmt.Errorf("truncate evidence: %w", err)
 		}
 		existing = 0
@@ -178,17 +181,17 @@ func summarize(ctx context.Context, pool *pgxpool.Pool) error {
 // clustered onto a limited set of repos, branches and commits so that filtering
 // in the UI returns meaningful groups rather than one row per value.
 type generator struct {
-	rnd      *rand.Rand
-	repos    []string
-	commits  [][]string // per repo, so a commit filter selects one repo's run
-	now      time.Time
-	spread   time.Duration
-	branches []string
-	types    []string
-	sources  []string
-	packages []string
-	targets  []string
-	tags     []string
+	rnd        *rand.Rand
+	repos      []string
+	commits    [][]string // per repo, so a commit filter selects one repo's run
+	now        time.Time
+	spread     time.Duration
+	branches   []string
+	collectors []string
+	sources    []string
+	packages   []string
+	targets    []string
+	tags       []string
 }
 
 func newGenerator(seed int64, days, repoCount int) *generator {
@@ -211,8 +214,10 @@ func newGenerator(seed int64, days, repoCount int) *generator {
 			"release/2.4", "release/2.5",
 			"feature/checkout-v2", "feature/oauth-refresh", "feature/dark-mode",
 		},
-		// Must satisfy validate.EvidenceCreate's ^[a-z][a-z0-9_]{0,63}$ pattern.
-		types: []string{"bazel", "bazel", "bazel", "bazel", "pytest", "gotest", "junit", "manual"},
+		// Which runner produced a CI record. The type says only that a machine
+		// ran it (see evidenceType); this is the split migration 000006 made in
+		// the real data, so the demo set has the same shape.
+		collectors: []string{"bazel", "bazel", "bazel", "bazel", "pytest", "gotest", "junit"},
 		sources: []string{
 			"https://ci.example.com/build/4711", "https://ci.example.com/build/4712",
 			"https://github.com/nesono/evidence_store/actions/runs/30207857523",
@@ -265,7 +270,7 @@ func (g *generator) row() []any {
 		g.packages[g.rnd.Intn(len(g.packages))],
 		g.targets[g.rnd.Intn(len(g.targets))])
 
-	evidenceType := g.types[g.rnd.Intn(len(g.types))]
+	evidenceType := g.evidenceType()
 
 	return []any{
 		repo,
@@ -278,6 +283,20 @@ func (g *generator) row() []any {
 		finishedAt,
 		ingestedAt,
 		g.metadata(evidenceType, result, procedure),
+	}
+}
+
+// evidenceType returns how a record was collected. Most evidence in a real
+// store comes off a pipeline; a demonstration is rare enough that the demo set
+// should show what a handful of them look like among millions of runs.
+func (g *generator) evidenceType() string {
+	switch n := g.rnd.Intn(100); {
+	case n < 82:
+		return "ci"
+	case n < 98:
+		return "manual_test"
+	default:
+		return "demonstration"
 	}
 }
 
@@ -302,9 +321,12 @@ func (g *generator) metadata(evidenceType, result, procedure string) []byte {
 		"duration_ms": g.rnd.Intn(120_000) + 40,
 	}
 
-	// Only manual runs carry a test log — a machine has nothing to observe. The
-	// demo set needs some so the record dialog's log viewer has something to show.
-	if evidenceType == "manual" {
+	// A machine has nothing to observe, so it names the runner instead; a person
+	// writes down what they saw. The demo set needs both: one so the type filter
+	// has something behind it, the other so the record dialog's log viewer does.
+	if evidenceType == "ci" {
+		meta["collector"] = g.collectors[g.rnd.Intn(len(g.collectors))]
+	} else {
 		meta["observations"] = g.observations(result, procedure)
 	}
 

@@ -161,7 +161,7 @@ func makeEvidence(repo, branch, rcsRef, procedureRef, source string, result mode
 		Branch:       branch,
 		RCSRef:       rcsRef,
 		ProcedureRef: procedureRef,
-		EvidenceType: "bazel",
+		EvidenceType: "ci",
 		Source:       source,
 		Result:       result,
 		FinishedAt:   model.FlexibleTime{Time: time.Now().UTC().Truncate(time.Microsecond)},
@@ -185,7 +185,7 @@ func TestCreateEvidence(t *testing.T) {
 	assert.Equal(t, "main", result.Branch)
 	assert.Equal(t, "aaa111", result.RCSRef)
 	assert.Equal(t, "//pkg:test_create", result.ProcedureRef)
-	assert.Equal(t, "bazel", result.EvidenceType)
+	assert.Equal(t, "ci", result.EvidenceType)
 	assert.Equal(t, model.ResultPass, result.Result)
 	assert.False(t, result.IngestedAt.IsZero())
 }
@@ -210,6 +210,38 @@ func TestCreateEvidenceInvalidEvidenceType(t *testing.T) {
 	resp := postJSON(t, "/api/v1/evidence", ev)
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 	resp.Body.Close()
+}
+
+// The types this store used to accept are the ones its existing clients are
+// still sending, so the refusal has to say what to send instead — and it has to
+// arrive as a validation error, not as a constraint violation from the database.
+func TestCreateEvidenceRejectsRetiredType(t *testing.T) {
+	for _, et := range []string{"bazel", "pytest", "manual", "junit_xml"} {
+		ev := makeEvidence("org/repo1", "main", "aaa111", "//pkg:test", "ci-bot", model.ResultPass)
+		ev.EvidenceType = et
+
+		resp := postJSON(t, "/api/v1/evidence", ev)
+		require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "type %q", et)
+
+		body := decodeJSON[map[string]any](t, resp)
+		text := fmt.Sprintf("%v", body)
+		for _, want := range []string{et, "ci", "manual_test", "demonstration"} {
+			assert.Contains(t, text, want, "the error should name %q", want)
+		}
+	}
+}
+
+func TestCreateEvidenceAcceptsEveryType(t *testing.T) {
+	for _, et := range model.EvidenceTypes {
+		ev := makeEvidence("org/repo_types", "main", "aaa111", "//pkg:test", "ci-bot", model.ResultPass)
+		ev.EvidenceType = et
+
+		resp := postJSON(t, "/api/v1/evidence", ev)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "type %q", et)
+
+		created := decodeJSON[model.Evidence](t, resp)
+		assert.Equal(t, et, created.EvidenceType)
+	}
 }
 
 // ---------------------------------------------------------------------------

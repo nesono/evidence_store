@@ -78,7 +78,7 @@ func TestSearchRegexProcedure(t *testing.T) {
 func TestSearchRegexEvidenceType(t *testing.T) {
 	repo := "org/regex_type_" + uuid.New().String()[:8]
 
-	for _, etype := range []string{"bazel", "manual", "bazeltool"} {
+	for _, etype := range []string{"ci", "manual_test", "demonstration"} {
 		ev := makeEvidence(repo, "main", "ref1", "//pkg:test", "ci", model.ResultPass)
 		ev.EvidenceType = etype
 		resp := postJSON(t, "/api/v1/evidence", ev)
@@ -86,10 +86,13 @@ func TestSearchRegexEvidenceType(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	resp := getJSON(t, "/api/v1/evidence?repo="+repo+"&evidence_type="+url.QueryEscape("~^bazel"))
+	// The set is closed now, so a regex here matches whole values rather than a
+	// family of spellings — which is the point of closing it. It still beats
+	// two requests when a caller wants two of the three.
+	resp := getJSON(t, "/api/v1/evidence?repo="+repo+"&evidence_type="+url.QueryEscape("~^(ci|demonstration)$"))
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	result := decodeJSON[listResponse](t, resp)
-	assert.Len(t, result.Records, 2) // bazel and bazeltool
+	assert.Len(t, result.Records, 2) // ci and demonstration, not manual_test
 }
 
 func TestSearchRegexTags(t *testing.T) {

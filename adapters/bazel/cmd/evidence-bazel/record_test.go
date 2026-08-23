@@ -29,7 +29,7 @@ func TestBuildRecord_Minimal(t *testing.T) {
 
 	assert.Equal(t, "nesono/evidence_store", rec.Repo)
 	assert.Equal(t, "PASS", rec.Result)
-	assert.Equal(t, "bazel_manual", rec.EvidenceType)
+	assert.Equal(t, "ci", rec.EvidenceType)
 	assert.Equal(t, "//pkg:failure_test", rec.ProcedureRef)
 	assert.Nil(t, rec.Metadata)
 
@@ -129,10 +129,23 @@ func TestBuildRecord_FinishedAtPassthrough(t *testing.T) {
 
 func TestBuildRecord_CustomEvidenceType(t *testing.T) {
 	opts := validRecordOptions()
-	opts.EvidenceType = "bazel_failure_test"
+	opts.EvidenceType = "manual_test"
 	rec, err := buildRecord(opts)
 	require.NoError(t, err)
-	assert.Equal(t, "bazel_failure_test", rec.EvidenceType)
+	assert.Equal(t, "manual_test", rec.EvidenceType)
+}
+
+// The store takes three collection methods. Catching a fourth here turns a
+// rejected upload -- after the test ran, halfway through a loop filing hundreds
+// of records -- into an argument error before anything is sent.
+func TestBuildRecord_RejectsRetiredEvidenceType(t *testing.T) {
+	for _, et := range []string{"bazel", "bazel_failure_test", "manual", "CI"} {
+		opts := validRecordOptions()
+		opts.EvidenceType = et
+		_, err := buildRecord(opts)
+		require.Error(t, err, "expected %q to be rejected", et)
+		assert.Contains(t, err.Error(), "ci, manual_test, demonstration")
+	}
 }
 
 func TestBuildRecord_EmptyTagsDoesNotAddKey(t *testing.T) {
@@ -193,7 +206,7 @@ func TestWriteRecord_ProducesParseableJSON(t *testing.T) {
 		Branch:       "main",
 		RCSRef:       "abc123",
 		ProcedureRef: "//pkg:ft",
-		EvidenceType: "bazel-failure-test",
+		EvidenceType: "ci",
 		Result:       "PASS",
 		FinishedAt:   "2026-04-18T10:00:00Z",
 		Metadata:     map[string]any{"notes": "ok"},

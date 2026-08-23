@@ -33,6 +33,31 @@ const DATETIME_FIELDS = ["finished_after", "finished_before"];
 // Badged onto the toggle, so a collapsed panel never hides an applied constraint.
 const ADVANCED_FIELDS = [...ADVANCED_TEXT_FIELDS, ...DATETIME_FIELDS, "include_inherited"];
 
+// How the evidence was collected: a closed set of three (DESIGN.md §2.2). The
+// stored values are slugs and the labels are what a reader is shown, so the
+// column that used to hold `bazel`, `pytest` and `junit` reads as one thing.
+const EVIDENCE_TYPES = ["ci", "manual_test", "demonstration"];
+const EVIDENCE_TYPE_LABELS = {
+  ci: "CI",
+  manual_test: "Manual Test",
+  demonstration: "Demonstration",
+};
+const DEFAULT_EVIDENCE_TYPE = "manual_test";
+
+// A record from a store that has not run migration 000006 yet, or one written
+// around the API, still has to render as something — so an unknown value shows
+// itself rather than becoming blank.
+function evidenceTypeLabel(value) {
+  return EVIDENCE_TYPE_LABELS[value] || value || "";
+}
+
+// Templates were saved when the field was a free-text box, so one can still be
+// holding `bazel`. A value the select does not have leaves the control blank
+// and the form unsubmittable, so anything unrecognised falls back.
+function evidenceTypeOr(value, fallback = DEFAULT_EVIDENCE_TYPE) {
+  return EVIDENCE_TYPES.includes(value) ? value : fallback;
+}
+
 // The list endpoint's default ordering. Named because reading a window from the
 // far end has to ask for the exact reverse of it.
 const DEFAULT_SORT_COLUMN = "ingested_at";
@@ -90,6 +115,14 @@ function readStateFromURL() {
   if (!filters.ref) {
     const legacy = params.get("rcs_ref") || params.get("branch");
     if (legacy) filters.ref = legacy;
+  }
+
+  // Same rule for a link carrying a type that no longer exists — `bazel`, from
+  // before the taxonomy. The dropdown cannot show it, so keeping it would search
+  // on a constraint the user can neither see nor clear, and every such link
+  // would come up empty for no visible reason. Dropping it shows the records.
+  if (filters.evidence_type && !EVIDENCE_TYPES.includes(filters.evidence_type)) {
+    delete filters.evidence_type;
   }
 
   const offset = parseInt(params.get("offset"), 10);
@@ -292,10 +325,11 @@ async function fetchEvidenceById(id) {
   return resp.json();
 }
 
+// evidence_type is not here any more: it is a closed set of three offered as a
+// dropdown, so there is nothing to complete from what the store happens to hold.
 const DATALIST_FIELDS = [
-  { field: "repo",          listId: "repos-list" },
-  { field: "evidence_type", listId: "evidence-types-list" },
-  { field: "source",        listId: "sources-list" },
+  { field: "repo",   listId: "repos-list" },
+  { field: "source", listId: "sources-list" },
 ];
 
 async function refreshDatalists() {
@@ -349,7 +383,7 @@ function rowHTML(r) {
       <td class="col-repo" title="${esc(r.repo)}">${esc(r.repo)}</td>
       <td class="col-branch" title="${esc(branch)}">${esc(branch)}</td>
       <td class="col-commit commit-ref">${esc((r.rcs_ref || "").slice(0, 10))}</td>
-      <td class="col-type">${esc(r.evidence_type)}</td>
+      <td class="col-type">${esc(evidenceTypeLabel(r.evidence_type))}</td>
       <td class="col-source" title="${esc(r.source)}">${esc(r.source)}</td>
       <td class="col-finished">${formatTime(r.finished_at)}</td>
       <td class="col-tags">${renderTags(r.metadata)}</td>
@@ -457,7 +491,7 @@ function renderDetail(record) {
     ["Branch", esc(record.branch || "")],
     ["Commit", `<span class="commit-ref">${esc(record.rcs_ref)}</span>`],
     ["Procedure", esc(record.procedure_ref)],
-    ["Type", esc(record.evidence_type)],
+    ["Type", esc(evidenceTypeLabel(record.evidence_type))],
     ["Source", esc(record.source)],
     ...(location ? [["Location", location]] : []),
     ["Finished", record.finished_at],
@@ -986,6 +1020,7 @@ document.getElementById("add-another").addEventListener("click", () => {
 const TEMPLATE_STORAGE_KEY = "evidence_templates";
 const TEMPLATE_DEFAULT_FIELDS = ["repo", "branch", "rcs_ref", "procedure_ref", "evidence_type", "source", "tags"];
 
+
 function loadTemplates() {
   try {
     return JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY)) || [];
@@ -1016,7 +1051,7 @@ function applyTemplate(templateId) {
   if (!templateId) {
     for (const f of TEMPLATE_DEFAULT_FIELDS) {
       const input = form.querySelector(`[name="${f}"]`);
-      if (input) input.value = f === "evidence_type" ? "manual" : "";
+      if (input) input.value = f === "evidence_type" ? DEFAULT_EVIDENCE_TYPE : "";
     }
     cfList.innerHTML = "";
     return;
@@ -1027,7 +1062,9 @@ function applyTemplate(templateId) {
 
   for (const f of TEMPLATE_DEFAULT_FIELDS) {
     const input = form.querySelector(`[name="${f}"]`);
-    if (input) input.value = (tpl.defaults && tpl.defaults[f]) || (f === "evidence_type" ? "manual" : "");
+    if (!input) continue;
+    const saved = (tpl.defaults && tpl.defaults[f]) || "";
+    input.value = f === "evidence_type" ? evidenceTypeOr(saved) : saved;
   }
 
   cfList.innerHTML = "";
@@ -1145,7 +1182,12 @@ function renderTemplateEditor(templateId) {
           <label>Procedure <input type="text" id="tpl-def-procedure_ref" value="${esc(defaults.procedure_ref || "")}"></label>
         </div>
         <div class="grid">
-          <label>Evidence type <input type="text" id="tpl-def-evidence_type" value="${esc(defaults.evidence_type || "")}"></label>
+          <label>Evidence type
+            <select id="tpl-def-evidence_type">
+              <option value="">— form default —</option>
+              ${EVIDENCE_TYPES.map(t => `<option value="${t}"${defaults.evidence_type === t ? " selected" : ""}>${EVIDENCE_TYPE_LABELS[t]}</option>`).join("")}
+            </select>
+          </label>
           <label>Source <input type="text" id="tpl-def-source" value="${esc(defaults.source || "")}"></label>
         </div>
         <label>Tags <input type="text" id="tpl-def-tags" value="${esc(defaults.tags || "")}"></label>

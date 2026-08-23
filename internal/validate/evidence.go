@@ -2,12 +2,10 @@ package validate
 
 import (
 	"fmt"
-	"regexp"
+	"strings"
 
 	"github.com/nesono/evidence-store/internal/model"
 )
-
-var evidenceTypeRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func EvidenceCreate(e *model.EvidenceCreate) []string {
 	var errs []string
@@ -26,8 +24,12 @@ func EvidenceCreate(e *model.EvidenceCreate) []string {
 	}
 	if e.EvidenceType == "" {
 		errs = append(errs, "evidence_type is required")
-	} else if !evidenceTypeRe.MatchString(e.EvidenceType) {
-		errs = append(errs, fmt.Sprintf("evidence_type %q must match pattern %s", e.EvidenceType, evidenceTypeRe.String()))
+	} else if !model.ValidEvidenceType(e.EvidenceType) {
+		// Naming the three matters more than naming the rule: a client sending
+		// `bazel` learns nothing from a pattern, and every rejected value here
+		// is a client that has to be changed to send something else.
+		errs = append(errs, fmt.Sprintf("evidence_type %q is invalid, must be one of %s",
+			e.EvidenceType, strings.Join(model.EvidenceTypes, ", ")))
 	}
 	if e.Source == "" {
 		errs = append(errs, "source is required")

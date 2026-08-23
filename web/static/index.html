@@ -52,8 +52,17 @@
                     <label>Procedure <small>(required)</small>
                         <input type="text" name="procedure_ref" placeholder="manual/login-flow" required>
                     </label>
+                    <!-- Three collection methods, not a free-text box: the type
+                         is what tells a reader what a record's metadata means,
+                         and a box produced `bazel`, `pytest`, `gotest` and
+                         `junit` for one of them. Defaults to Manual Test —
+                         this page is how a person files what they ran. -->
                     <label>Evidence type <small>(required)</small>
-                        <input type="text" name="evidence_type" value="manual" list="evidence-types-list" required>
+                        <select name="evidence_type" required>
+                            <option value="ci">CI</option>
+                            <option value="manual_test" selected>Manual Test</option>
+                            <option value="demonstration">Demonstration</option>
+                        </select>
                     </label>
                     <label>Source <small>(required)</small>
                         <input type="text" name="source" placeholder="your name" list="sources-list" required>
@@ -157,7 +166,18 @@
                 <div id="filter-advanced" hidden>
                     <small class="regex-hint">Prefix with <code>~</code> for regex, e.g. <code>~^org/.*</code></small>
                     <div class="grid">
-                        <label>Evidence type <input type="text" name="evidence_type" placeholder="bazel or ~^(bazel|manual)$" list="evidence-types-list"></label>
+                        <!-- A dropdown rather than a box with a regex in it:
+                             with three values there is nothing left to match
+                             loosely. The API still takes a regex here for a
+                             client that wants one. -->
+                        <label>Evidence type
+                            <select name="evidence_type">
+                                <option value="">All types</option>
+                                <option value="ci">CI</option>
+                                <option value="manual_test">Manual Test</option>
+                                <option value="demonstration">Demonstration</option>
+                            </select>
+                        </label>
                         <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
                         <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
                     </div>
@@ -360,7 +380,6 @@
     </main>
 
     <datalist id="repos-list"></datalist>
-    <datalist id="evidence-types-list"></datalist>
     <datalist id="sources-list"></datalist>
 
     <script type="module" src="app.js"></script>

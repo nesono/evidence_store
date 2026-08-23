@@ -365,7 +365,7 @@ func createWithLog(t *testing.T, repo, log string) model.Evidence {
 		"branch":        "main",
 		"rcs_ref":       "abc123",
 		"procedure_ref": "manual/brake-check",
-		"evidence_type": "manual",
+		"evidence_type": "manual_test",
 		"source":        "j.tester",
 		"result":        "PASS",
 		"finished_at":   "2026-03-30 14:00",

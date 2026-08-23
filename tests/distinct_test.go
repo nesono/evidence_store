@@ -36,7 +36,7 @@ func TestDistinctRepo(t *testing.T) {
 
 func TestDistinctEvidenceType(t *testing.T) {
 	repo := "org/distinct_etype_" + uuid.New().String()[:8]
-	for _, etype := range []string{"manual", "ci", "manual"} {
+	for _, etype := range []string{"manual_test", "ci", "manual_test"} {
 		ev := makeEvidence(repo, "main", "ref1", "//pkg:test", "src", model.ResultPass)
 		ev.EvidenceType = etype
 		resp := postJSON(t, "/api/v1/evidence", ev)
@@ -48,7 +48,7 @@ func TestDistinctEvidenceType(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	got := decodeJSON[distinctResponse](t, resp)
 
-	assert.Contains(t, got.Values, "manual")
+	assert.Contains(t, got.Values, "manual_test")
 	assert.Contains(t, got.Values, "ci")
 }
 

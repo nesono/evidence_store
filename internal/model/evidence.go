@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,6 +74,33 @@ func (r EvidenceResult) Valid() bool {
 		return true
 	}
 	return false
+}
+
+// How the evidence was collected. This is a closed set of three, and it is the
+// field that tells a reader what a record's metadata means (DESIGN.md §2.2).
+//
+// It used to be any lowercase word, which produced `bazel`, `pytest`, `gotest`
+// and `junit` — four spellings of "a machine ran it" that no query could treat
+// as one thing, and no reader could tell apart from a category of test. Which
+// runner produced a record is still worth knowing, so it lives in
+// `metadata.collector` where it does not have to carry that meaning too.
+const (
+	// TypeCI is anything a machine ran unattended: a pipeline, a watch mode, a
+	// developer's `bazel test`. Nobody was watching it happen.
+	TypeCI = "ci"
+	// TypeManualTest is a procedure a person carried out and reported.
+	TypeManualTest = "manual_test"
+	// TypeDemonstration is evidence produced by showing the thing working —
+	// to a customer, an auditor, or a room — rather than by testing it.
+	TypeDemonstration = "demonstration"
+)
+
+// EvidenceTypes is the allowed set, in the order a UI should offer it.
+var EvidenceTypes = []string{TypeCI, TypeManualTest, TypeDemonstration}
+
+// ValidEvidenceType reports whether s is one of the three collection methods.
+func ValidEvidenceType(s string) bool {
+	return slices.Contains(EvidenceTypes, s)
 }
 
 type Evidence struct {

@@ -44,7 +44,7 @@ func seedAnalyticsFixture(t *testing.T) analyticsFixture {
 			Branch:       "main",
 			RCSRef:       commit,
 			ProcedureRef: procedure,
-			EvidenceType: "bazel",
+			EvidenceType: "ci",
 			Source:       "ci",
 			Result:       result,
 			FinishedAt:   model.FlexibleTime{Time: fixtureBase.Add(time.Duration(minute) * time.Minute)},
@@ -336,7 +336,7 @@ func TestAnalyticsGroupByEvidenceType(t *testing.T) {
 	body := f.get(t, url.Values{"group_by": {"evidence_type"}})
 	require.NotEmpty(t, body.Tests)
 	for _, s := range body.Tests {
-		assert.Equal(t, "bazel", s.EvidenceType)
+		assert.Equal(t, "ci", s.EvidenceType)
 	}
 }
 
@@ -426,7 +426,7 @@ func seedRefFixture(t *testing.T) string {
 			Branch:       branch,
 			RCSRef:       rcsRef,
 			ProcedureRef: procedure,
-			EvidenceType: "bazel",
+			EvidenceType: "ci",
 			Source:       "ci",
 			Result:       model.ResultPass,
 			FinishedAt:   model.FlexibleTime{Time: fixtureBase},
