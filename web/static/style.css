@@ -952,12 +952,41 @@ body > main {
     font-style: italic;
 }
 
-.dt-end .dt-time {
-    width: auto;
+/* Pico paints a clock into every time field as a 1rem background image inset
+   0.75rem from the right, and reserves the room for it with padding-inline-end.
+   The compact padding here took that room back, so the picture ended up on top
+   of the end of the value — over the AM/PM in a twelve-hour locale. It is the
+   same collision #window-size has with Pico's select chevron, and it goes the
+   same way: drop the image and keep the padding.
+
+   Pico's own selector is `input:not(...)[type=time]`, which outranks a pair of
+   classes, so these rules are scoped through the popup to outrank it in turn.
+
+   What Pico hides behind that image is the browser's real picker button —
+   transparent, and pulled out of the layout by a negative margin so it overlays
+   the painting. Giving it back its width and its opacity puts a control where
+   the picture was: it sits inside the field rather than over it, so it cannot
+   collide, and max-content then sizes the box to the value plus the button —
+   which is also how the box grows for a locale that spells the time out longer
+   than `00:00`. */
+.dt-popup .dt-end input.dt-time {
+    width: max-content;
     padding: 0.1em 0.3em;
+    padding-inline-end: 0.3em;
     margin-bottom: 0 !important;
     font-size: 1em;
     height: auto;
+    background-image: none;
+}
+
+.dt-popup .dt-end input.dt-time::-webkit-calendar-picker-indicator {
+    width: 1em;
+    margin: 0 0 0 0.3em;
+    opacity: 0.5;
+}
+
+.dt-popup .dt-end input.dt-time::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 .dt-end-clear {
