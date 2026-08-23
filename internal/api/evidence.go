@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/nesono/evidence-store/internal/auth"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/store"
@@ -34,6 +36,16 @@ func (h *EvidenceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
+
+	// Who filed this is the server's answer, not the client's. Bound before
+	// validation so that a source filled in from the caller's own subject
+	// satisfies the source-is-required rule.
+	source, err := auth.BindSource(r.Context(), req.Source)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+	req.Source = source
 
 	if errs := validate.EvidenceCreate(&req); len(errs) > 0 {
 		writeErrors(w, http.StatusUnprocessableEntity, errs)
@@ -64,6 +76,23 @@ func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	if len(req.Records) > h.cfg.MaxBatchSize {
 		writeError(w, http.StatusBadRequest, "batch size exceeds maximum")
 		return
+	}
+
+	// Bind every source before validating any record, and refuse the whole
+	// batch if one of them is not the caller's to write.
+	//
+	// The rest of this handler reports a bad record and carries on with the
+	// others, which is right for malformed data: the answer is "we filed what
+	// we could". A source the caller may not write is not malformed data, it is
+	// a claim about who they are, and half-accepting a batch making that claim
+	// would leave evidence filed under a name whose owner never filed it.
+	for i := range req.Records {
+		source, err := auth.BindSource(r.Context(), req.Records[i].Source)
+		if err != nil {
+			writeError(w, http.StatusForbidden, fmt.Sprintf("record %d: %s", i, err))
+			return
+		}
+		req.Records[i].Source = source
 	}
 
 	// Validate all records, separate valid from invalid.

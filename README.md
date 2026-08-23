@@ -145,6 +145,27 @@ UI tab for it are the next phase. See
 [docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including where
 SSO/SAML plugs in.
 
+#### `source` is bound to the caller
+
+A record's `source` is what a reader goes on months later to ask who ran this
+and whether to believe them, so the server decides what it may say:
+
+| Caller | `source` |
+|---|---|
+| `ci` (holds `source:any`) | Taken as sent — a build robot's useful attribution is the build URL, not the robot |
+| Any other principal | Must equal the caller's subject. Left empty, the server fills it in; anything else is `403` |
+| No principal (nothing configured) | Unchanged — there is no identity to pin it to |
+
+In a batch, one record with a source the caller may not write refuses the whole
+batch. A *malformed* record still behaves as it always did: reported in the
+per-record results, with the rest of the batch filed and a `207`.
+
+`admin` does not subsume `ci`, so an administrator is pinned to their own name
+too. Backfilling evidence in somebody else's name means holding both roles, so
+that writing history under another party's identity is always a deliberate
+grant. Configured `EVIDENCE_API_KEYS` are unaffected: every `rw` key is `ci`, so
+the pipelines using one keep writing exactly the `source` they wrote before.
+
 ### Rate limiting
 
 Set `EVIDENCE_RATE_LIMIT_READ_RPS` and/or `EVIDENCE_RATE_LIMIT_WRITE_RPS` to enforce per-caller token-bucket limits on `/api/v1/*` endpoints. Reads (GET/HEAD/OPTIONS) and writes (POST/PUT/PATCH/DELETE) use separate buckets so a flood of reads cannot starve writes.
