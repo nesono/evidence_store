@@ -19,8 +19,8 @@ rewrite of every handler. Section 9 marks the slot it fills.
 ## Existing State
 
 This section describes the tree as it stood when this document was written —
-that is, before phase 1. Sections 1-6 and 8 are now implemented; see the phase
-list at the end.
+that is, before phase 1. Sections 1-8 are now implemented; see the phase list at
+the end.
 
 - `internal/auth/middleware.go` is the whole authorization system. It compares
   the bearer token against `config.APIKey` entries in constant time and puts a
@@ -251,12 +251,36 @@ middleware — only the handler has parsed the body and can see the field.
 - Caller has `source:any` (i.e. `ci`): `source` is accepted as sent.
 - Otherwise: `source` must equal the principal's subject. Empty is filled in
   with the subject; a mismatch is `403`. In a batch, one bad row rejects the
-  batch, consistent with how batch validation already behaves.
+  batch.
 - No principal at all (keys not configured, local dev): unchanged, anything goes.
 
 This is the rule `DESIGN.md:469` describes, and it is what makes `source`
 trustworthy enough to attribute a manual test result to a person — which is
 exactly what the just-merged #89/#94 fix was about.
+
+*Corrected in phase 3 — the batch rule.* This section justified rejecting the
+whole batch as "consistent with how batch validation already behaves", which was
+simply wrong about the code: `CreateBatch` marks a malformed record `error`,
+files the rest, and answers `207`. The behaviour is still right, for a different
+reason. That `207` is the answer to bad *data* — we filed what we could. A
+source the caller may not write is not bad data, it is a claim about who they
+are, and half-accepting a batch containing one would leave evidence filed under
+a name whose owner never filed it. So an unowned source is `403` for the whole
+request, while malformed records keep their per-record `207` exactly as before.
+
+*Also settled in phase 3:* binding runs **before** validation, so a source
+filled in from the subject satisfies the validator's `source is required`. An
+anonymous caller sending nothing still fails there, unchanged. And an empty
+source from a `ci` caller stays a `422` rather than being filled in — the useful
+attribution for a build result is the build URL, and writing the robot's own
+name there would dress a misconfigured adapter up as provenance.
+
+*Known gap.* `web/static/app.js:862` sends whatever the tester typed into the
+Source box, so a human principal that is not `ci` must type their own subject or
+leave the box empty. Nothing breaks today, because the web UI authenticates with
+an `EVIDENCE_API_KEYS` entry and every `rw` key is `ci`. The UI has no idea who
+it is; giving it one is phase 5, and that is where the box should stop being a
+free-text field for a logged-in user.
 
 ### 8. Configuration and compatibility
 
@@ -331,7 +355,9 @@ Each phase is independently shippable and leaves the tree green.
    bindings in Postgres, key minting and hashing, bootstrap admin. *This phase
    is what makes the four roles individually grantable, and a key revocable
    without a redeploy.*
-3. **`source` binding.** Enforce section 7.
+3. **`source` binding.** ✅ Landed. Enforces section 7, which is what turns
+   `source` from a label the client chooses into an attribution the server
+   stands behind.
 4. **Principal admin API + UI.** `/api/v1/principals` CRUD behind
    `principal:admin`; a UI tab for issuing and revoking keys.
 5. **OIDC** (#15 proper), then SAML.

@@ -87,12 +87,17 @@ func rbacSubject(t *testing.T, suffix string) string {
 func TestDBKeyHoldsOnlyTheRolesItWasGranted(t *testing.T) {
 	ts := setupRBACServer(t, nil)
 
-	viewer := issueKey(t, rbacSubject(t, "viewer"), "viewer")
-	ci := issueKey(t, rbacSubject(t, "ci"), "ci")
-	admin := issueKey(t, rbacSubject(t, "admin"), "admin")
+	viewerSubject, ciSubject, adminSubject :=
+		rbacSubject(t, "viewer"), rbacSubject(t, "ci"), rbacSubject(t, "admin")
+	viewer := issueKey(t, viewerSubject, "viewer")
+	ci := issueKey(t, ciSubject, "ci")
+	admin := issueKey(t, adminSubject, "admin")
 
-	evidence := func() any {
-		return makeEvidence("org/rbac_roles", "main", "ref1", "//pkg:test", "ci", model.ResultPass)
+	// Each caller files under its own name. Only ci may do otherwise, and what
+	// this test is about is which endpoints a role reaches — the source rule
+	// itself is tests/source_binding_test.go.
+	evidence := func(source string) any {
+		return makeEvidence("org/rbac_roles", "main", "ref1", "//pkg:test", source, model.ResultPass)
 	}
 	declaration := func(who string) any {
 		return model.InheritanceCreate{
@@ -107,14 +112,14 @@ func TestDBKeyHoldsOnlyTheRolesItWasGranted(t *testing.T) {
 
 	for _, tc := range []struct {
 		role                              string
-		key                               string
+		key, subject                      string
 		read, writeEvidence, writeInherit int
 	}{
-		{"viewer", viewer, http.StatusOK, http.StatusForbidden, http.StatusForbidden},
+		{"viewer", viewer, viewerSubject, http.StatusOK, http.StatusForbidden, http.StatusForbidden},
 		// The one that was impossible before: a key that ingests results all
 		// day and still cannot rewrite what the store says about untested code.
-		{"ci", ci, http.StatusOK, http.StatusCreated, http.StatusForbidden},
-		{"admin", admin, http.StatusOK, http.StatusCreated, http.StatusCreated},
+		{"ci", ci, ciSubject, http.StatusOK, http.StatusCreated, http.StatusForbidden},
+		{"admin", admin, adminSubject, http.StatusOK, http.StatusCreated, http.StatusCreated},
 	} {
 		t.Run(tc.role, func(t *testing.T) {
 			bearer := "Bearer " + tc.key
@@ -123,7 +128,7 @@ func TestDBKeyHoldsOnlyTheRolesItWasGranted(t *testing.T) {
 			assert.Equal(t, tc.read, resp.StatusCode, "GET /evidence")
 			resp.Body.Close()
 
-			resp = doRequest(t, http.MethodPost, ts.URL+"/api/v1/evidence", bearer, evidence())
+			resp = doRequest(t, http.MethodPost, ts.URL+"/api/v1/evidence", bearer, evidence(tc.subject))
 			assert.Equal(t, tc.writeEvidence, resp.StatusCode, "POST /evidence")
 			resp.Body.Close()
 
