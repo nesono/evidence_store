@@ -45,10 +45,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	evidenceStore := store.NewEvidenceStoreWithCache(pool, cfg.AnalyticsCacheTTL)
 	inheritanceStore := store.NewInheritanceStore(pool)
 
+	principalStore := store.NewPrincipalStore(pool)
+
 	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
 	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
 	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes)
+	// Mounted whether or not EVIDENCE_AUTH_DB is on. Issuing keys before
+	// flipping the switch is a reasonable way to prepare a cutover, so the
+	// handler reports the setting rather than refusing to work without it.
+	principalAPI := api.NewPrincipalHandler(principalStore, cfg.Auth.DB)
+	meAPI := api.NewMeHandler(cfg.Auth.DB)
 
 	// An empty endpoint means the operator has switched the lookup off, and the
 	// handler is given no provider rather than not being routed: a form whose
@@ -71,7 +78,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	authenticator := auth.Chain{auth.NewStaticKeyAuthenticator(cfg.APIKeys)}
 	if cfg.Auth.DB {
 		authenticator = append(authenticator,
-			auth.NewDBKeyAuthenticator(store.NewPrincipalStore(pool), slog.Default()))
+			auth.NewDBKeyAuthenticator(principalStore, slog.Default()))
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -100,6 +107,24 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 
 		r.With(auth.Require(auth.PermBlobWrite)).Post("/blobs", blobAPI.Upload)
 		r.With(auth.Require(auth.PermBlobRead)).Get("/blobs/{ref}", blobAPI.Get)
+
+		// Who is calling, for a client deciding what to offer them. The only
+		// route here asserting no permission: authentication has already run,
+		// and a principal holding nothing still deserves to be told so.
+		r.Get("/me", meAPI.Get)
+
+		// Administering the identities that authenticate against this store.
+		// There is no delete: revocation is a timestamp, so that evidence
+		// already attributed to a principal still names something.
+		r.Route("/principals", func(r chi.Router) {
+			r.Use(auth.Require(auth.PermPrincipalAdmin))
+			r.Get("/", principalAPI.List)
+			r.Post("/", principalAPI.Create)
+			r.Put("/{id}/roles", principalAPI.ReplaceRoles)
+			r.Post("/{id}/disable", principalAPI.Disable)
+			r.Post("/{id}/enable", principalAPI.Enable)
+			r.Post("/{id}/rotate", principalAPI.Rotate)
+		})
 	})
 
 	r.Handle("/*", web.StaticHandler())

@@ -15,6 +15,7 @@ go_test(
         "list_offset_sort_test.go",
         "location_test.go",
         "migration_test.go",
+        "principals_api_test.go",
         "rbac_integration_test.go",
         "regex_search_test.go",
         "retention_integration_test.go",

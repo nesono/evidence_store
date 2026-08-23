@@ -71,6 +71,18 @@ var (
 	}
 )
 
+// RoleNames returns the four role names in the order they widen, which is the
+// order an administrator reads them in: a message listing what a caller could
+// have sent, and the checkboxes in the web UI.
+func RoleNames() []string {
+	return []string{
+		string(RoleViewer),
+		string(RoleContributor),
+		string(RoleCI),
+		string(RoleAdmin),
+	}
+}
+
 // ParseRole validates a role name coming from outside the process — config
 // today, a role_bindings row tomorrow.
 func ParseRole(s string) (Role, bool) {

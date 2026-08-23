@@ -10,6 +10,7 @@ import {
   updateAuthUI,
 } from "./common.js";
 import { showAnalytics } from "./analytics.js";
+import { mount as mountAccess, showAccess } from "./access.js";
 import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
 import { renderMarkdown } from "./markdown.js";
@@ -794,6 +795,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     document.querySelectorAll(".tab-content").forEach(s => s.hidden = true);
     document.getElementById(`tab-${target}`).hidden = false;
     if (target === "analytics") showAnalytics();
+    if (target === "access") showAccess();
   });
 });
 
@@ -1453,9 +1455,21 @@ document.getElementById("auth-login")?.addEventListener("click", () => {
 
 // --- Init ---
 
+// Asking the server who we are is what lets the page offer only what this
+// caller can actually do. A store with nothing configured answers
+// "not authenticated", which means open rather than locked out.
+async function loadIdentity() {
+  try {
+    const resp = await apiFetch(`${API_BASE}/me`);
+    if (resp.ok) return await resp.json();
+  } catch { /* offline or mid-restart; fall through */ }
+  return { authenticated: false, permissions: [] };
+}
+
 (async function init() {
   startHealthPolling();
   updateAuthUI();
+  mountAccess(await loadIdentity());
   refreshTemplateDropdown();
   refreshDatalists();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());

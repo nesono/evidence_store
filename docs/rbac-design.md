@@ -358,12 +358,42 @@ Each phase is independently shippable and leaves the tree green.
 3. **`source` binding.** ✅ Landed. Enforces section 7, which is what turns
    `source` from a label the client chooses into an attribution the server
    stands behind.
-4. **Principal admin API + UI.** `/api/v1/principals` CRUD behind
-   `principal:admin`; a UI tab for issuing and revoking keys.
+4. **Principal admin API + UI.** ✅ Landed. `/api/v1/principals` behind
+   `principal:admin`, and an Access tab for issuing, rotating and revoking keys.
+   Also `GET /api/v1/me`, without which a client can only render every control
+   and let the server refuse half of them.
 5. **OIDC** (#15 proper), then SAML.
 
 Phases 1-3 are the RBAC foundation this document is for; 4 and 5 are what it
 was built to carry.
+
+### What phase 4 settled that this document had not
+
+- **No delete.** Section 4 chose `disabled_at` over deletion; the API makes that
+  the only revocation there is. A principal that could be deleted would leave
+  evidence attributed to a name nothing can resolve.
+- **Roles are replaced, not granted and revoked one at a time.** `PUT
+  /principals/{id}/roles` is what an administrator editing a set of checkboxes
+  means, and it is idempotent, so two admins submitting the same intent do not
+  fight.
+- **The last administrator is protected.** Disabling or demoting the only
+  enabled `admin` is refused with `409`. Nothing in this document called for it,
+  and one click in the new UI could otherwise leave a deployment reachable only
+  through `psql`.
+- **Rotation exists.** Section 4 said the plaintext is shown once and never
+  stored, which left a mislaid key with no remedy but discarding the identity —
+  and phase 2's README said exactly that. `POST /principals/{id}/rotate` keeps
+  the identity, the roles, and everything filed under the name, and invalidates
+  the old key at once.
+- **`granted_by` no longer blocks a delete** (migration 000007). The column was
+  declared with no `ON DELETE`, so an administrator who had granted anything
+  could not be removed even by hand. It is `SET NULL` now: provenance going
+  missing is a lesser loss than a role vanishing from someone's account because
+  the colleague who granted it left.
+- **`kind` is not the client's to choose.** `POST /principals` always creates an
+  `api_key`. A `user` principal has nothing to authenticate with until section 9
+  exists, so creating one here would issue an identity nothing can use; the SSO
+  callback is what makes those.
 
 ## Testing
 

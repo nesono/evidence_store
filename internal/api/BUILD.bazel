@@ -8,6 +8,8 @@ go_library(
         "evidence.go",
         "filter.go",
         "inheritance.go",
+        "me.go",
+        "principals.go",
         "response.go",
         "weather.go",
     ],

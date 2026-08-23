@@ -15,6 +15,10 @@
                 <li><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
                 <li><a href="#" class="nav-tab" data-tab="analytics">Analytics</a></li>
                 <li><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
+                <!-- Shown only to a caller holding principal:admin. Rendering a
+                     tab whose every request would be refused is worse than not
+                     offering it; access.js unhides this once /me says so. -->
+                <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access">Access</a></li>
                 <li id="health-status"></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
                 <li><a href="#" id="auth-logout" class="secondary" style="font-size:0.8em" hidden>Logout</a></li>
@@ -370,6 +374,67 @@
                 <div id="an-clusters"></div>
             </div>
         </section>
+
+        <section id="tab-access" class="tab-content" hidden>
+            <h4>Access</h4>
+            <p id="access-db-warning" class="access-warning" hidden>
+                Database authentication is switched off
+                (<code>EVIDENCE_AUTH_DB</code> is not <code>true</code>), so keys
+                issued here will not authenticate yet. They are stored and will
+                start working when it is turned on.
+            </p>
+
+            <details id="access-new">
+                <summary role="button" class="secondary">Issue a key</summary>
+                <form id="access-form">
+                    <div class="grid">
+                        <label>Subject <small>(required)</small>
+                            <input type="text" name="subject" placeholder="ci:nightly-build" required>
+                        </label>
+                        <label>Display name
+                            <input type="text" name="display_name" placeholder="Nightly build">
+                        </label>
+                    </div>
+                    <fieldset id="access-new-roles">
+                        <legend>Roles</legend>
+                    </fieldset>
+                    <button type="submit">Issue key</button>
+                </form>
+            </details>
+
+            <div id="access-feedback"></div>
+
+            <table id="access-table">
+                <thead>
+                    <tr>
+                        <th class="col-subject">Subject</th>
+                        <th class="col-roles">Roles</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-seen">Last seen</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <!-- The key is readable here and nowhere else, ever: only its digest is
+             stored, so this dialog is the one chance to copy it. -->
+        <dialog id="access-key-dialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" id="close-access-key"></button>
+                    <h3>Copy this key now</h3>
+                </header>
+                <p id="access-key-for"></p>
+                <p><strong>It is not stored and will not be shown again.</strong>
+                   If it is lost, rotate the key to issue another.</p>
+                <div class="input-with-button">
+                    <input type="text" id="access-key-value" readonly>
+                    <button type="button" id="access-key-copy" class="secondary">Copy</button>
+                </div>
+            </article>
+        </dialog>
 
         <dialog id="template-dialog">
             <article>

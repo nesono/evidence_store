@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"slices"
 
 	"github.com/google/uuid"
 )
@@ -69,6 +70,22 @@ func (p *Principal) Can(perm Permission) bool {
 	}
 	_, ok := p.perms[perm]
 	return ok
+}
+
+// Permissions returns everything the principal may do, sorted so the answer is
+// stable. Callers are the "who am I" endpoint and the web UI deciding which
+// controls to show — a client that renders a button it will be refused for is
+// worse than one that renders nothing.
+func (p *Principal) Permissions() []Permission {
+	if p == nil {
+		return []Permission{}
+	}
+	perms := make([]Permission, 0, len(p.perms))
+	for perm := range p.perms {
+		perms = append(perms, perm)
+	}
+	slices.Sort(perms)
+	return perms
 }
 
 // HasRole reports whether the principal was granted role directly.

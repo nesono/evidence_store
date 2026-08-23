@@ -5,10 +5,14 @@ go_library(
     srcs = [
         "evidence.go",
         "inheritance.go",
+        "principal.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/validate",
     visibility = ["//:__subpackages__"],
-    deps = ["//internal/model"],
+    deps = [
+        "//internal/auth",
+        "//internal/model",
+    ],
 )
 
 go_test(

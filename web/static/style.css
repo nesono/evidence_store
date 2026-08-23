@@ -1657,3 +1657,61 @@ body > main {
     .an-field { flex: 1 1 12rem; }
     .an-col-labels, .an-col-time { display: none; }
 }
+
+/* --- Access tab --- */
+
+/* Same density as the results table: this is a list of credentials to scan,
+   not prose to read. */
+#access-table {
+    font-size: 0.85rem;
+    table-layout: fixed;
+}
+
+#access-table th,
+#access-table td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+}
+
+#access-table .col-subject { width: 30%; word-break: break-all; }
+#access-table .col-roles   { width: 26%; }
+#access-table .col-status  { width: 7em; }
+#access-table .col-seen    { width: 10em; }
+#access-table .col-actions { width: 16em; text-align: right; }
+
+#access-table .col-actions button {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.78rem;
+    margin: 0 0 0 0.25rem;
+    width: auto;
+    display: inline-block;
+}
+
+/* One role per line, because the description is the point: an admin choosing
+   between contributor and ci should not have to remember the difference. */
+.access-role {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.85rem;
+}
+
+.access-role small { color: var(--pico-muted-color); }
+
+.access-role-editor td { background: var(--pico-code-background-color); }
+
+.access-warning,
+.access-error {
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.access-warning { background: #fdf3e0; color: #8a5a00; }
+.access-error   { background: #fdecea; color: #a32219; }
+.access-ok      { color: #2d9e2d; font-size: 0.85rem; }
+
+/* The key is readable once. Make it look like the thing to copy. */
+#access-key-value {
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.9rem;
+}
