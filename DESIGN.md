@@ -92,8 +92,13 @@ Common optional fields (any type):
 | `photo_uris` | URI[] | Links to photos or screenshots. Images embedded in `observations` are listed here automatically (see 4.4) |
 | `location` | string | Where the test was run, as written: a decimal `lat, lon` pair or a place name |
 | `location_accuracy_m` | float | Radius in metres the fix is good to. Present only when `location` came from the device's receiver and was not edited afterwards |
-| `weather_conditions` | string | Weather conditions during the test |
+| `weather_conditions` | string | Weather conditions during the test, as written: a line fetched for the record's place and hour, or the tester's own account |
+| `weather_observed_at` | timestamp | The hour a fetched reading was for. Present only when `weather_conditions` came from the weather service and was not edited afterwards |
 | `video_uris` | URI[] | Links to video recordings |
+
+`weather_conditions` is text for the same reason `location` is: the tester may correct it. A weather model is a model, and someone standing in a hailstorm it put two valleys away has to be able to say so — a structured reading they cannot argue with would file the model's account over theirs. `weather_observed_at` is what separates the two afterwards: a reading is for an hour, which is the resolution weather models publish at and never the minute of the test, and a line without an hour beside it was written by the person who was there.
+
+The reading is fetched by the server, not by the browser (§4.5), and the client sends only the coordinates and the moment the record already names.
 
 `location` is one string and not a structured point, because the two things a tester has to record are not the same shape: someone on a proving ground has a fix from the device, someone at a bench has "Lab 2, bay 4", and a schema that demands coordinates gets an empty field from the second. Clients that need a point parse the pair back out; a value that is not one is a place name and was never meant to be a point. The store itself does not read the field — a value that came back rounded or reordered would be a claim about the place that the tester never made.
 
@@ -271,6 +276,21 @@ CREATE TABLE blob_ref (
 References are extracted from `observations` when a record is ingested and written in the same transaction; they are also mirrored into `metadata.photo_uris` so clients need not parse markdown. Retention deleting a record releases its references by cascade, and a sweep on the retention worker's schedule deletes objects no reference names. Objects younger than a grace period are spared: between an upload and the record being filed, a blob is legitimately unreachable.
 
 The alternative — deriving reachability from `metadata` on every sweep — needs no table but scans the evidence table each pass, which is the wrong shape for the volumes this store targets.
+
+### 4.5 Weather Lookup
+
+`weather_conditions` (§2.2) can be filled from a weather service for the place and hour the record already names. Nothing is stored by the lookup: it answers with a line for the field, and what is filed is whatever the tester accepted or wrote over it.
+
+```
+GET /api/v1/weather?lat=<deg>&lon=<deg>&at=<RFC 3339>
+ -> {"observed_at": "...", "description": "...", "temperature_c": 18.7, ..., "summary": "..."}
+```
+
+**The server makes the request, not the browser.** The page asking a weather service directly would hand a tester's position to a third party on every form fill, and would leave an operator with no way to see or sever that. Here there is one host to allow through a firewall, one place to point at an internal service, and one setting — `EVIDENCE_WEATHER_ENDPOINT`, emptied — that turns it off. The deployments that most need weather on a test record are proving grounds behind a firewall, so being able to redirect or refuse the traffic is not a footnote.
+
+**The point is coarsened to two decimals before it is passed on**, about a kilometre. That is well under the resolution of any weather model, and coarser than the record's own five decimals, so the service is not told which bench in the building a test ran at.
+
+**Three outcomes, three answers.** A reading is `200`. No reading for that place and hour — a date outside the window the service keeps — is `404`, carrying the service's own account of why, because "out of allowed range from … to …" tells a tester what to do next in a way "unavailable" cannot. An unreachable or broken upstream is `502`, and its detail goes to the server log: a tester can do nothing with a socket error, and the field is one they can still type into. The lookup switched off is `503` saying so, because a form whose button silently does nothing is worse than one that says the button is off here.
 
 ---
 

@@ -20,6 +20,7 @@ go_test(
         "search_ref_test.go",
         "test_log_test.go",
         "utc_normalization_test.go",
+        "weather_test.go",
     ],
     data = ["//migrations"],
     tags = [

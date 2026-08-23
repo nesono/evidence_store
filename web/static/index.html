@@ -99,6 +99,19 @@
                     </span>
                     <small class="location-status" id="location-status"></small>
                 </label>
+                <!-- What the sky was doing while the test ran. Fetched for the
+                     place and hour the record already names, and left editable,
+                     because a tester standing in a hailstorm the model put two
+                     valleys away has to be able to say so. Stored as
+                     metadata.weather_conditions. -->
+                <label class="weather-field">Weather
+                    <small>(conditions while you ran it)</small>
+                    <span class="input-with-button">
+                        <input type="text" name="weather_conditions" placeholder="Overcast, 8 °C, wind 20 km/h, light rain">
+                        <button type="button" id="fill-weather" class="secondary outline" title="Look up the weather for the location and finish time">Look up</button>
+                    </span>
+                    <small class="location-status" id="weather-status"></small>
+                </label>
                 <label>Notes
                     <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>
                 </label>
