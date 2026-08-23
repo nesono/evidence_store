@@ -81,6 +81,18 @@
                 <label>Notes
                     <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>
                 </label>
+                <!-- The tester's running account of the procedure, kept apart from
+                     Notes: notes summarise the record, the log records what was
+                     actually seen, step by step, and is long enough to need room
+                     and formatting. Stored as metadata.observations. -->
+                <label>Test log
+                    <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links)</small>
+                    <textarea name="observations" rows="10" placeholder="1. Powered on the rig — all lights green&#10;2. Pressed the brake pedal — firm, no travel&#10;&#10;Saw `ERR_42` on screen 2 during step 3."></textarea>
+                </label>
+                <div class="test-log-tools">
+                    <button type="button" class="secondary outline" id="test-log-preview-toggle" aria-expanded="false" aria-controls="test-log-preview">Preview</button>
+                </div>
+                <div class="test-log" id="test-log-preview" hidden></div>
                 <fieldset class="custom-fields">
                     <legend>Custom metadata</legend>
                     <div id="custom-fields-list"></div>

@@ -477,6 +477,83 @@ body > main {
     overflow: auto;
 }
 
+/* Test log — rendered markdown, in the record dialog and in the add form's
+   preview. Pico styles headings and lists for a page; inside a dialog those
+   sizes turn a five-line log into something that has to be scrolled, so the
+   whole block is scaled down and its vertical rhythm tightened. */
+.test-log {
+    font-size: 0.9em;
+    margin-top: 0.4em;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    max-height: 420px;
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
+.test-log > :first-child { margin-top: 0; }
+.test-log > :last-child  { margin-bottom: 0; }
+
+.test-log p,
+.test-log ul,
+.test-log ol,
+.test-log blockquote,
+.test-log pre {
+    margin-block: 0.5em;
+}
+
+.test-log h1, .test-log h2, .test-log h3,
+.test-log h4, .test-log h5, .test-log h6 {
+    margin-block: 0.8em 0.3em;
+    line-height: 1.3;
+}
+
+.test-log h1 { font-size: 1.25em; }
+.test-log h2 { font-size: 1.15em; }
+.test-log h3 { font-size: 1.05em; }
+.test-log h4,
+.test-log h5,
+.test-log h6 { font-size: 1em; }
+
+.test-log ul,
+.test-log ol {
+    padding-left: 1.4em;
+}
+
+.test-log li { margin-block: 0.15em; }
+
+.test-log pre {
+    font-size: 0.9em;
+    padding: 0.5em 0.6em;
+    overflow-x: auto;
+}
+
+.test-log blockquote {
+    padding: 0.1em 0.8em;
+    border-left: 3px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color);
+}
+
+.test-log hr {
+    margin-block: 0.8em;
+}
+
+.test-log-empty {
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
+
+.test-log-tools {
+    margin-block: -0.3em 0.2em;
+}
+
+.test-log-tools button {
+    font-size: 0.8em;
+    padding: 0.2em 0.7em;
+    width: auto;
+}
+
 /* Health indicator */
 .health-dot {
     display: inline-block;
