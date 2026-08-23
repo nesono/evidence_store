@@ -53,7 +53,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	version, dirty, err := m.Version()
 	require.NoError(t, err)
 	assert.False(t, dirty)
-	assert.Equal(t, uint(6), version, "the round trip should end at the latest migration")
+	assert.Equal(t, uint(7), version, "the round trip should end at the latest migration")
 }
 
 // ---------------------------------------------------------------------------

@@ -124,9 +124,9 @@ WARN bootstrap admin API key issued - copy it now, it is not stored and will not
 ```
 
 Only a SHA-256 digest of the key is stored, so that line is the single moment it
-can be read. Miss it and the remedy is to disable the principal and seed
-another. Restarts are safe: an existing subject is left alone and no second key
-is minted.
+can be read. Miss it and the remedy is to rotate the key (see below), which
+keeps the identity and its roles. Restarts are safe: an existing subject is left
+alone and no second key is minted.
 
 Keys are always minted by the server, never chosen by a caller — 256 bits from
 `crypto/rand`, prefixed `evs_`. That is what makes a fast digest the right one
@@ -140,10 +140,43 @@ checked first because they cost no round trip. A token neither source
 recognises is `401`; if the database cannot be reached at all, requests get
 `503` rather than being told their key is wrong.
 
-Issuing and revoking keys is `psql` for now — the `/api/v1/principals` API and a
-UI tab for it are the next phase. See
-[docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including where
-SSO/SAML plugs in.
+#### Issuing and revoking keys
+
+The **Access** tab in the web UI is the everyday way in: it lists every
+principal with its roles, when its key was last used, and whether it has been
+revoked, and it issues, rotates and revokes keys. The tab is only shown to a
+caller holding `principal:admin`.
+
+The same operations are `/api/v1/principals`, all behind `principal:admin`:
+
+| Request | Does |
+|---|---|
+| `GET /api/v1/principals` | List every principal, revoked ones included |
+| `POST /api/v1/principals` | Create one and mint its key — `{"subject": "ci:nightly", "display_name": "…", "roles": ["ci"]}` |
+| `PUT /api/v1/principals/{id}/roles` | Set roles to exactly `{"roles": [...]}` |
+| `POST /api/v1/principals/{id}/disable` | Revoke: the key stops working on the next request |
+| `POST /api/v1/principals/{id}/enable` | Restore, with the roles it already had |
+| `POST /api/v1/principals/{id}/rotate` | Issue a fresh key and invalidate the old one |
+
+Creating and rotating return `{"principal": {...}, "api_key": "evs_..."}`. That
+response is the only time the key can be read — only its digest is stored — so
+a mislaid key is fixed by rotating, not by looking it up.
+
+There is **no delete**. Revoking is a timestamp so that evidence already
+attributed to a principal still names something a reader can look up, and so an
+administrator can tell a credential that was taken away from one that never
+existed.
+
+The last enabled administrator cannot be revoked or demoted; the request is
+refused with `409` and a message saying to grant `admin` to somebody else first.
+Otherwise one click could leave a deployment with no way in but `psql`.
+
+`GET /api/v1/me` reports the calling principal, its roles and its permissions.
+It is the one route under `/api/v1` that asserts no permission of its own — the
+web UI uses it to decide what to offer.
+
+See [docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including
+where SSO/SAML plugs in.
 
 #### `source` is bound to the caller
 
