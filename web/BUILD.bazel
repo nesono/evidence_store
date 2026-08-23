@@ -11,6 +11,7 @@ go_library(
         "static/common.js",
         "static/datetime.js",
         "static/datepicker.js",
+        "static/images.js",
         "static/markdown.js",
     ],
     importpath = "github.com/nesono/evidence-store/web",

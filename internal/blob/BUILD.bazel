@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "blob",
+    srcs = [
+        "blob.go",
+        "fs.go",
+        "open.go",
+        "refs.go",
+        "s3.go",
+    ],
+    importpath = "github.com/nesono/evidence-store/internal/blob",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_minio_minio_go_v7//:minio-go",
+        "@com_github_minio_minio_go_v7//pkg/credentials",
+    ],
+)
+
+go_test(
+    name = "blob_test",
+    srcs = [
+        "blob_test.go",
+        "fs_test.go",
+        "refs_test.go",
+        "s3_test.go",
+    ],
+    embed = [":blob"],
+    tags = ["requires-docker"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@com_github_testcontainers_testcontainers_go//:testcontainers-go",
+        "@com_github_testcontainers_testcontainers_go//wait",
+    ],
+)

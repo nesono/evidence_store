@@ -5,11 +5,13 @@ go_library(
     srcs = [
         "config.go",
         "evaluator.go",
+        "sweep.go",
         "worker.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/retention",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/blob",
         "//internal/model",
         "//internal/store",
         "@com_github_google_uuid//:uuid",

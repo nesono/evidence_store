@@ -29,9 +29,10 @@ func setupAuthServer(t *testing.T, keys []config.APIKey) *httptest.Server {
 		MaxBatchSize:    1000,
 		LogLevel:        "ERROR",
 		APIKeys:         keys,
+		Blob:            testBlobConfig,
 	}
 	_ = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	srv := server.New(cfg, testPool)
+	srv := server.New(cfg, testPool, testBlobStore)
 	return httptest.NewServer(srv.Handler())
 }
 

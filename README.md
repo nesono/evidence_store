@@ -30,6 +30,16 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
 | `EVIDENCE_RATE_LIMIT_WRITE_BURST` | `2 × write RPS` | Token-bucket burst capacity for writes |
+| `EVIDENCE_BLOB_BACKEND` | `fs` | Where images live: `fs` or `s3` (see [Images in test logs](#images-in-test-logs)) |
+| `EVIDENCE_BLOB_PATH` | `blobs` | Directory for the `fs` backend |
+| `EVIDENCE_BLOB_S3_ENDPOINT` | *(empty)* | `host:port` of the S3/MinIO endpoint |
+| `EVIDENCE_BLOB_S3_BUCKET` | `evidence-blobs` | Bucket to store blobs in |
+| `EVIDENCE_BLOB_S3_ACCESS_KEY` | *(empty)* | S3 access key |
+| `EVIDENCE_BLOB_S3_SECRET_KEY` | *(empty)* | S3 secret key |
+| `EVIDENCE_BLOB_S3_USE_SSL` | `false` | `true` to talk to the endpoint over HTTPS |
+| `EVIDENCE_BLOB_S3_REGION` | *(empty)* | S3 region |
+| `EVIDENCE_MAX_BLOB_BYTES` | `5242880` (5 MiB) | Largest image that may be uploaded |
+| `EVIDENCE_BLOB_ORPHAN_GRACE_HOURS` | `24` | How long an unreferenced image is kept before the sweep removes it |
 
 ### Authentication
 
@@ -324,12 +334,60 @@ and the record dialog in **Search** renders the log alongside the record's
 fields rather than leaving it as one long line inside the metadata dump.
 
 Supported markdown: headings, ordered and unordered lists, blockquotes,
-horizontal rules, fenced and inline code, bold, italic, and links. Links are
-restricted to `http`, `https`, `mailto`, and same-site targets; everything else
-in a log is escaped, never interpreted as HTML.
+horizontal rules, fenced and inline code, bold, italic, links, and images of
+blobs this store holds. Links are restricted to `http`, `https`, `mailto`, and
+same-site targets; everything else in a log is escaped, never interpreted as
+HTML.
 
 `observations` is plain metadata, so it needs no special handling from any
 client — the Bazel adapter's `--metadata` flag can carry one just as well.
+
+### Images in test logs
+
+Paste or drop an image into the **Test log** box and it is uploaded, referenced
+from the log, and rendered in the record dialog. Images larger than about 1.5 MB
+are downscaled in the browser first.
+
+Images are stored by content: the name of a blob is the SHA-256 of its bytes.
+The photo attached to a FAIL is therefore verifiable against its own name, the
+same image uploaded twice costs one object, and moving the data between backends
+is a copy rather than a migration — a reference names content, not a location.
+
+```bash
+# Upload. The body is the raw image; the Content-Type header is not trusted.
+curl -X POST http://localhost:8000/api/v1/blobs \
+  --data-binary @screenshot.png
+# {"ref":"/api/v1/blobs/sha256:9f2b….png","digest":"sha256:9f2b…",
+#  "content_type":"image/png","size":51231}
+
+# Reference it from a log, and it renders as an image:
+#   ![rig after step 3](/api/v1/blobs/sha256:9f2b….png)
+
+curl http://localhost:8000/api/v1/blobs/sha256:9f2b….png
+```
+
+The references found in a log are also listed under `metadata.photo_uris`, so a
+client can find a record's images without parsing markdown.
+
+A log may embed PNG, JPEG, WebP and GIF, decided by sniffing the bytes rather
+than by what the uploader claims. SVG is refused: it is markup, and markup can
+carry script. An image pointing anywhere but this store renders as a link, never
+as an embed, so reading a log never fetches from a third party.
+
+**Where the bytes live.** `fs` (the default) keeps them in a directory, which is
+enough to run the server from a checkout. `s3` stores them in any S3-compatible
+object store; `docker compose up` runs MinIO and points the app at it.
+
+**Lifetime.** Because blobs are deduplicated they have no single owner, so they
+are kept by reachability: an image is deleted once no record's log references it
+any more. Retention deleting a record releases its references, and the sweep on
+the next retention pass collects what has become unreachable. Images uploaded
+but never filed — a form someone abandoned — are collected the same way, once
+they are older than `EVIDENCE_BLOB_ORPHAN_GRACE_HOURS`.
+
+Deleting evidence therefore removes its images unless another record still shows
+them, and deletion is not immediate: it happens on the next sweep after the
+grace period.
 
 ### Querying evidence
 

@@ -20,6 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/migrate"
 	"github.com/nesono/evidence-store/internal/model"
@@ -32,8 +33,15 @@ var (
 	testPool             *pgxpool.Pool
 	testEvidenceStore    *store.EvidenceStore
 	testInheritanceStore *store.InheritanceStore
+	testBlobRefStore     *store.BlobRefStore
+	testBlobStore        *blob.FS
 	testLogger           = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 )
+
+// testBlobConfig is what every test server uses: a cap small enough that a test
+// can exceed it without shipping megabytes around, and no grace period, so a
+// sweep in a test collects what it should rather than waiting a day.
+var testBlobConfig = config.Blob{MaxBytes: 1 << 20}
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
@@ -80,6 +88,23 @@ func TestMain(m *testing.M) {
 	testPool = pool
 	testEvidenceStore = store.NewEvidenceStore(pool)
 	testInheritanceStore = store.NewInheritanceStore(pool)
+	testBlobRefStore = store.NewBlobRefStore(pool)
+
+	// The suite runs against the filesystem backend: which store holds the
+	// bytes is a deployment choice nothing above the storage layer can see, and
+	// the S3 backend has its own container tests in internal/blob.
+	blobDir, err := os.MkdirTemp("", "evidence-blobs-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create blob directory: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(blobDir)
+
+	testBlobStore, err = blob.NewFS(blobDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create blob store: %v\n", err)
+		os.Exit(1)
+	}
 
 	cfg := &config.Config{
 		DatabaseURL:     dbURL,
@@ -92,9 +117,10 @@ func TestMain(m *testing.M) {
 		// the suite rather than only in unit tests. Every fixture seeds its own
 		// repo, so no test reads another's cached window.
 		AnalyticsCacheTTL: 30 * time.Second,
+		Blob:              testBlobConfig,
 	}
 
-	srv := server.New(cfg, pool)
+	srv := server.New(cfg, pool, testBlobStore)
 	testServer = httptest.NewServer(srv.Handler())
 	defer testServer.Close()
 

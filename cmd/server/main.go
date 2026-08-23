@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/migrate"
 	"github.com/nesono/evidence-store/internal/retention"
@@ -52,7 +53,14 @@ func main() {
 	}
 	slog.Info("database connected")
 
-	srv := server.New(cfg, pool)
+	blobs, err := blob.Open(ctx, cfg.Blob.Options)
+	if err != nil {
+		slog.Error("failed to open blob store", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("blob store ready", "backend", cfg.Blob.Options.Backend)
+
+	srv := server.New(cfg, pool, blobs)
 
 	// Start retention worker if configured.
 	if retentionPath := os.Getenv("EVIDENCE_RETENTION_CONFIG"); retentionPath != "" {
@@ -68,6 +76,10 @@ func main() {
 			slog.Error("failed to create retention worker", "error", err)
 			os.Exit(1)
 		}
+		// Blobs only become unreachable when the records naming them are
+		// deleted, so the sweep rides along with retention rather than running
+		// on a schedule of its own.
+		worker = worker.WithBlobs(blobs, store.NewBlobRefStore(pool), cfg.Blob.OrphanGrace)
 		go worker.Start(ctx)
 		slog.Info("retention worker configured", "config", retentionPath, "interval", retCfg.Interval)
 	}

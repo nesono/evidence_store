@@ -7,12 +7,22 @@
 //
 // The subset is deliberate rather than a shortfall of a full CommonMark
 // implementation: headings, lists, blockquotes, rules, fenced and inline code,
-// bold, italic and links. Nested lists, tables, reference links, images and raw
+// bold, italic, links and images. Nested lists, tables, reference links and raw
 // HTML are not supported — the first two are rare in a hand-written log, and
 // the rest either fetch or embed, which a log has no business doing.
 //
+// Images are the one embed a log may carry, and only ones this store holds:
+// `![shot](/api/v1/blobs/sha256:…)` becomes an image, anything else written as
+// an image degrades to a link. That keeps the property the old blanket
+// exclusion had — a log never causes a fetch from somewhere else, so it cannot
+// carry a tracking pixel or leak a reader's address — while still showing the
+// tester what they photographed.
+//
 // Everything here is a pure string function so the rules can be tested under
-// node (web/tests/markdown_test.mjs); the DOM only ever sees the result.
+// node (web/tests/markdown_test.mjs); the DOM only ever sees the result. That
+// includes images: the tag is emitted with the reference in `data-blob` and no
+// `src`, because fetching it needs an API key that only the caller has. app.js
+// hydrates them after the markup is in the document.
 //
 // Security: the input is untrusted text from whoever filed the evidence, and
 // the output goes into innerHTML. Every path escapes before it emits, and link
@@ -20,6 +30,15 @@
 // into markup or a script URL.
 
 const ALLOWED_URL = /^(?:https?:\/\/|mailto:|\/|#)/i;
+
+// Where blobs are served. A deployment that fronts them from somewhere else —
+// a CDN, a bucket host — passes its own base to renderMarkdown; the reference
+// stored in the log names content, not a location, so nothing has to be
+// rewritten for that to work.
+const DEFAULT_BLOB_BASE = "/api/v1/blobs/";
+
+// A reference this store can serve, and the only thing that becomes an image.
+const BLOB_REF = /^\/api\/v1\/blobs\/(sha256:[0-9a-f]{64})(\.[a-z0-9]{1,5})?$/;
 
 // Which lines end a paragraph by starting something else.
 const BLOCK_START = /^(?:```|#{1,6}\s|>|\s*(?:[-*+]|\d+[.)])\s|(?:-{3,}|\*{3,}|_{3,})\s*$)/;
@@ -54,10 +73,19 @@ function link(url, label) {
   return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 }
 
+// An image, but only for a blob this store holds. The reference goes in
+// `data-blob` rather than `src`: rendering must not fetch anything, and the
+// request needs an API key this module has no business knowing about.
+function image(url, alt, base) {
+  const ref = BLOB_REF.exec(url);
+  if (!ref) return null;
+  return `<img data-blob="${escapeHTML(base)}${ref[1]}${ref[2] || ""}" alt="${alt}" loading="lazy">`;
+}
+
 // Inline formatting for one run of text. The text is escaped first, so every
 // transformation below operates on markup-free input and can only add the tags
 // it means to.
-function inline(text) {
+function inline(text, base) {
   // Code spans win over everything else inside them, so they come out first and
   // go back in last.
   const spans = [];
@@ -67,6 +95,18 @@ function inline(text) {
   });
 
   s = escapeHTML(s);
+
+  // Images come first: the link rule below would otherwise match the `[…](…)`
+  // inside an image and leave the `!` stranded in front of it.
+  //
+  // An image pointing anywhere but this store degrades to a link rather than
+  // being embedded. A log that renders a remote image would fetch it on every
+  // reader's behalf, which is a tracking pixel by another name; a link goes
+  // nowhere until someone decides to follow it.
+  s = s.replace(
+    /!\[([^\]\n]*)\]\(([^)\s]+)\)/g,
+    (whole, alt, url) => image(url, alt, base) ?? link(url, alt || url) ?? whole,
+  );
 
   s = s.replace(/\[([^\]\n]*)\]\(([^)\s]+)\)/g, (whole, label, url) => link(url, label) ?? whole);
 
@@ -88,7 +128,7 @@ function inline(text) {
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${escapeHTML(spans[Number(i)])}</code>`);
 }
 
-export function renderMarkdown(src) {
+export function renderMarkdown(src, { blobBase: base = DEFAULT_BLOB_BASE } = {}) {
   if (src === null || src === undefined) return "";
   const lines = normalize(src).split("\n");
   const out = [];
@@ -127,7 +167,7 @@ export function renderMarkdown(src) {
     const heading = line.match(HEADING);
     if (heading) {
       const level = heading[1].length;
-      out.push(`<h${level}>${inline(heading[2].trim())}</h${level}>`);
+      out.push(`<h${level}>${inline(heading[2].trim(), base)}</h${level}>`);
       i++;
       continue;
     }
@@ -138,7 +178,7 @@ export function renderMarkdown(src) {
         body.push(lines[i].match(QUOTE)[1]);
         i++;
       }
-      out.push(`<blockquote>\n${renderMarkdown(body.join("\n"))}\n</blockquote>`);
+      out.push(`<blockquote>\n${renderMarkdown(body.join("\n"), { blobBase: base })}\n</blockquote>`);
       continue;
     }
 
@@ -147,7 +187,7 @@ export function renderMarkdown(src) {
       const tag = marker === BULLET ? "ul" : "ol";
       const items = [];
       while (i < lines.length && marker.test(lines[i])) {
-        items.push(`<li>${inline(lines[i].match(marker)[1].trim())}</li>`);
+        items.push(`<li>${inline(lines[i].match(marker)[1].trim(), base)}</li>`);
         i++;
       }
       out.push(`<${tag}>\n${items.join("\n")}\n</${tag}>`);
@@ -159,7 +199,7 @@ export function renderMarkdown(src) {
     // between steps means the step ends there.
     const para = [];
     while (i < lines.length && lines[i].trim() && !BLOCK_START.test(lines[i])) {
-      para.push(inline(lines[i].trim()));
+      para.push(inline(lines[i].trim(), base));
       i++;
     }
     out.push(`<p>${para.join("<br>")}</p>`);

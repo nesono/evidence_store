@@ -544,6 +544,35 @@ body > main {
     font-style: italic;
 }
 
+/* An image in a log is evidence, not decoration: it gets room, but never more
+   width than the log it sits in, and never enough height to push the steps
+   around it off the screen. */
+.test-log img {
+    display: block;
+    max-width: 100%;
+    max-height: 320px;
+    width: auto;
+    margin-block: 0.5em;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+}
+
+/* A swept image, or one the reader's key cannot fetch. The log still reads. */
+.test-log-image-missing {
+    display: inline-block;
+    padding: 0.1em 0.4em;
+    color: var(--pico-muted-color);
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* Feedback while a file is over the log field, so a drop that is about to be
+   accepted looks different from one the browser is about to navigate to. */
+.drop-active {
+    outline: 2px dashed var(--pico-primary);
+    outline-offset: -2px;
+}
+
 .test-log-tools {
     margin-block: -0.3em 0.2em;
 }

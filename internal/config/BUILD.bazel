@@ -5,6 +5,7 @@ go_library(
     srcs = ["config.go"],
     importpath = "github.com/nesono/evidence-store/internal/config",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/blob"],
 )
 
 go_test(

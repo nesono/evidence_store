@@ -4,6 +4,7 @@ go_library(
     name = "api",
     srcs = [
         "analytics.go",
+        "blobs.go",
         "evidence.go",
         "filter.go",
         "inheritance.go",
@@ -13,6 +14,7 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/analytics",
+        "//internal/blob",
         "//internal/config",
         "//internal/model",
         "//internal/store",

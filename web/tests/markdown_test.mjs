@@ -216,3 +216,83 @@ test("strips control characters used to forge code placeholders", () => {
   const html = renderMarkdown("\u00000\u0000 and `real`");
   assert.equal(html, "<p>0 and <code>real</code></p>");
 });
+
+// --- Images ---
+
+const REF = "/api/v1/blobs/sha256:" + "a".repeat(64);
+
+test("renders an image for a blob this store holds", () => {
+  const html = renderMarkdown(`![rig after step 3](${REF}.png)`);
+  // No src: rendering must not fetch anything, and the request needs an API key
+  // the renderer has no business knowing about. app.js fills it in.
+  assert.equal(
+    html,
+    `<p><img data-blob="${REF}.png" alt="rig after step 3" loading="lazy"></p>`,
+  );
+});
+
+test("renders an image for a reference without an extension hint", () => {
+  const html = renderMarkdown(`![shot](${REF})`);
+  assert.ok(html.includes(`data-blob="${REF}"`), html);
+});
+
+test("resolves references against a configured blob base", () => {
+  // Moving where the bytes are served from is a config change: a reference
+  // names content, so nothing already written into a log has to be rewritten.
+  const html = renderMarkdown(`![shot](${REF}.png)`, {
+    blobBase: "https://cdn.example.com/blobs/",
+  });
+  assert.ok(html.includes(`data-blob="https://cdn.example.com/blobs/sha256:${"a".repeat(64)}.png"`), html);
+});
+
+test("degrades an image from anywhere else to a link", () => {
+  // Embedding a remote image would fetch it on every reader's behalf, which is
+  // a tracking pixel by another name. The tester's intent is still visible.
+  const html = renderMarkdown("![holiday](https://example.com/photo.png)");
+  assert.ok(!html.includes("<img"), html);
+  assert.ok(html.includes('<a href="https://example.com/photo.png"'), html);
+  assert.ok(html.includes(">holiday</a>"), html);
+});
+
+test("refuses to build an image out of a script or data URL", () => {
+  for (const url of ["javascript:alert(1)", "data:image/svg+xml;base64,PHN2Zz4="]) {
+    const html = renderMarkdown(`![x](${url})`);
+    assert.ok(!html.includes("<img"), html);
+    assert.ok(!html.includes("<a "), html);
+    assert.ok(html.includes("![x]"), html);
+  }
+});
+
+test("refuses references that only look like ours", () => {
+  const cases = [
+    `https://evil.example.com${REF}.png`, // not this origin
+    "/api/v2/blobs/sha256:" + "a".repeat(64), // not this route
+    "/api/v1/blobs/sha256:deadbeef", // not a digest
+    "/api/v1/blobs/sha256:" + "A".repeat(64), // digests are lowercase hex
+    `${REF}.png?x=1`, // a reference carries nothing but the name
+  ];
+  for (const url of cases) {
+    assert.ok(!renderMarkdown(`![x](${url})`).includes("<img"), url);
+  }
+});
+
+test("cannot break out of the alt attribute", () => {
+  const html = renderMarkdown(`![" onerror="alert(1)](${REF}.png)`);
+  assert.ok(!html.includes('onerror="alert(1)"'), html);
+  assert.ok(html.includes("&quot;"), html);
+});
+
+test("renders images inside lists and quotes", () => {
+  const inList = renderMarkdown(`- step one\n- ![shot](${REF}.png)`);
+  assert.ok(inList.includes("<li><img data-blob="), inList);
+
+  const inQuote = renderMarkdown(`> ![shot](${REF}.png)`);
+  assert.ok(inQuote.includes("<blockquote>"), inQuote);
+  assert.ok(inQuote.includes("<img data-blob="), inQuote);
+});
+
+test("leaves an image reference inside a code span alone", () => {
+  const html = renderMarkdown(`paste \`![shot](${REF}.png)\` to embed it`);
+  assert.ok(!html.includes("<img"), html);
+  assert.ok(html.includes("<code>"), html);
+});

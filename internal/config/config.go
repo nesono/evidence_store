@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nesono/evidence-store/internal/blob"
 )
 
 // APIKey represents a configured API key with its access role.
@@ -31,6 +33,20 @@ type Config struct {
 	// AnalyticsQueryTimeout bounds how long a single analytics aggregation may
 	// run. Zero means no budget beyond the server's own request timeout.
 	AnalyticsQueryTimeout time.Duration
+	Blob                  Blob
+}
+
+// Blob configures the content-addressed store behind the images in a test log.
+type Blob struct {
+	Options blob.Options
+	// MaxBytes caps a single upload.
+	MaxBytes int64
+	// OrphanGrace is how long an unreferenced blob is kept before the sweep
+	// removes it. Images are uploaded while a form is still being filled in, so
+	// a blob is unreachable for as long as it takes to finish writing the log —
+	// the grace period is what keeps the sweep from deleting an image out from
+	// under the tester who just pasted it.
+	OrphanGrace time.Duration
 }
 
 // RateLimit configures per-caller token-bucket limits. Zero RPS disables
@@ -59,6 +75,34 @@ func Load() (*Config, error) {
 			envOrDefaultInt("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS", 30)) * time.Second,
 		AnalyticsQueryTimeout: time.Duration(
 			envOrDefaultInt("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS", 15)) * time.Second,
+	}
+
+	cfg.Blob = Blob{
+		Options: blob.Options{
+			Backend: envOrDefault("EVIDENCE_BLOB_BACKEND", "fs"),
+			Path:    envOrDefault("EVIDENCE_BLOB_PATH", "blobs"),
+			S3: blob.S3Config{
+				Endpoint:  os.Getenv("EVIDENCE_BLOB_S3_ENDPOINT"),
+				Bucket:    envOrDefault("EVIDENCE_BLOB_S3_BUCKET", "evidence-blobs"),
+				AccessKey: os.Getenv("EVIDENCE_BLOB_S3_ACCESS_KEY"),
+				SecretKey: os.Getenv("EVIDENCE_BLOB_S3_SECRET_KEY"),
+				UseSSL:    os.Getenv("EVIDENCE_BLOB_S3_USE_SSL") == "true",
+				Region:    os.Getenv("EVIDENCE_BLOB_S3_REGION"),
+			},
+		},
+		// 5 MiB is a generous screenshot and a small photo. Videos will need
+		// their own cap and a streaming upload path (#79).
+		MaxBytes: int64(envOrDefaultInt("EVIDENCE_MAX_BLOB_BYTES", 5<<20)),
+		OrphanGrace: time.Duration(
+			envOrDefaultInt("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS", 24)) * time.Hour,
+	}
+
+	if cfg.Blob.MaxBytes <= 0 {
+		return nil, fmt.Errorf("EVIDENCE_MAX_BLOB_BYTES must be positive")
+	}
+
+	if cfg.Blob.OrphanGrace < 0 {
+		return nil, fmt.Errorf("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS must not be negative")
 	}
 
 	if cfg.AnalyticsCacheTTL < 0 {

@@ -4,6 +4,7 @@ go_library(
     name = "store",
     srcs = [
         "analytics.go",
+        "blobref.go",
         "cache.go",
         "evidence.go",
         "filter.go",
@@ -14,6 +15,7 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/analytics",
+        "//internal/blob",
         "//internal/model",
         "@com_github_google_uuid//:uuid",
         "@com_github_jackc_pgx_v5//:pgx",
@@ -24,12 +26,14 @@ go_library(
 go_test(
     name = "store_test",
     srcs = [
+        "blobref_test.go",
         "cache_test.go",
         "pagination_test.go",
     ],
     embed = [":store"],
     deps = [
         "//internal/analytics",
+        "//internal/blob",
         "//internal/model",
         "@com_github_google_uuid//:uuid",
         "@com_github_stretchr_testify//assert",
