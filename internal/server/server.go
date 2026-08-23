@@ -16,6 +16,7 @@ import (
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/ratelimit"
 	"github.com/nesono/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/internal/weather"
 	"github.com/nesono/evidence-store/web"
 )
 
@@ -49,6 +50,15 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
 	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes)
 
+	// An empty endpoint means the operator has switched the lookup off, and the
+	// handler is given no provider rather than not being routed: a form whose
+	// button does nothing at all is worse than one that says why.
+	var weatherProvider weather.Provider
+	if cfg.Weather.Endpoint != "" {
+		weatherProvider = weather.NewOpenMeteo(cfg.Weather.Endpoint, cfg.Weather.Timeout)
+	}
+	weatherAPI := api.NewWeatherHandler(weatherProvider)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.APIKeys))
 		r.Use(ratelimit.Middleware(cfg.RateLimit))
@@ -65,6 +75,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store) *Server {
 		r.Get("/analytics/summary", analyticsAPI.Summary)
 		r.Get("/analytics/tests", analyticsAPI.Tests)
 		r.Get("/analytics/clusters", analyticsAPI.Clusters)
+
+		// A read: it writes nothing, and the same key that may read a record
+		// may look up the weather that would go on one.
+		r.Get("/weather", weatherAPI.Get)
 
 		// Uploading is a write, reading is a read, so the API-key roles and the
 		// rate limiter's buckets already apply the right rules to both.

@@ -40,6 +40,8 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_BLOB_S3_REGION` | *(empty)* | S3 region |
 | `EVIDENCE_MAX_BLOB_BYTES` | `5242880` (5 MiB) | Largest image that may be uploaded |
 | `EVIDENCE_BLOB_ORPHAN_GRACE_HOURS` | `24` | How long an unreferenced image is kept before the sweep removes it |
+| `EVIDENCE_WEATHER_ENDPOINT` | `https://api.open-meteo.com/v1/forecast` | Forecast API the weather lookup asks. Set it to an empty value to switch the lookup off (see [Weather while a test ran](#weather-while-a-test-ran)) |
+| `EVIDENCE_WEATHER_TIMEOUT_SECONDS` | `10` | Budget for one weather lookup before the tester is told to type the conditions in |
 
 ### Authentication
 
@@ -284,6 +286,7 @@ Base URL: `/api/v1`
 | `GET` | `/api/v1/analytics/summary` | Headline counts for a filter window |
 | `GET` | `/api/v1/analytics/tests` | Per-test reliability metrics (see [Analytics](#analytics)) |
 | `GET` | `/api/v1/analytics/clusters` | Co-failure clusters and the minimal covering set |
+| `GET` | `/api/v1/weather` | Conditions at a point and an hour (see [Weather while a test ran](#weather-while-a-test-ran)) |
 | `GET` | `/healthz` | Health check |
 
 ### Creating evidence
@@ -433,6 +436,85 @@ The record dialog in **Search** shows the location with the record's own fields
 rather than inside the metadata dump, and links a coordinate pair to a map. The
 link is only followed when a reader clicks it — opening a record tells no map
 service what is being read.
+
+### Weather while a test ran
+
+Braking distance on a wet surface is a different measurement from braking
+distance on a dry one, and a record that does not say which cannot be compared
+with the next one. What the sky was doing goes in
+`metadata.weather_conditions`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/evidence \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "repo": "myorg/myrepo",
+    "branch": "main",
+    "rcs_ref": "abc123",
+    "procedure_ref": "manual/brake-check",
+    "evidence_type": "manual",
+    "source": "j.tester",
+    "result": "PASS",
+    "finished_at": "2026-03-30 14:00",
+    "metadata": {
+      "location": "52.51631, 13.37771",
+      "weather_conditions": "Overcast, 8.4 °C, wind 22 km/h, humidity 81%, precipitation 1.2 mm",
+      "weather_observed_at": "2026-03-30T14:00:00Z"
+    }
+  }'
+```
+
+The store can look the conditions up rather than leaving them to be written from
+memory hours later:
+
+```bash
+curl 'http://localhost:8000/api/v1/weather?lat=52.51631&lon=13.37771&at=2026-03-30T14:05:00Z'
+```
+
+```json
+{
+  "observed_at": "2026-03-30T14:00:00Z",
+  "description": "Overcast",
+  "temperature_c": 8.4,
+  "relative_humidity": 81,
+  "precipitation_mm": 1.2,
+  "wind_speed_kph": 22,
+  "summary": "Overcast, 8.4 °C, wind 22 km/h, humidity 81%, precipitation 1.2 mm"
+}
+```
+
+`summary` is the line meant for the field. The lookup stores nothing: what ends
+up on a record is what the tester accepted or wrote over. `observed_at` is the
+hour the reading is for — hourly is the resolution weather models publish at, so
+a reading is never the minute of the test — and it goes on the record as
+`weather_observed_at` only while the line is still the service's. Editing the
+line makes it the tester's account of the weather, which is the point of leaving
+it editable: someone standing in a hailstorm the model put two valleys away has
+to be able to say so, and an hour attached to their sentence would dress it up
+as a reading nobody can go back and check.
+
+In the web UI's **Add Result** tab, **Look up** next to the Weather field asks
+about the coordinates in the Location field, or — when that holds a place name
+like `Lab 2, bay 4`, or nothing — about this device's position. The time it asks
+about is the record's own **Finished at**, so filing yesterday evening's run
+gets yesterday evening's weather. The line is retained by **Submit & Add
+Another**, since a burst of records is made under one sky, and cleared by
+**Submit**, since the next record filled in on that form could be days later.
+
+The request goes out from the server, never from the page: a form fill must not
+hand a tester's position to a third party, and an operator needs one place to
+see it, point it elsewhere, or stop it. The coordinates are coarsened to two
+decimals (about a kilometre, well under the resolution of any weather model)
+before they are passed on, so the service is not told which bench in the
+building a test ran at. Setting `EVIDENCE_WEATHER_ENDPOINT` to an internal
+service redirects the lookup; setting it to an empty value switches it off, and
+the button then says so rather than doing nothing.
+
+The default service is [Open-Meteo](https://open-meteo.com/), which needs no
+account and no key — a feature that only works once somebody has signed up for
+something is a feature most deployments never turn on. It keeps a window of a
+few months around the present, so a lookup for a run outside that window comes
+back saying so, and the conditions are typed in as normal.
 
 ### Querying evidence
 

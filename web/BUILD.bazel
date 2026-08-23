@@ -14,6 +14,7 @@ go_library(
         "static/images.js",
         "static/location.js",
         "static/markdown.js",
+        "static/weather.js",
     ],
     importpath = "github.com/nesono/evidence-store/web",
     visibility = ["//visibility:public"],

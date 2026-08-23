@@ -34,6 +34,24 @@ type Config struct {
 	// run. Zero means no budget beyond the server's own request timeout.
 	AnalyticsQueryTimeout time.Duration
 	Blob                  Blob
+	Weather               Weather
+}
+
+// Weather configures the one lookup this store makes to a service outside it.
+//
+// It is a setting and not a constant because the deployments that most need
+// weather on a test record are the ones on a proving ground behind a firewall:
+// they need to point this at a mirror, at their own site's instruments, or at
+// nothing at all.
+type Weather struct {
+	// Endpoint is the forecast API to ask. Empty disables the lookup, and the
+	// endpoint still answers — saying the button is off here, which is better
+	// than a button that silently does nothing.
+	Endpoint string
+	// Timeout bounds one lookup. A tester is waiting on it with a form open, so
+	// the budget is short: giving up and letting them type is a better outcome
+	// than a spinner that outlasts their patience.
+	Timeout time.Duration
 }
 
 // Blob configures the content-addressed store behind the images in a test log.
@@ -95,6 +113,24 @@ func Load() (*Config, error) {
 		MaxBytes: int64(envOrDefaultInt("EVIDENCE_MAX_BLOB_BYTES", 5<<20)),
 		OrphanGrace: time.Duration(
 			envOrDefaultInt("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS", 24)) * time.Hour,
+	}
+
+	cfg.Weather = Weather{
+		// Open-Meteo needs no account and no key. That matters more than the
+		// choice of service: a feature that only works once someone has signed
+		// up for something is a feature most deployments never turn on.
+		//
+		// Read with LookupEnv rather than envOrDefault so that setting the
+		// variable to nothing means nothing: an operator turning the lookup off
+		// writes an empty value, and having that fall back to the default would
+		// send the traffic they just tried to stop.
+		Endpoint: envOrDefaultSet("EVIDENCE_WEATHER_ENDPOINT", "https://api.open-meteo.com/v1/forecast"),
+		Timeout: time.Duration(
+			envOrDefaultInt("EVIDENCE_WEATHER_TIMEOUT_SECONDS", 10)) * time.Second,
+	}
+
+	if cfg.Weather.Timeout <= 0 && cfg.Weather.Endpoint != "" {
+		return nil, fmt.Errorf("EVIDENCE_WEATHER_TIMEOUT_SECONDS must be positive")
 	}
 
 	if cfg.Blob.MaxBytes <= 0 {
@@ -168,6 +204,16 @@ func ParseAPIKeys(raw string) ([]APIKey, error) {
 
 func envOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// envOrDefaultSet takes the variable at its word when it is set, including when
+// it is set to nothing. For a setting whose empty value means "off", the
+// difference between unset and empty is the whole point.
+func envOrDefaultSet(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
 		return v
 	}
 	return fallback

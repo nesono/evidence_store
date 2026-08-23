@@ -21,6 +21,7 @@ import {
   parseCoordinates,
   requestPosition,
 } from "./location.js";
+import { describeReading, fetchWeather, weatherPoint } from "./weather.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -436,6 +437,27 @@ function renderLocation(metadata) {
   return html;
 }
 
+// What the weather was doing, as a detail field.
+//
+// The hour beside it is what separates a reading from a description: a line the
+// tester wrote has no hour and does not get one, and a line the service gave is
+// for an hour that is not the minute of the test. Anything that is not a string
+// is some other client's field and stays in the dump.
+function renderWeather(metadata) {
+  if (typeof metadata.weather_conditions !== "string" || !metadata.weather_conditions.trim()) {
+    return "";
+  }
+
+  let html = esc(metadata.weather_conditions.trim());
+  if (typeof metadata.weather_observed_at === "string") {
+    const observed = new Date(metadata.weather_observed_at);
+    if (!Number.isNaN(observed.getTime())) {
+      html += ` <small class="weather-observed">reading for ${formatTime(metadata.weather_observed_at)} UTC</small>`;
+    }
+  }
+  return html;
+}
+
 function renderDetail(record) {
   const el = document.getElementById("detail-content");
   const metadata = record.metadata || {};
@@ -450,6 +472,15 @@ function renderDetail(record) {
     delete rest.location_accuracy_m;
   }
 
+  // Weather goes beside it for the same reason: braking distance on a wet
+  // surface is a different measurement from braking distance on a dry one, and
+  // a reader comparing two records needs to see which without reading JSON.
+  const weather = renderWeather(metadata);
+  if (weather) {
+    delete rest.weather_conditions;
+    delete rest.weather_observed_at;
+  }
+
   const fields = [
     ["ID", record.id],
     ["Result", resultBadge(record.result)],
@@ -460,6 +491,7 @@ function renderDetail(record) {
     ["Type", esc(record.evidence_type)],
     ["Source", esc(record.source)],
     ...(location ? [["Location", location]] : []),
+    ...(weather ? [["Weather", weather]] : []),
     ["Finished", record.finished_at],
     ["Ingested", record.ingested_at],
     ["Inherited", record.inherited ? "Yes" : "No"],
@@ -773,6 +805,18 @@ async function submitEvidence(andAnother) {
       metadata.location_accuracy_m = accuracy;
     }
   }
+  const weather = form.weather_conditions.value.trim();
+  if (weather) {
+    metadata.weather_conditions = weather;
+    // Which hour the reading was for is filed only while the line is still the
+    // service's, the same rule the location's accuracy follows: an edited line
+    // is the tester's account of the weather, and an hour attached to it would
+    // dress that up as a reading nobody can go back and check.
+    if (form.weather_conditions.dataset.fromService === weather &&
+        form.weather_conditions.dataset.observedAt) {
+      metadata.weather_observed_at = form.weather_conditions.dataset.observedAt;
+    }
+  }
   Object.assign(metadata, readCustomFields());
 
   const record = {
@@ -809,9 +853,11 @@ async function submitEvidence(andAnother) {
       form.querySelector('[name="result"]:checked').checked = false;
       form.notes.value = "";
       form.observations.value = "";
-      // Location is deliberately kept: a tester filing several runs in a row is
-      // still standing where they were, and re-locating for each one is how the
-      // field stops being filled.
+      // Location and weather are deliberately kept: a tester filing several
+      // runs in a row is still standing where they were, under the same sky,
+      // and looking both up again for each one is how the fields stop being
+      // filled. The reading is an hour wide, which is longer than a burst of
+      // manual records takes.
       updateTestLogPreview();
       const currentTpl = document.getElementById("template-select").value;
       if (currentTpl) {
@@ -820,6 +866,11 @@ async function submitEvidence(andAnother) {
         document.getElementById("custom-fields-list").innerHTML = "";
       }
     } else {
+      // Submit ends the sitting, and a weather line does not keep: it is a
+      // reading for one hour, and the next record filled in on this form could
+      // be days later. Leaving it in the box is how yesterday's sky ends up
+      // filed as today's.
+      clearWeather();
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code> &mdash; switching to search...</p>`;
       setTimeout(() => {
         document.querySelector('[data-tab="search"]').click();
@@ -945,6 +996,72 @@ document.querySelector('#add-form [name="location"]').addEventListener("input", 
   status.textContent = "";
   status.classList.remove("location-status-error");
 });
+
+// --- Weather ---
+
+// The lookup is asked for the place and hour the record already names, so it
+// wants a location and a finish time filled in first — but neither is required,
+// and neither is worth refusing over: an empty location falls back to the
+// device, and an empty finish time means the run is happening now, which is
+// what the record itself would say.
+document.getElementById("fill-weather").addEventListener("click", async (e) => {
+  const input = document.querySelector('#add-form [name="weather_conditions"]');
+  const status = document.getElementById("weather-status");
+  const btn = e.currentTarget;
+
+  status.classList.remove("location-status-error");
+  status.textContent = "Looking up the weather…";
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+
+  try {
+    const location = document.querySelector('#add-form [name="location"]').value.trim();
+    const point = await weatherPoint(location, requestPosition);
+
+    // The record's own finish time, not now: a tester filing yesterday
+    // evening's run wants yesterday evening's weather, and today's would be a
+    // plausible-looking untruth. An unparseable box is left to the field's own
+    // preview to complain about; the lookup just asks about now.
+    const rawFinished = document.querySelector('#add-form [name="finished_at"]').value.trim();
+    const when = rawFinished ? parseUserDateTime(rawFinished) : null;
+
+    const reading = await fetchWeather(point, when);
+    input.value = reading.summary;
+    input.dataset.fromService = reading.summary;
+    if (reading.observed_at) input.dataset.observedAt = reading.observed_at;
+    status.textContent = describeReading(reading, point.source);
+  } catch (err) {
+    status.textContent = err.message;
+    status.classList.add("location-status-error");
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+});
+
+// Editing the line makes it the tester's account of the weather again — which
+// is the point of leaving it editable, since the person who was standing there
+// outranks a model that put the hailstorm two valleys away. The hour the
+// service read stops applying to it at the same moment.
+document.querySelector('#add-form [name="weather_conditions"]').addEventListener("input", (e) => {
+  if (e.target.dataset.fromService === e.target.value) return;
+  delete e.target.dataset.fromService;
+  delete e.target.dataset.observedAt;
+  const status = document.getElementById("weather-status");
+  status.textContent = "";
+  status.classList.remove("location-status-error");
+});
+
+// clearWeather empties the field and everything that was true about it.
+function clearWeather() {
+  const input = document.querySelector('#add-form [name="weather_conditions"]');
+  input.value = "";
+  delete input.dataset.fromService;
+  delete input.dataset.observedAt;
+  const status = document.getElementById("weather-status");
+  status.textContent = "";
+  status.classList.remove("location-status-error");
+}
 
 function updateUtcPreview(input) {
   const preview = document.querySelector(`.utc-preview[data-preview-for="${input.name}"]`);

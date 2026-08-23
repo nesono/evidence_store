@@ -671,7 +671,8 @@ body > main {
    margin, which .input-with-button zeroes to sit the button beside the box — so
    this label carries the gap to Notes itself. Written against #add-form because
    that is what zeroes label margins above. */
-#add-form .location-field {
+#add-form .location-field,
+#add-form .weather-field {
     margin-bottom: var(--pico-spacing, 1rem);
 }
 
@@ -695,6 +696,17 @@ body > main {
 .location-accuracy {
     color: var(--pico-muted-color);
     font-variant-numeric: tabular-nums;
+}
+
+/* The hour a weather reading was for, next to the line it qualifies. The
+   dialog's dd breaks anywhere so that a long id or URL cannot widen it; that
+   rule split this note as "readi / ng for", so it wraps as one unit instead. */
+.weather-observed {
+    color: var(--pico-muted-color);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    word-break: normal;
+    display: inline-block;
 }
 
 /* Custom metadata fields */
