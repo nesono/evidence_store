@@ -640,6 +640,23 @@ func (g *generator) manualObservations(result, procedure string, images []manual
 	return b.String(), photoURIs
 }
 
+// blobDestination describes where images are about to be written, so a run
+// against the wrong backend is visible immediately rather than discovered
+// later as a broken image in the UI. config.Load reads EVIDENCE_BLOB_* the
+// same way cmd/server does, but nothing forces this script to be run with the
+// variables a docker-compose deployment set for the server -- see the printed
+// warning in seedManualTests.
+func blobDestination(opts blob.Options) string {
+	switch opts.Backend {
+	case "", "fs":
+		return fmt.Sprintf("the local fs backend at %q", opts.Path)
+	case "s3":
+		return fmt.Sprintf("the s3 backend (bucket %q at %s)", opts.S3.Bucket, opts.S3.Endpoint)
+	default:
+		return fmt.Sprintf("the %q backend", opts.Backend)
+	}
+}
+
 // seedManualTests writes a curated batch of manual_test records: real images
 // in the blob store, blob_ref rows for reachability, and an exact 50/20/20/10
 // pass/skip/error/fail split (issue #81). It runs after the bulk COPY loop and
@@ -655,7 +672,16 @@ func seedManualTests(ctx context.Context, pool *pgxpool.Pool, g *generator, n in
 		return fmt.Errorf("open blob store: %w", err)
 	}
 
-	fmt.Printf("\nseeding %s manual test record(s) with images in the blob store...\n", humanize(int64(n)))
+	fmt.Printf("\nseeding %s manual test record(s) with images in %s\n", humanize(int64(n)), blobDestination(cfg.Blob.Options))
+	if cfg.Blob.Options.Backend == "" || cfg.Blob.Options.Backend == "fs" {
+		fmt.Println("  note: this is the local-disk default, not necessarily where your running " +
+			"server reads blobs from. If the server is behind docker-compose (EVIDENCE_BLOB_BACKEND=s3 " +
+			"against MinIO), the images this writes will not be visible there -- rerun with matching " +
+			"EVIDENCE_BLOB_* variables, e.g.:\n" +
+			"    EVIDENCE_BLOB_BACKEND=s3 EVIDENCE_BLOB_S3_ENDPOINT=localhost:9000 \\\n" +
+			"    EVIDENCE_BLOB_S3_BUCKET=evidence-blobs EVIDENCE_BLOB_S3_ACCESS_KEY=evidence \\\n" +
+			"    EVIDENCE_BLOB_S3_SECRET_KEY=evidence-secret go run ./scripts/seed-demo ...")
+	}
 
 	images, err := buildImagePool(ctx, store, g.rnd)
 	if err != nil {
