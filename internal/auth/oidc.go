@@ -129,16 +129,19 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*Cl
 	}, nil
 }
 
-// RolesFor turns the groups a provider reports into roles here.
+// RolesForGroups turns the groups an identity provider reports into roles here.
+//
+// Shared by both front ends, because which of our groups means which of your
+// roles is one question and does not become two just because the protocol did.
 //
 // A group with no entry in the map grants nothing, so pointing this store at a
-// company IdP does not hand every employee an account that can write. Unknown
-// role names are dropped for the same reason a role_bindings row naming one
-// grants nothing: a mapping can outlive the constant it names.
-func (p *OIDCProvider) RolesFor(groups []string) []string {
+// company directory does not hand every employee an account that can write.
+// Unknown role names are dropped for the same reason a role_bindings row naming
+// one grants nothing: a mapping can outlive the constant it names.
+func RolesForGroups(roleMap map[string]string, groups []string) []string {
 	seen := map[string]struct{}{}
 	for _, group := range groups {
-		name, mapped := p.cfg.RoleMap[group]
+		name, mapped := roleMap[group]
 		if !mapped {
 			continue
 		}

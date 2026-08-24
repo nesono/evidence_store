@@ -132,7 +132,7 @@ func TestMain(m *testing.M) {
 		Blob:              testBlobConfig,
 	}
 
-	srv := server.New(cfg, pool, testBlobStore, nil)
+	srv := server.New(cfg, pool, testBlobStore, server.SSO{})
 	testServer = httptest.NewServer(srv.Handler())
 	defer testServer.Close()
 

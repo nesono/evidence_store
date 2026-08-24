@@ -54,7 +54,56 @@ type Auth struct {
 	BootstrapAdmin string
 	// OIDC lets people log in with the identity provider they already use.
 	OIDC OIDC
+	// SAML is the same thing for a directory that speaks SAML instead. Both can
+	// be configured at once; a company migrating between them will have a
+	// period where both are true.
+	SAML SAML
+	// RoleMap turns a group an identity provider reports into a role here, for
+	// whichever provider reported it. A group with no entry grants nothing, so
+	// adding the store to a company directory does not hand every employee an
+	// account that can write.
+	//
+	// Shared rather than per-provider because it is one question — which of our
+	// groups means which of your roles — and an operator running both front
+	// ends against one directory should answer it once.
+	RoleMap map[string]string
+	// Session is what any login leaves behind, whichever front end made it.
+	Session Session
 }
+
+// SAML configures single sign-on against a directory that speaks SAML. Empty
+// IDPMetadataURL and IDPMetadataFile switch it off, which is the default.
+//
+// Everything behind Principal is shared with OIDC; this is a second front end,
+// which is the arrangement docs/rbac-design.md was written to make possible.
+type SAML struct {
+	// Exactly one of these says where to find the provider's metadata: a URL to
+	// fetch at startup, or a file for a deployment that will not reach out.
+	IDPMetadataURL  string
+	IDPMetadataFile string
+	// RootURL is this store's own public address, e.g.
+	// https://evidence.example.com. Every URL in the metadata handed to the
+	// provider is built from it, so a wrong value produces metadata the
+	// provider will accept and a login it will misdeliver.
+	RootURL string
+	// EntityID names this service provider to the identity provider. Defaults
+	// to the metadata URL, which is the usual convention.
+	EntityID string
+	// CertFile and KeyFile are the service provider's X.509 keypair, used to
+	// sign authentication requests and decrypt assertions. Required: most
+	// providers will not register a service provider without one, and a
+	// self-signed pair is a single openssl command.
+	CertFile string
+	KeyFile  string
+	// Which assertion attributes carry what. Providers disagree wildly, and
+	// the long URN forms are what Entra and ADFS actually send.
+	EmailAttribute  string
+	NameAttribute   string
+	GroupsAttribute string
+}
+
+// Enabled reports whether a SAML login flow should be mounted at all.
+func (s SAML) Enabled() bool { return s.IDPMetadataURL != "" || s.IDPMetadataFile != "" }
 
 // OIDC configures single sign-on. Empty Issuer switches it off, which is the
 // default: a store nobody has pointed at an identity provider has no login
@@ -76,9 +125,17 @@ type OIDC struct {
 	// RoleMap turns a group the provider reports into a role here. A group with
 	// no entry grants nothing, so adding the store to an IdP does not hand
 	// every employee an account that can write.
+	//
+	// A copy of Auth.RoleMap, which is where the setting lives now that two
+	// front ends share it.
 	RoleMap map[string]string
-	// SessionTTL is how long a login lasts before the person signs in again.
-	SessionTTL time.Duration
+}
+
+// Session configures what a login leaves behind, for whichever front end made
+// it. A session is a session regardless of how somebody proved who they were.
+type Session struct {
+	// TTL is how long a login lasts before the person signs in again.
+	TTL time.Duration
 	// CookieSecure keeps the session cookie off plain HTTP. On by default and
 	// only worth turning off for local development, which is the one place a
 	// store is legitimately reached without TLS.
@@ -219,23 +276,72 @@ func Load() (*Config, error) {
 		RedirectURL:  strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_REDIRECT_URL")),
 		Scopes:       splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
 		GroupsClaim:  envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
-		SessionTTL: time.Duration(
-			envOrDefaultInt("EVIDENCE_SESSION_TTL_HOURS", 12)) * time.Hour,
+	}
+
+	session := Session{
+		TTL: time.Duration(envOrDefaultInt("EVIDENCE_SESSION_TTL_HOURS", 12)) * time.Hour,
 		// Secure unless explicitly turned off, so that forgetting the variable
 		// fails towards the safe posture rather than away from it.
 		CookieSecure: os.Getenv("EVIDENCE_COOKIE_SECURE") != "false",
 	}
 
-	roleMap, err := ParseRoleMap(os.Getenv("EVIDENCE_OIDC_ROLE_MAP"))
+	// One mapping for both front ends. EVIDENCE_OIDC_ROLE_MAP is still read,
+	// because it is what the OIDC release documented and an operator who set it
+	// should not have their groups quietly stop granting anything.
+	roleMapVar, raw := "EVIDENCE_GROUP_ROLE_MAP", os.Getenv("EVIDENCE_GROUP_ROLE_MAP")
+	if raw == "" {
+		roleMapVar, raw = "EVIDENCE_OIDC_ROLE_MAP", os.Getenv("EVIDENCE_OIDC_ROLE_MAP")
+	}
+	roleMap, err := ParseRoleMap(raw)
 	if err != nil {
-		return nil, fmt.Errorf("EVIDENCE_OIDC_ROLE_MAP: %w", err)
+		return nil, fmt.Errorf("%s: %w", roleMapVar, err)
 	}
 	oidc.RoleMap = roleMap
+
+	saml := SAML{
+		IDPMetadataURL:  strings.TrimSpace(os.Getenv("EVIDENCE_SAML_IDP_METADATA_URL")),
+		IDPMetadataFile: strings.TrimSpace(os.Getenv("EVIDENCE_SAML_IDP_METADATA_FILE")),
+		RootURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("EVIDENCE_SAML_ROOT_URL")), "/"),
+		EntityID:        strings.TrimSpace(os.Getenv("EVIDENCE_SAML_ENTITY_ID")),
+		CertFile:        strings.TrimSpace(os.Getenv("EVIDENCE_SAML_CERT_FILE")),
+		KeyFile:         strings.TrimSpace(os.Getenv("EVIDENCE_SAML_KEY_FILE")),
+		// Defaults that match what most providers send when nobody has
+		// configured a claim mapping at their end.
+		EmailAttribute:  envOrDefault("EVIDENCE_SAML_EMAIL_ATTRIBUTE", "email"),
+		NameAttribute:   envOrDefault("EVIDENCE_SAML_NAME_ATTRIBUTE", "displayName"),
+		GroupsAttribute: envOrDefault("EVIDENCE_SAML_GROUPS_ATTRIBUTE", "groups"),
+	}
 
 	cfg.Auth = Auth{
 		DB:             os.Getenv("EVIDENCE_AUTH_DB") == "true",
 		BootstrapAdmin: strings.TrimSpace(os.Getenv("EVIDENCE_BOOTSTRAP_ADMIN")),
 		OIDC:           oidc,
+		SAML:           saml,
+		RoleMap:        roleMap,
+		Session:        session,
+	}
+
+	if saml.Enabled() {
+		if saml.IDPMetadataURL != "" && saml.IDPMetadataFile != "" {
+			return nil, fmt.Errorf("set EVIDENCE_SAML_IDP_METADATA_URL or EVIDENCE_SAML_IDP_METADATA_FILE, not both")
+		}
+		for name, value := range map[string]string{
+			"EVIDENCE_SAML_ROOT_URL":  saml.RootURL,
+			"EVIDENCE_SAML_CERT_FILE": saml.CertFile,
+			"EVIDENCE_SAML_KEY_FILE":  saml.KeyFile,
+		} {
+			if value == "" {
+				return nil, fmt.Errorf("%s is required when SAML is configured", name)
+			}
+		}
+		// Same reason as OIDC: a session resolves to a principal, and without
+		// the table there is nothing for a login to become.
+		if !cfg.Auth.DB {
+			return nil, fmt.Errorf("SAML requires EVIDENCE_AUTH_DB=true")
+		}
+		if session.TTL <= 0 {
+			return nil, fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
+		}
 	}
 
 	if oidc.Enabled() {
@@ -249,7 +355,7 @@ func Load() (*Config, error) {
 				return nil, fmt.Errorf("%s is required when EVIDENCE_OIDC_ISSUER is set", name)
 			}
 		}
-		if oidc.SessionTTL <= 0 {
+		if session.TTL <= 0 {
 			return nil, fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
 		}
 		// Sessions resolve to principals, which is the table EVIDENCE_AUTH_DB

@@ -41,7 +41,7 @@ func setupRBACServer(t *testing.T, keys []config.APIKey) *httptest.Server {
 		Auth:            config.Auth{DB: true},
 		Blob:            testBlobConfig,
 	}
-	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, nil).Handler())
+	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }

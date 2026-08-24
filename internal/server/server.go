@@ -25,10 +25,20 @@ type Server struct {
 	pool       *pgxpool.Pool
 }
 
-// New builds the router. sso is nil unless an identity provider is configured;
-// discovering one is network I/O that can fail, so it happens at startup in
-// cmd/server rather than here, where there would be nowhere to report it.
-func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso *auth.OIDCProvider) *Server {
+// SSO carries whichever login front ends are configured. Both may be nil, and
+// both may be set: a company moving between protocols will have a period where
+// each is somebody's way in.
+//
+// They are built in cmd/server rather than here because discovering an issuer
+// or fetching provider metadata is network I/O that can fail, and here there
+// would be nowhere to report it.
+type SSO struct {
+	OIDC *auth.OIDCProvider
+	SAML *auth.SAMLProvider
+}
+
+// New builds the router.
+func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Server {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -59,7 +69,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso *auth.OID
 	// flipping the switch is a reasonable way to prepare a cutover, so the
 	// handler reports the setting rather than refusing to work without it.
 	principalAPI := api.NewPrincipalHandler(principalStore, cfg.Auth.DB)
-	meAPI := api.NewMeHandler(cfg.Auth.DB, sso != nil)
+	meAPI := api.NewMeHandler(cfg.Auth.DB, api.LoginMethods{OIDC: sso.OIDC != nil, SAML: sso.SAML != nil})
 
 	// An empty endpoint means the operator has switched the lookup off, and the
 	// handler is given no provider rather than not being routed: a form whose
@@ -99,14 +109,35 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso *auth.OID
 	// page needs just as much as "yes".
 	r.Get("/auth/config", meAPI.AuthConfig)
 
-	// The login flow, outside /api/v1: these are browser navigations, not API
-	// calls, and /auth/login has to be reachable by somebody who is not yet
+	// The login flows, outside /api/v1: these are browser navigations, not API
+	// calls, and a login route has to be reachable by somebody who is not yet
 	// authenticated — which is the whole point of it.
-	if sso != nil {
-		ssoAPI := api.NewSSOHandler(sso, principalStore, sessionStore, cfg.Auth.OIDC, slog.Default())
-		r.Get("/auth/login", ssoAPI.Login)
-		r.Get("/auth/callback", ssoAPI.Callback)
+	if sso.OIDC != nil || sso.SAML != nil {
+		ssoAPI := api.NewSSOHandler(api.SSODeps{
+			OIDC:        sso.OIDC,
+			SAML:        sso.SAML,
+			Principals:  principalStore,
+			Sessions:    sessionStore,
+			SAMLPending: store.NewSAMLRequestStore(pool),
+			RoleMap:     cfg.Auth.RoleMap,
+			Session:     cfg.Auth.Session,
+			Logger:      slog.Default(),
+		})
+
+		// Logging out is the same act whichever front end started the session.
 		r.Post("/auth/logout", ssoAPI.Logout)
+
+		if sso.OIDC != nil {
+			r.Get("/auth/login", ssoAPI.Login)
+			r.Get("/auth/callback", ssoAPI.Callback)
+		}
+		if sso.SAML != nil {
+			r.Get(auth.SAMLMetadataPath, ssoAPI.SAMLMetadata)
+			r.Get(auth.SAMLLoginPath, ssoAPI.SAMLLogin)
+			// A form POST from the provider's origin, which is why the request
+			// id it answers is remembered server-side rather than in a cookie.
+			r.Post(auth.SAMLACSPath, ssoAPI.SAMLACS)
+		}
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {

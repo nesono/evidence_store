@@ -337,6 +337,14 @@ Landing #15 on top of it means:
   endpoint replaces the OIDC callback and attribute statements replace claims.
   Everything from `Principal` inward is unchanged. That is the point of doing
   RBAC first.
+
+  *As implemented:* it held. SAML added three routes, one table and one provider
+  type; both front ends converge on a single `completeLogin`, and the upsert,
+  role reconciliation, session, cookies, CSRF and `source` binding are the same
+  code for both. The only thing that had to move was the group-to-role map,
+  which was under `OIDC` and is now shared — which of our groups means which of
+  your roles is one question, and it does not become two because the protocol
+  did.
 - **Web UI.** `web/static/common.js` stops `prompt()`ing: a 401 redirects to
   `/auth/login`, and `apiFetch` relies on the session cookie (with a CSRF token
   on writes, since cookies are ambient where bearer headers were not). The
@@ -363,11 +371,38 @@ Each phase is independently shippable and leaves the tree green.
    Also `GET /api/v1/me`, without which a client can only render every control
    and let the server refuse half of them.
 5. **OIDC** (#15 proper) ✅ Landed — sessions, the login flow, group-to-role
-   mapping, CSRF, and the web UI. **SAML** is the remaining step: the same shape
-   with an Assertion Consumer Service in place of the callback.
+   mapping, CSRF, and the web UI. **SAML** ✅ Landed — the same shape with an
+   Assertion Consumer Service in place of the callback, and nothing behind
+   `Principal` changed to accommodate it. *This document is now fully
+   implemented.*
 
 Phases 1-3 are the RBAC foundation this document is for; 4 and 5 are what it
 was built to carry.
+
+### What SAML settled that this document had not
+
+- **The request id cannot live in a cookie.** An assertion arrives as a form
+  POST from the provider's origin, and `SameSite=Lax` is precisely what stops a
+  cookie riding along with a cross-site POST. Migration 000009 adds
+  `saml_requests`; loosening the session cookie to `SameSite=None` instead would
+  have traded a real protection for a detail of one flow. It also means a login
+  survives landing on a different replica than the one that started it.
+- **Every pending request is a candidate.** The POST carries nothing of ours to
+  say which browser it belongs to, so `InResponseTo` is checked against all
+  outstanding ids. What that rules out is an assertion for a login nobody here
+  started, or one replayed after its window closed; the signature rules out the
+  rest. The id is consumed on use, so the same assertion does not work twice.
+- **A service provider needs a keypair.** Not mentioned anywhere in this
+  document, and not optional in practice — most providers will not register one
+  without it. Required at startup rather than generated, because an ephemeral
+  key would silently invalidate the metadata the provider was given.
+- **Attribute names are configuration, with fallbacks.** Providers disagree far
+  more than OIDC ones do. The three that matter are settings, and the common
+  spellings are tried when the configured name is absent, so an operator does
+  not discover the difference by reading a failed login.
+- **`NameID` is the SAML `sub`.** An assertion without one is refused rather
+  than falling back to the email address, which is exactly the mistake that
+  splits somebody in two when they are renamed.
 
 ### What phase 5 settled that this document had not
 

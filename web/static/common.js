@@ -53,15 +53,27 @@ export function promptForAPIKey(msg) {
 // is what this page did before there was anywhere to log in.
 let ssoEnabled = false;
 
+// Which login flows this deployment has. With one there is somewhere to go;
+// with two the page has a choice to offer rather than a guess to make.
+let loginMethods = [];
+
+const LOGIN_PATHS = { oidc: "/auth/login", saml: "/auth/saml/login" };
+const LOGIN_LABELS = { oidc: "Log in with SSO", saml: "Log in with SAML" };
+
 // Whether *this* page is authenticated by a session rather than a pasted key.
 // It decides two things: that writes carry a CSRF token, and that the header
 // offers logging out rather than clearing a key.
 let usingSession = false;
 
-export function setAuthMode({ sso, session }) {
+export function setAuthMode({ sso, session, methods }) {
   ssoEnabled = !!sso;
   usingSession = !!session;
+  loginMethods = (methods || []).filter(m => m in LOGIN_PATHS);
   updateAuthUI();
+}
+
+export function availableLoginMethods() {
+  return loginMethods.slice();
 }
 
 export function isUsingSession() {
@@ -84,10 +96,41 @@ function isWrite(method) {
   return !!method && !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
-export function goToLogin() {
-  // A full navigation, not fetch: the flow is a series of redirects through
-  // the identity provider and has to happen in the address bar.
-  window.location.href = "/auth/login";
+// goToLogin sends the browser to a login flow.
+//
+// A full navigation, not fetch: the flow is a series of redirects through the
+// identity provider, and in SAML's case a form the provider posts back — none
+// of which can happen inside an XHR.
+//
+// With two providers configured and no preference given, ask rather than
+// guess: sending somebody to the wrong directory produces a login screen they
+// have no account on, which reads as the store being broken.
+export function goToLogin(method) {
+  const chosen = method || (loginMethods.length === 1 ? loginMethods[0] : null);
+  if (!chosen) {
+    showLoginChoice();
+    return;
+  }
+  window.location.href = LOGIN_PATHS[chosen] || LOGIN_PATHS.oidc;
+}
+
+function showLoginChoice() {
+  const dialog = document.getElementById("login-choice-dialog");
+  if (!dialog) {
+    // No dialog on the page: better to reach the first provider than nothing.
+    window.location.href = LOGIN_PATHS[loginMethods[0]] || LOGIN_PATHS.oidc;
+    return;
+  }
+  const list = document.getElementById("login-choice-list");
+  list.innerHTML = "";
+  for (const method of loginMethods) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = LOGIN_LABELS[method] || method;
+    button.addEventListener("click", () => goToLogin(method));
+    list.appendChild(button);
+  }
+  dialog.showModal();
 }
 
 // Wrapper around fetch that carries whichever credential this page has, and

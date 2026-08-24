@@ -34,7 +34,16 @@ This starts PostgreSQL 16 and the Evidence Store server on port 8000.
 | `EVIDENCE_OIDC_REDIRECT_URL` | *(empty)* | Where the provider sends the browser back, e.g. `https://evidence.example.com/auth/callback` |
 | `EVIDENCE_OIDC_SCOPES` | `openid,profile,email` | Scopes to request |
 | `EVIDENCE_OIDC_GROUPS_CLAIM` | `groups` | Claim carrying group membership (Entra calls it `roles`) |
-| `EVIDENCE_OIDC_ROLE_MAP` | *(empty)* | `group:role` pairs, e.g. `eng-all:contributor,eng-leads:admin` |
+| `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. `EVIDENCE_OIDC_ROLE_MAP` is still read as a fallback |
+| `EVIDENCE_SAML_IDP_METADATA_URL` | *(empty — SAML off)* | Identity provider metadata to fetch at startup (see [SAML](#saml)) |
+| `EVIDENCE_SAML_IDP_METADATA_FILE` | *(empty)* | The same metadata from a file, for a deployment that will not reach out |
+| `EVIDENCE_SAML_ROOT_URL` | *(empty)* | This store's public address, e.g. `https://evidence.example.com` |
+| `EVIDENCE_SAML_ENTITY_ID` | *(metadata URL)* | What this service provider calls itself |
+| `EVIDENCE_SAML_CERT_FILE` | *(empty)* | Service provider certificate, PEM |
+| `EVIDENCE_SAML_KEY_FILE` | *(empty)* | Service provider private key, PEM |
+| `EVIDENCE_SAML_EMAIL_ATTRIBUTE` | `email` | Assertion attribute carrying the address |
+| `EVIDENCE_SAML_NAME_ATTRIBUTE` | `displayName` | Assertion attribute carrying the display name |
+| `EVIDENCE_SAML_GROUPS_ATTRIBUTE` | `groups` | Assertion attribute carrying group membership |
 | `EVIDENCE_SESSION_TTL_HOURS` | `12` | How long a login lasts |
 | `EVIDENCE_COOKIE_SECURE` | `true` | `false` only for local development over plain HTTP |
 | `EVIDENCE_RATE_LIMIT_READ_RPS` | `0` (disabled) | Sustained reads per second per caller (see [Rate limiting](#rate-limiting)) |
@@ -196,7 +205,7 @@ export EVIDENCE_OIDC_ISSUER="https://login.example.com/realms/engineering"
 export EVIDENCE_OIDC_CLIENT_ID="evidence-store"
 export EVIDENCE_OIDC_CLIENT_SECRET="…"
 export EVIDENCE_OIDC_REDIRECT_URL="https://evidence.example.com/auth/callback"
-export EVIDENCE_OIDC_ROLE_MAP="eng-all:contributor,eng-leads:admin"
+export EVIDENCE_GROUP_ROLE_MAP="eng-all:contributor,eng-leads:admin"
 ```
 
 Register the redirect URL with the provider, and make sure the ID token carries
@@ -210,7 +219,7 @@ revoking somebody stops the browser they left open rather than waiting for a
 token to expire. `GET /auth/config` reports whether a login flow exists, which
 is how the UI knows to offer one.
 
-**Roles come from groups.** A group with no entry in `EVIDENCE_OIDC_ROLE_MAP`
+**Roles come from groups.** A group with no entry in `EVIDENCE_GROUP_ROLE_MAP`
 grants nothing, so pointing this store at a company directory does not hand
 every employee an account that can write. On each login the roles derived from
 group claims are reconciled to what the token now says — losing a group loses
@@ -234,9 +243,53 @@ Source box is filled in with their own subject and locked, because that is the
 only value the server will accept from them — see
 [`source` is bound to the caller](#source-is-bound-to-the-caller).
 
-SAML is the same shape with a different front end and has not been built yet;
-everything from `Principal` inward is already independent of where a caller came
-from.
+### SAML
+
+Same idea, different protocol, and the same everything else — a SAML login
+produces the identical principal, session, roles and `source` binding an OIDC
+one does.
+
+```bash
+export EVIDENCE_AUTH_DB=true
+export EVIDENCE_SAML_IDP_METADATA_URL="https://login.example.com/app/xxx/sso/saml/metadata"
+export EVIDENCE_SAML_ROOT_URL="https://evidence.example.com"
+export EVIDENCE_SAML_CERT_FILE=/etc/evidence/saml.crt
+export EVIDENCE_SAML_KEY_FILE=/etc/evidence/saml.key
+export EVIDENCE_GROUP_ROLE_MAP="eng-all:contributor,eng-leads:admin"
+```
+
+A service provider needs its own X.509 keypair, which most identity providers
+will not register one without. A self-signed pair is enough:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -keyout saml.key -out saml.crt -subj "/CN=evidence.example.com"
+```
+
+Then point the provider at `https://evidence.example.com/auth/saml/metadata`,
+which describes this store in the XML they expect — where assertions go and
+which certificate signs requests. Serving it beats writing it by hand, which is
+how the two ends end up disagreeing about a URL.
+
+`GET /auth/saml/login` starts a login and `POST /auth/saml/acs` is the Assertion
+Consumer Service the provider posts back to. Logging out is the same
+`POST /auth/logout` either way.
+
+Attribute names vary a great deal between providers, so the three that matter
+are configurable, and the common spellings — `mail`, `cn`, `memberOf`, and the
+`urn:oid:` and `schemas.xmlsoap.org` forms Entra and ADFS send — are tried
+automatically when the configured name is not present.
+
+**Both front ends can run at once.** A company moving between protocols will
+have a period where each is somebody's way in, so the UI offers a choice when
+two are configured and goes straight there when there is one.
+
+One detail worth knowing if you are reading the schema: an assertion arrives as
+a form POST from the provider's own origin, and a `SameSite=Lax` cookie is
+exactly what a browser will not send on a cross-site POST. The id of the request
+it answers therefore lives in a `saml_requests` row rather than a cookie —
+loosening the session cookie to `SameSite=None` to avoid that table would have
+traded a real protection for a detail of one flow.
 
 See [docs/rbac-design.md](docs/rbac-design.md) for the whole plan, including
 where SSO/SAML plugs in.

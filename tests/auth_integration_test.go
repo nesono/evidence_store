@@ -33,7 +33,7 @@ func setupAuthServer(t *testing.T, keys []config.APIKey) *httptest.Server {
 		Blob:            testBlobConfig,
 	}
 	_ = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	srv := server.New(cfg, testPool, testBlobStore, nil)
+	srv := server.New(cfg, testPool, testBlobStore, server.SSO{})
 	return httptest.NewServer(srv.Handler())
 }
 

@@ -122,7 +122,7 @@ func setupWeatherServer(t *testing.T, upstream string) *httptest.Server {
 		Blob:            testBlobConfig,
 		Weather:         config.Weather{Endpoint: upstream, Timeout: 5 * time.Second},
 	}
-	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, nil).Handler())
+	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -177,7 +177,7 @@ func TestWeatherEndpointIsAReadNotAWrite(t *testing.T) {
 		Blob:            testBlobConfig,
 		Weather:         config.Weather{Endpoint: upstream, Timeout: 5 * time.Second},
 	}
-	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, nil).Handler())
+	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
 	defer ts.Close()
 
 	resp := doRequest(t, http.MethodGet, ts.URL+"/api/v1/weather?lat=52.5&lon=13.4", "Bearer reader", nil)
