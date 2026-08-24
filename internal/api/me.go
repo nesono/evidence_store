@@ -18,12 +18,35 @@ import (
 // or the store has nothing configured — and a principal holding no roles at all
 // still deserves to be told that that is what it holds.
 type MeHandler struct {
-	authDB bool
-	sso    bool
+	authDB  bool
+	methods LoginMethods
 }
 
-func NewMeHandler(authDB, sso bool) *MeHandler {
-	return &MeHandler{authDB: authDB, sso: sso}
+// LoginMethods is which ways in this deployment has. A page offering "log in"
+// when there are two of them has a choice to present, and one when there is a
+// single method should just go there.
+type LoginMethods struct {
+	OIDC bool
+	SAML bool
+}
+
+// Names lists the configured methods, in the order a page should offer them.
+func (m LoginMethods) Names() []string {
+	names := make([]string, 0, 2)
+	if m.OIDC {
+		names = append(names, "oidc")
+	}
+	if m.SAML {
+		names = append(names, "saml")
+	}
+	return names
+}
+
+// Any reports whether there is anywhere at all to log in.
+func (m LoginMethods) Any() bool { return m.OIDC || m.SAML }
+
+func NewMeHandler(authDB bool, methods LoginMethods) *MeHandler {
+	return &MeHandler{authDB: authDB, methods: methods}
 }
 
 type meResponse struct {
@@ -42,6 +65,9 @@ type meResponse struct {
 	// to. Without it the web UI has nothing to offer on a 401 but a prompt for
 	// an API key, which is what it did before there was one.
 	SSOEnabled bool `json:"sso_enabled"`
+	// LoginMethods names them, because with two configured a page has a choice
+	// to offer rather than a place to go.
+	LoginMethods []string `json:"login_methods"`
 	// ViaSession distinguishes a logged-in browser from a pasted API key, which
 	// is what decides whether the page shows a logout button and whether it
 	// must send a CSRF token on writes.
@@ -57,8 +83,9 @@ type meResponse struct {
 // here is a secret. Whether a login button exists is plain from the login page,
 // and a store that answers "no" is one whose UI keeps asking for an API key.
 func (h *MeHandler) AuthConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{
-		"sso_enabled":     h.sso,
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sso_enabled":     h.methods.Any(),
+		"login_methods":   h.methods.Names(),
 		"auth_db_enabled": h.authDB,
 	})
 }
@@ -68,7 +95,8 @@ func (h *MeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Roles:         []string{},
 		Permissions:   []string{},
 		AuthDBEnabled: h.authDB,
-		SSOEnabled:    h.sso,
+		SSOEnabled:    h.methods.Any(),
+		LoginMethods:  h.methods.Names(),
 	}
 
 	principal, ok := auth.PrincipalFrom(r.Context())

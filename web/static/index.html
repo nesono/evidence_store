@@ -418,6 +418,19 @@
             </table>
         </section>
 
+        <!-- Only shown when two providers are configured. Guessing which one
+             somebody belongs to produces a login screen they have no account
+             on, which reads as the store being broken. -->
+        <dialog id="login-choice-dialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" id="close-login-choice"></button>
+                    <h3>How would you like to log in?</h3>
+                </header>
+                <div id="login-choice-list"></div>
+            </article>
+        </dialog>
+
         <!-- The key is readable here and nowhere else, ever: only its digest is
              stored, so this dialog is the one chance to copy it. -->
         <dialog id="access-key-dialog">

@@ -49,11 +49,10 @@ func ssoServer(t *testing.T, idp *mockIdP, roleMap map[string]string) (string, *
 		Scopes:       []string{"openid", "profile", "email", "groups"},
 		GroupsClaim:  "groups",
 		RoleMap:      roleMap,
-		SessionTTL:   time.Hour,
-		// The test server speaks plain HTTP, which is the one setting a real
-		// deployment should never copy.
-		CookieSecure: false,
 	}
+	// The test server speaks plain HTTP, which is the one setting a real
+	// deployment should never copy.
+	sessionCfg := config.Session{TTL: time.Hour, CookieSecure: false}
 
 	provider, err := auth.NewOIDCProvider(context.Background(), oidcCfg)
 	require.NoError(t, err)
@@ -65,11 +64,13 @@ func ssoServer(t *testing.T, idp *mockIdP, roleMap map[string]string) (string, *
 		MaxPageSize:     1000,
 		MaxBatchSize:    1000,
 		LogLevel:        "ERROR",
-		Auth:            config.Auth{DB: true, OIDC: oidcCfg},
-		Blob:            testBlobConfig,
+		Auth: config.Auth{
+			DB: true, OIDC: oidcCfg, RoleMap: roleMap, Session: sessionCfg,
+		},
+		Blob: testBlobConfig,
 	}
 
-	ts.Config.Handler = server.New(cfg, testPool, testBlobStore, provider).Handler()
+	ts.Config.Handler = server.New(cfg, testPool, testBlobStore, server.SSO{OIDC: provider}).Handler()
 	ts.Start()
 	t.Cleanup(ts.Close)
 

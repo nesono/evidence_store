@@ -1452,6 +1452,10 @@ document.getElementById("auth-logout")?.addEventListener("click", async (e) => {
   await logout();
 });
 
+document.getElementById("close-login-choice")?.addEventListener("click", () => {
+  document.getElementById("login-choice-dialog").close();
+});
+
 document.getElementById("auth-login")?.addEventListener("click", (e) => {
   e.preventDefault();
   // Where there is an identity provider, that is what "log in" means. The API
@@ -1526,7 +1530,11 @@ async function loadIdentity() {
 
   const [authConfig, me] = await Promise.all([loadAuthConfig(), loadIdentity()]);
   ssoAvailable = !!authConfig.sso_enabled;
-  setAuthMode({ sso: ssoAvailable, session: me.via_session });
+  setAuthMode({
+    sso: ssoAvailable,
+    session: me.via_session,
+    methods: authConfig.login_methods,
+  });
   mountAccess(me);
   pinSourceToCaller(me);
   refreshTemplateDropdown();

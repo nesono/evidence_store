@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -29,18 +30,39 @@ const loginTimeout = 10 * time.Minute
 // came from, so this is genuinely a front end. Replacing it with SAML changes
 // these three routes and nothing else.
 type SSOHandler struct {
-	provider   *auth.OIDCProvider
-	principals *store.PrincipalStore
-	sessions   *store.SessionStore
-	cfg        config.OIDC
-	logger     *slog.Logger
+	// Either may be nil; a deployment can have one front end, both, or neither.
+	oidc *auth.OIDCProvider
+	saml *auth.SAMLProvider
+
+	principals  *store.PrincipalStore
+	sessions    *store.SessionStore
+	samlPending *store.SAMLRequestStore
+	roleMap     map[string]string
+	cfg         config.Session
+	logger      *slog.Logger
 }
 
-func NewSSOHandler(p *auth.OIDCProvider, principals *store.PrincipalStore, sessions *store.SessionStore, cfg config.OIDC, logger *slog.Logger) *SSOHandler {
+type SSODeps struct {
+	OIDC        *auth.OIDCProvider
+	SAML        *auth.SAMLProvider
+	Principals  *store.PrincipalStore
+	Sessions    *store.SessionStore
+	SAMLPending *store.SAMLRequestStore
+	RoleMap     map[string]string
+	Session     config.Session
+	Logger      *slog.Logger
+}
+
+func NewSSOHandler(d SSODeps) *SSOHandler {
+	logger := d.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SSOHandler{provider: p, principals: principals, sessions: sessions, cfg: cfg, logger: logger}
+	return &SSOHandler{
+		oidc: d.OIDC, saml: d.SAML,
+		principals: d.Principals, sessions: d.Sessions, samlPending: d.SAMLPending,
+		roleMap: d.RoleMap, cfg: d.Session, logger: logger,
+	}
 }
 
 // Login sends the browser to the identity provider.
@@ -60,7 +82,7 @@ func (h *SSOHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// server memory, so a login survives the request landing on a different
 	// replica than the one that started it.
 	http.SetCookie(w, h.cookie(loginStateCookie, state+"|"+verifier, loginTimeout))
-	http.Redirect(w, r, h.provider.AuthCodeURL(state, verifier), http.StatusFound)
+	http.Redirect(w, r, h.oidc.AuthCodeURL(state, verifier), http.StatusFound)
 }
 
 // Callback is where the provider sends the browser back.
@@ -102,7 +124,7 @@ func (h *SSOHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := h.provider.Exchange(r.Context(), code, verifier)
+	claims, err := h.oidc.Exchange(r.Context(), code, verifier)
 	if err != nil {
 		// A token that does not verify is the one thing here that is worth
 		// alarming about: everything above is a browser being confused, and
@@ -112,11 +134,117 @@ func (h *SSOHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.completeLogin(w, r, claims)
+}
+
+// SAMLMetadata is what an administrator registers with the identity provider.
+// Serving it beats asking somebody to write the XML by hand, which is how the
+// two ends end up disagreeing about a URL or a certificate.
+func (h *SSOHandler) SAMLMetadata(w http.ResponseWriter, _ *http.Request) {
+	metadata, err := h.saml.Metadata()
+	if err != nil {
+		h.fail(w, "produce SAML metadata", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/samlmetadata+xml")
+	_, _ = w.Write(metadata)
+}
+
+// SAMLLogin sends the browser to the identity provider.
+func (h *SSOHandler) SAMLLogin(w http.ResponseWriter, r *http.Request) {
+	redirect, requestID, err := h.saml.AuthnRequest("/")
+	if err != nil {
+		h.fail(w, "start login", err)
+		return
+	}
+
+	// Remembered server-side rather than in a cookie: the assertion comes back
+	// as a cross-site POST, and SameSite=Lax is exactly what stops a cookie
+	// riding along with one.
+	if err := h.samlPending.Remember(r.Context(), requestID, time.Now().Add(loginTimeout)); err != nil {
+		h.fail(w, "start login", err)
+		return
+	}
+
+	http.Redirect(w, r, redirect.String(), http.StatusFound)
+}
+
+// SAMLACS is the Assertion Consumer Service: where the identity provider posts
+// the assertion. It is section 9's "same shape, different front end" — from the
+// claims onward this is the OIDC path.
+func (h *SSOHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "malformed assertion post")
+		return
+	}
+
+	pending, err := h.samlPending.Pending(r.Context())
+	if err != nil {
+		h.fail(w, "check the login", err)
+		return
+	}
+
+	claims, err := h.saml.ParseAssertion(r, pending)
+	if err != nil {
+		// An assertion that does not validate is the one thing in this flow
+		// worth alarming about. The reason stays in the log: it names which
+		// check failed, which is more use to an attacker than to the browser.
+		h.logger.Error("failed to validate SAML assertion", "error", err)
+		writeError(w, http.StatusUnauthorized, "could not verify the assertion; start again at "+auth.SAMLLoginPath)
+		return
+	}
+
+	// Consume the request so the same assertion cannot be presented twice.
+	// Best effort: the assertion's own validity window bounds a replay even if
+	// this fails, and refusing a login somebody has already completed would be
+	// the worse outcome.
+	if id := requestIDOf(r); id != "" {
+		if err := h.samlPending.Forget(r.Context(), id); err != nil {
+			h.logger.Warn("failed to consume saml request id", "error", err)
+		}
+	}
+
+	h.completeLogin(w, r, claims)
+}
+
+// requestIDOf reads the InResponseTo the provider echoed back, so the matching
+// pending request can be consumed. Reading it from the assertion the library
+// already validated would be better; it does not expose it, and re-parsing the
+// XML to find out would mean trusting a second, unvalidated read of the same
+// document. So this is deliberately only used to clean up, never to decide
+// anything.
+func requestIDOf(r *http.Request) string {
+	raw, err := base64.StdEncoding.DecodeString(r.PostFormValue("SAMLResponse"))
+	if err != nil {
+		return ""
+	}
+	const marker = `InResponseTo="`
+	start := strings.Index(string(raw), marker)
+	if start < 0 {
+		return ""
+	}
+	rest := string(raw)[start+len(marker):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// completeLogin is everything that happens once a front end has established who
+// somebody is: the principal, the roles their groups imply, the session, and
+// the cookies.
+//
+// Both front ends end here, which is the arrangement docs/rbac-design.md was
+// written to make possible — from this point nothing can tell an OIDC login
+// from a SAML one, and neither can the session, the roles, or the source
+// binding downstream of them.
+func (h *SSOHandler) completeLogin(w http.ResponseWriter, r *http.Request, claims *auth.Claims) {
 	principal, err := h.principals.UpsertFromIdP(r.Context(), store.IdPLogin{
 		ExternalID:  claims.ExternalID(),
 		Subject:     claims.PrincipalSubject(),
 		DisplayName: claims.Name,
-		Roles:       h.provider.RolesFor(claims.Groups),
+		Roles:       auth.RolesForGroups(h.roleMap, claims.Groups),
 	})
 	if errors.Is(err, store.ErrSubjectTaken) {
 		// An API key is already using this person's name. Guessing they are the
@@ -145,7 +273,7 @@ func (h *SSOHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, "start the session", err)
 		return
 	}
-	expires := time.Now().Add(h.cfg.SessionTTL)
+	expires := time.Now().Add(h.cfg.TTL)
 	if _, err := h.sessions.Create(r.Context(), principal.ID, auth.HashKey(token), expires, r.UserAgent()); err != nil {
 		h.fail(w, "start the session", err)
 		return
@@ -157,11 +285,11 @@ func (h *SSOHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, h.cookie(auth.SessionCookie, token, h.cfg.SessionTTL))
+	http.SetCookie(w, h.cookie(auth.SessionCookie, token, h.cfg.TTL))
 	// Readable by script, unlike the session cookie: the page has to be able to
 	// echo it back in a header, which is the whole point of a double submit.
 	// Knowing it is useless without also being able to send the session cookie.
-	http.SetCookie(w, h.readableCookie(auth.CSRFCookie, csrf, h.cfg.SessionTTL))
+	http.SetCookie(w, h.readableCookie(auth.CSRFCookie, csrf, h.cfg.TTL))
 
 	h.logger.Info("login", "subject", principal.Subject, "roles", principal.Roles)
 	http.Redirect(w, r, "/", http.StatusFound)

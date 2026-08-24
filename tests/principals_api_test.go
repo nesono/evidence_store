@@ -357,6 +357,7 @@ type meBody struct {
 	Permissions   []string `json:"permissions"`
 	AuthDBEnabled bool     `json:"auth_db_enabled"`
 	SSOEnabled    bool     `json:"sso_enabled"`
+	LoginMethods  []string `json:"login_methods"`
 	ViaSession    bool     `json:"via_session"`
 }
 

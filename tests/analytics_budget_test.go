@@ -33,7 +33,7 @@ func serverWithBudget(t *testing.T, budget time.Duration) *httptest.Server {
 		Blob:                  testBlobConfig,
 	}
 
-	srv := httptest.NewServer(server.New(cfg, testPool, testBlobStore, nil).Handler())
+	srv := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }
