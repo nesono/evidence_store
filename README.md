@@ -1039,9 +1039,10 @@ exercising the UI at realistic scale.
 
 ```bash
 docker compose up -d db
-go run ./scripts/seed-demo                 # 2,000,000 records (~1 minute)
-go run ./scripts/seed-demo --count 50000   # a smaller set
-go run ./scripts/seed-demo --truncate      # replace existing evidence
+go run ./scripts/seed-demo                       # 2,000,000 CI records + 3,000 manual tests
+go run ./scripts/seed-demo --count 50000         # a smaller CI set
+go run ./scripts/seed-demo --manual-tests 500    # fewer manual test logs
+go run ./scripts/seed-demo --truncate            # replace existing evidence
 ```
 
 It writes to Postgres with `COPY` rather than through the API — the batch
@@ -1053,3 +1054,12 @@ Records are clustered onto a limited set of repositories, branches and commits s
 that filtering returns meaningful groups, with a realistic verdict distribution
 (88% `PASS`) and timestamps biased towards the recent past. `--seed` makes a run
 reproducible. Two million records occupy roughly 900 MB including indexes.
+
+Manual tests are seeded separately from that bulk CI noise: `--manual-tests`
+(3,000 by default) generates a curated batch of `manual_test` records with a
+fixed 50/20/20/10 pass/skip/error/fail split, markdown logs of varying length,
+and synthetically rendered screenshots (never real photos, so there is no
+copyright question) written through the real content-addressed blob store. It
+honours the same `EVIDENCE_BLOB_*` variables as `cmd/server` — set them to match
+if you want the images visible through a server pointed at S3/MinIO rather than
+the local `fs` default.
