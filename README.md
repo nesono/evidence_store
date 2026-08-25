@@ -631,10 +631,39 @@ Result**, and **Access** (only shown to an administrator).
 
 ### Working without a connection
 
-The page loads and stays usable with no server to ask, which is what a test
-campaign at a proving ground needs. A service worker keeps the application
-itself — HTML, styles, scripts, icons — so opening the UI in the field gives a
-working **Add Result** form rather than a browser error.
+The page loads, and results can be filed, with no server to ask — which is what
+a test campaign at a proving ground needs. A service worker keeps the
+application itself (HTML, styles, scripts, icons), and a record filed with no
+connection goes into an **outbox** on the device instead of being lost.
+
+Filing offline works like filing online: fill in **Add Result** and press
+Create. The feedback says the record was saved here rather than filed, and a
+counter appears in the header. From it you can see what is waiting, correct a
+record before it goes, or delete one.
+
+The queue is held in IndexedDB, so it survives closing the tab, quitting the
+browser, and restarting the machine. It also survives the login expiring, which
+it usually will: a session lasts 12 hours by default and a campaign does not.
+Sign in again and the records go.
+
+**Sending happens by itself** when a connection returns — on reconnect, and on
+page load. Nobody is looking at the page at the moment a signal appears, so the
+report comes afterwards rather than as a prompt beforehand. Each record is
+answered on its own terms:
+
+| What the store says | What happens |
+|---|---|
+| Filed | It leaves the queue |
+| Already filed | It leaves the queue too — an earlier attempt got through and its response did not, which is what `client_record_id` is for |
+| Refused (a bad field) | It stays, flagged with the store's own message, and is not retried until you change it |
+| No answer at all | It stays, unchanged, and goes with the next attempt |
+
+Nothing leaves the queue until the store has said what became of it, so there
+is no state in which the page has forgotten a record the store never received.
+
+A record also remembers who wrote it, and is only ever sent by that person. If
+someone else is signed in, it waits for its author rather than being filed
+under the wrong name.
 
 What does *not* work offline is anything that is a question about the archive:
 **Search**, **Analytics**, the weather lookup, and the suggestions in the repo
@@ -654,9 +683,8 @@ Two things to know before relying on it:
   campaign; an installed web app is exempt. Open the UI in Safari, then
   *Share → Add to Home Screen*. On Android, Chrome offers to install it.
 
-Filing results while offline — queuing them and syncing when a signal returns —
-is the next step, designed in
-[docs/offline-support-plan.md](docs/offline-support-plan.md) and not built yet.
+Photos attached to a record still need a connection; that and the rest are in
+[docs/offline-support-plan.md](docs/offline-support-plan.md).
 
 ### Adding a manual test result
 

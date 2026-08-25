@@ -32,6 +32,10 @@
                      tab whose every request would be refused is worse than not
                      offering it; access.js unhides this once /me says so. -->
                 <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access">Access</a></li>
+                <!-- Hidden until there is something waiting. A counter reading
+                     zero is furniture; one reading three is the most important
+                     thing on the page. -->
+                <li><a href="#" id="outbox-status" class="outbox-status" hidden></a></li>
                 <li id="health-status"></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
                 <li><a href="#" id="auth-logout" class="secondary" style="font-size:0.8em" hidden>Logout</a></li>
@@ -469,6 +473,20 @@
                     <h3 id="template-dialog-title">Manage Templates</h3>
                 </header>
                 <div id="template-dialog-content"></div>
+            </article>
+        </dialog>
+
+        <dialog id="outbox-dialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" id="close-outbox"></button>
+                    <h3>Waiting to send</h3>
+                </header>
+                <p id="outbox-explainer" class="outbox-explainer"></p>
+                <div id="outbox-list"></div>
+                <footer>
+                    <button id="outbox-send" class="secondary">Send now</button>
+                </footer>
             </article>
         </dialog>
 

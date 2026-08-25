@@ -36,6 +36,8 @@ const SHELL = [
   "/location.js",
   "/markdown.js",
   "/offline.js",
+  "/outbox.js",
+  "/sync.js",
   "/weather.js",
   "/manifest.webmanifest",
   "/icon.svg",
