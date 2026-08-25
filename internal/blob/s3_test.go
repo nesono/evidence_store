@@ -53,12 +53,39 @@ func newS3(t *testing.T) *S3 {
 	port, err := container.MappedPort(ctx, "9000")
 	require.NoError(t, err)
 
-	s, err := NewS3(ctx, S3Config{
+	cfg := S3Config{
 		Endpoint:  fmt.Sprintf("%s:%s", host, port.Port()),
 		Bucket:    "evidence-blobs",
 		AccessKey: "minioadmin",
 		SecretKey: "minioadmin",
-	})
+	}
+
+	// The readiness probe above is necessary and not sufficient: MinIO answers
+	// it before the object layer behind it is registered, so the first S3 call
+	// can still come back "Server not initialized yet, please try again". That
+	// is what this suite hit on CI — a bucket check failing a few milliseconds
+	// after the container reported itself ready.
+	//
+	// Reaching for a better endpoint is how the probe above was arrived at the
+	// first time, and it moved the race rather than closing it. So this waits
+	// on the operation the test actually needs instead of on a proxy for it:
+	// the bucket check, retried until the server can serve it.
+	//
+	// Any error is retried, not a matched message, because a readiness race
+	// does not promise to announce itself the same way twice. The cost is that
+	// a genuine misconfiguration — a wrong key, an unreachable endpoint — takes
+	// until the deadline to report the error it would otherwise report at once.
+	// In a harness that already spends longer than this starting a container,
+	// that is the cheaper of the two mistakes.
+	var s *S3
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		s, err = NewS3(ctx, cfg)
+		if err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 	require.NoError(t, err)
 	return s
 }
