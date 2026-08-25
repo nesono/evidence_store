@@ -52,14 +52,22 @@ func (h *EvidenceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ev, err := h.evidence.Insert(r.Context(), &req)
+	res, err := h.evidence.Insert(r.Context(), &req)
 	if err != nil {
 		slog.Error("failed to insert evidence", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, ev)
+	// A submission the store already had is answered 200, not 201: nothing was
+	// created by this call. The record itself comes back either way, so a
+	// client that retried a post whose response it never saw learns which
+	// record its submission became instead of having to guess.
+	status := http.StatusCreated
+	if !res.Created {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, res.Evidence)
 }
 
 func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +113,7 @@ func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		if errs := validate.EvidenceCreate(&rec); len(errs) > 0 {
 			results[i] = model.BatchRecordStatus{
 				Index:  i,
-				Status: "error",
+				Status: model.StatusError,
 				Error:  strings.Join(errs, "; "),
 			}
 			hasErrors = true
@@ -124,12 +132,16 @@ func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for j, ev := range inserted {
+		for j, res := range inserted {
 			idx := validIndices[j]
+			status := model.StatusCreated
+			if !res.Created {
+				status = model.StatusDuplicate
+			}
 			results[idx] = model.BatchRecordStatus{
 				Index:  idx,
-				ID:     ev.ID,
-				Status: "created",
+				ID:     res.Evidence.ID,
+				Status: status,
 			}
 		}
 	}

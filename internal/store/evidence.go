@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,13 @@ import (
 
 	"github.com/nesono/evidence-store/internal/model"
 )
+
+// evidenceColumns is what every read of the table selects, in the order the
+// scan helpers below expect. One list rather than a copy per query: a column
+// added to the table has to reach the scan in the same order at every call
+// site, and four copies of the list is four chances to miss one.
+const evidenceColumns = "id, client_record_id, repo, branch, rcs_ref, procedure_ref, " +
+	"evidence_type, source, result, finished_at, ingested_at, metadata"
 
 type EvidenceStore struct {
 	pool  *pgxpool.Pool
@@ -33,14 +41,22 @@ func NewEvidenceStoreWithCache(pool *pgxpool.Pool, ttl time.Duration) *EvidenceS
 	return &EvidenceStore{pool: pool, stats: newStatsCache(ttl, maxCachedAggregations)}
 }
 
-func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*model.Evidence, error) {
+// InsertResult is what became of one submission: the record the store holds
+// for it, and whether this call is what put it there. The two differ only for
+// a client that sent a client_record_id the store had already seen.
+type InsertResult struct {
+	Evidence *model.Evidence
+	Created  bool
+}
+
+func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*InsertResult, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	ev, err := insertOne(ctx, tx, e)
+	res, err := insertOne(ctx, tx, e)
 	if err != nil {
 		return nil, err
 	}
@@ -49,23 +65,27 @@ func (s *EvidenceStore) Insert(ctx context.Context, e *model.EvidenceCreate) (*m
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
-	return ev, nil
+	return res, nil
 }
 
-func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.EvidenceCreate) ([]model.Evidence, error) {
+func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.EvidenceCreate) ([]InsertResult, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	results := make([]model.Evidence, 0, len(records))
+	results := make([]InsertResult, 0, len(records))
 	for _, e := range records {
-		ev, err := insertOne(ctx, tx, &e)
+		// One transaction for the whole batch, which is also what makes a
+		// token repeated inside a batch resolve the same way as one repeated
+		// across two calls: the unique index sees the earlier row immediately,
+		// committed or not.
+		res, err := insertOne(ctx, tx, &e)
 		if err != nil {
 			return nil, fmt.Errorf("insert record: %w", err)
 		}
-		results = append(results, *ev)
+		results = append(results, *res)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -78,19 +98,54 @@ func (s *EvidenceStore) InsertBatch(ctx context.Context, records []model.Evidenc
 // insertOne stores one record and the references to whatever blobs its test log
 // points at. The two happen in one transaction because a record that mentions a
 // blob without a reference row would have its images swept out from under it.
-func insertOne(ctx context.Context, tx pgx.Tx, e *model.EvidenceCreate) (*model.Evidence, error) {
+//
+// A record carrying a client_record_id the store has already seen is not stored
+// again. The existing record is returned instead, untouched — it is evidence,
+// and a resend is a question about it, not a revision of it.
+func insertOne(ctx context.Context, tx pgx.Tx, e *model.EvidenceCreate) (*InsertResult, error) {
 	metadata, refs, err := annotateBlobRefs(e.Metadata)
 	if err != nil {
 		return nil, err
 	}
 
+	// Validation has already rejected a value that is not a UUID; this is the
+	// conversion, and it fails only if something reached the store without
+	// passing through it.
+	var clientRecordID *uuid.UUID
+	if e.ClientRecordID != nil {
+		parsed, err := uuid.Parse(*e.ClientRecordID)
+		if err != nil {
+			return nil, fmt.Errorf("client_record_id %q: %w", *e.ClientRecordID, err)
+		}
+		clientRecordID = &parsed
+	}
+
 	row := tx.QueryRow(ctx, `
-		INSERT INTO evidence (repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-	`, e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
+		INSERT INTO evidence (client_record_id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		-- The predicate is what lets this infer the partial index. A record
+		-- without a token has nothing to conflict with and always inserts.
+		ON CONFLICT (client_record_id) WHERE client_record_id IS NOT NULL DO NOTHING
+		RETURNING `+evidenceColumns, clientRecordID,
+		e.Repo, e.Branch, e.RCSRef, e.ProcedureRef, e.EvidenceType, e.Source, e.Result, e.FinishedAt.UTC(), metadata)
 
 	ev, err := scanEvidence(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// DO NOTHING returns no row, which is the store saying it already has
+		// this submission. Which record that became is the useful answer, so
+		// read it back rather than reporting a conflict the client can do
+		// nothing with.
+		if clientRecordID == nil {
+			return nil, fmt.Errorf("insert returned no row for a record with no client_record_id")
+		}
+		existing, err := findByClientRecordID(ctx, tx, *clientRecordID)
+		if err != nil {
+			return nil, err
+		}
+		// Deliberately no recordBlobRefs: the existing record's references were
+		// written when it was filed, and its test log has not changed.
+		return &InsertResult{Evidence: existing, Created: false}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -99,14 +154,24 @@ func insertOne(ctx context.Context, tx pgx.Tx, e *model.EvidenceCreate) (*model.
 		return nil, err
 	}
 
+	return &InsertResult{Evidence: ev, Created: true}, nil
+}
+
+// findByClientRecordID reads the record a submission already became. It runs on
+// the same transaction as the insert that conflicted, so it also finds a row
+// written earlier in the same batch.
+func findByClientRecordID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*model.Evidence, error) {
+	row := tx.QueryRow(ctx, `SELECT `+evidenceColumns+` FROM evidence WHERE client_record_id = $1`, id)
+	ev, err := scanEvidence(row)
+	if err != nil {
+		return nil, fmt.Errorf("read back record for client_record_id %s: %w", id, err)
+	}
 	return ev, nil
 }
 
 func (s *EvidenceStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Evidence, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata
-		FROM evidence
-		WHERE id = $1
+		SELECT `+evidenceColumns+` FROM evidence WHERE id = $1
 	`, id)
 
 	return scanEvidence(row)
@@ -174,7 +239,7 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		f.add(fmt.Sprintf("(ingested_at, id) > (%s, %s)", f.arg(params.Cursor.IngestedAt), f.arg(params.Cursor.ID)))
 	}
 
-	query := "SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata FROM evidence" + f.whereClause()
+	query := "SELECT " + evidenceColumns + " FROM evidence" + f.whereClause()
 
 	// id breaks ties so the total order is deterministic and offset windows
 	// neither repeat nor skip records.
@@ -237,7 +302,7 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 func scanEvidence(row pgx.Row) (*model.Evidence, error) {
 	var e model.Evidence
 	err := row.Scan(
-		&e.ID, &e.Repo, &e.Branch, &e.RCSRef, &e.ProcedureRef,
+		&e.ID, &e.ClientRecordID, &e.Repo, &e.Branch, &e.RCSRef, &e.ProcedureRef,
 		&e.EvidenceType, &e.Source, &e.Result, &e.FinishedAt, &e.IngestedAt, &e.Metadata,
 	)
 	if err != nil {
@@ -251,7 +316,7 @@ func scanEvidence(row pgx.Row) (*model.Evidence, error) {
 func scanEvidenceRow(rows pgx.Rows) (*model.Evidence, error) {
 	var e model.Evidence
 	err := rows.Scan(
-		&e.ID, &e.Repo, &e.Branch, &e.RCSRef, &e.ProcedureRef,
+		&e.ID, &e.ClientRecordID, &e.Repo, &e.Branch, &e.RCSRef, &e.ProcedureRef,
 		&e.EvidenceType, &e.Source, &e.Result, &e.FinishedAt, &e.IngestedAt, &e.Metadata,
 	)
 	if err != nil {
@@ -343,7 +408,7 @@ func (s *EvidenceStore) ScanAll(ctx context.Context, batchSize int, fn func([]mo
 		}
 
 		query := fmt.Sprintf(
-			"SELECT id, repo, branch, rcs_ref, procedure_ref, evidence_type, source, result, finished_at, ingested_at, metadata FROM evidence%s ORDER BY finished_at ASC, id ASC LIMIT %d",
+			"SELECT "+evidenceColumns+" FROM evidence%s ORDER BY finished_at ASC, id ASC LIMIT %d",
 			where, batchSize,
 		)
 

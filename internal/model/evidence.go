@@ -104,29 +104,43 @@ func ValidEvidenceType(s string) bool {
 }
 
 type Evidence struct {
-	ID           uuid.UUID       `json:"id"`
-	Repo         string          `json:"repo"`
-	Branch       string          `json:"branch"`
-	RCSRef       string          `json:"rcs_ref"`
-	ProcedureRef string          `json:"procedure_ref"`
-	EvidenceType string          `json:"evidence_type"`
-	Source       string          `json:"source"`
-	Result       EvidenceResult  `json:"result"`
-	FinishedAt   time.Time       `json:"finished_at"`
-	IngestedAt   time.Time       `json:"ingested_at"`
-	Metadata     json.RawMessage `json:"metadata"`
+	ID uuid.UUID `json:"id"`
+	// ClientRecordID is the token the client chose for this submission, if it
+	// sent one. Returned so that a client reconciling a queue can match what it
+	// sent against what the store has.
+	ClientRecordID *uuid.UUID      `json:"client_record_id,omitempty"`
+	Repo           string          `json:"repo"`
+	Branch         string          `json:"branch"`
+	RCSRef         string          `json:"rcs_ref"`
+	ProcedureRef   string          `json:"procedure_ref"`
+	EvidenceType   string          `json:"evidence_type"`
+	Source         string          `json:"source"`
+	Result         EvidenceResult  `json:"result"`
+	FinishedAt     time.Time       `json:"finished_at"`
+	IngestedAt     time.Time       `json:"ingested_at"`
+	Metadata       json.RawMessage `json:"metadata"`
 }
 
 type EvidenceCreate struct {
-	Repo         string          `json:"repo"`
-	Branch       string          `json:"branch"`
-	RCSRef       string          `json:"rcs_ref"`
-	ProcedureRef string          `json:"procedure_ref"`
-	EvidenceType string          `json:"evidence_type"`
-	Source       string          `json:"source"`
-	Result       EvidenceResult  `json:"result"`
-	FinishedAt   FlexibleTime    `json:"finished_at"`
-	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	// ClientRecordID is a UUID the client mints for the submission, not for the
+	// record: the store still chooses the id. Sending the same one twice files
+	// one record, which is what lets a client retry a post whose response it
+	// never saw. See docs/offline-support-plan.md.
+	//
+	// A string rather than a uuid.UUID because a malformed value is a fact
+	// about one field, and this way the client is told that, in a 422 alongside
+	// any other field it got wrong, rather than having the whole body refused
+	// as unparseable JSON.
+	ClientRecordID *string         `json:"client_record_id,omitempty"`
+	Repo           string          `json:"repo"`
+	Branch         string          `json:"branch"`
+	RCSRef         string          `json:"rcs_ref"`
+	ProcedureRef   string          `json:"procedure_ref"`
+	EvidenceType   string          `json:"evidence_type"`
+	Source         string          `json:"source"`
+	Result         EvidenceResult  `json:"result"`
+	FinishedAt     FlexibleTime    `json:"finished_at"`
+	Metadata       json.RawMessage `json:"metadata,omitempty"`
 }
 
 // EvidenceResponse wraps Evidence with optional inheritance info.
@@ -157,6 +171,19 @@ type EvidenceFilter struct {
 type BatchRequest struct {
 	Records []EvidenceCreate `json:"records"`
 }
+
+// The statuses a record in a batch can come back with.
+const (
+	// StatusCreated: this call is what stored it.
+	StatusCreated = "created"
+	// StatusDuplicate: the store already had this submission, under the
+	// client_record_id it was sent with, and the id names the record it became.
+	// Not an error — the client asked what happened to something it sent, and
+	// this is the answer.
+	StatusDuplicate = "duplicate"
+	// StatusError: the record was not stored and will not be until it changes.
+	StatusError = "error"
+)
 
 type BatchRecordStatus struct {
 	Index  int       `json:"index"`

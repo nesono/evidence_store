@@ -11,6 +11,7 @@ go_test(
         "blobs_test.go",
         "clusters_integration_test.go",
         "distinct_test.go",
+        "idempotency_test.go",
         "integration_test.go",
         "list_offset_sort_test.go",
         "location_test.go",

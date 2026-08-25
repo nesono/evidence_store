@@ -58,6 +58,66 @@ its own answer in `metadata.collector`, which the Bazel adapter sets.
 
 `finished_at` accepts RFC3339 (`2026-01-01T00:00:00Z`, `2026-01-01T12:00:00+02:00`) as well as shorter forms (`2026-01-01 14:00`, `2026-01-01`). Values without a timezone are interpreted as **UTC**. All timestamps are normalized to UTC on storage.
 
+### Sending the same record twice
+
+`client_record_id` is an optional UUID a client chooses for a **submission**.
+It is not the record's `id` — the store still mints that — and a client that
+does not send one is unaffected in every way.
+
+It exists for one failure: the post that **succeeds while the response is
+lost**. The store has the record, the client cannot tell, and sending again
+files the event twice. Afterwards the two rows differ only in `id` and
+`ingested_at`, which nothing can distinguish from a test that genuinely ran
+twice and passed twice. So the client says instead:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/evidence \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_record_id": "9f1c8b3e-2d4a-4f6b-8c1d-0e2f3a4b5c6d",
+    "repo": "myorg/myrepo",
+    "rcs_ref": "abc123",
+    "procedure_ref": "//pkg:my_test",
+    "evidence_type": "ci",
+    "source": "ci",
+    "result": "PASS",
+    "finished_at": "2026-01-01T00:00:00Z"
+  }'
+```
+
+| Outcome | Response |
+|---|---|
+| The store did not have it | `201 Created` with the new record |
+| The store already had this `client_record_id` | `200 OK` with the record it became — nothing is created, and the stored record is not modified |
+| Not a UUID | `422` naming the field |
+
+The record comes back either way, `client_record_id` included, so a client
+reconciling a queue can match what it sent against what the store holds.
+Retrying is therefore safe to do indefinitely: it either files the record or
+tells you which record you already filed.
+
+In a batch, the field works per record and appears in each result:
+
+```json
+{"results": [
+  {"index": 0, "id": "…", "status": "created"},
+  {"index": 1, "id": "…", "status": "duplicate"},
+  {"index": 2, "status": "error", "error": "…"}
+]}
+```
+
+A batch of records the store already has is `201` with every result marked
+`duplicate` — it is not a failed batch. `207 Multi-Status` still means at least
+one record was rejected. A token repeated **within** one batch resolves the
+same way as one repeated across two calls: the first is `created`, the rest
+`duplicate`, and all of them name the same record.
+
+Uniqueness is global, not per client. Two clients must not share a token, which
+is why it has to be a UUID rather than a build number or a filename.
+
+This is what makes offline collection safe to sync over a bad link — see
+[docs/offline-support-plan.md](offline-support-plan.md).
+
 ## Test logs
 
 A manual result is only as useful as the account of what the tester saw. That
