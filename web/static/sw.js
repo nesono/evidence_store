@@ -27,6 +27,7 @@ const SHELL = [
   "/pico.min.css",
   "/style.css",
   "/app.js",
+  "/blobref.js",
   "/access.js",
   "/analytics.js",
   "/common.js",

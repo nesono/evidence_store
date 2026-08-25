@@ -12,6 +12,7 @@ go_library(
         "static/analytics.js",
         "static/app.js",
         "static/apple-touch-icon.png",
+        "static/blobref.js",
         "static/common.js",
         "static/datepicker.js",
         "static/datetime.js",

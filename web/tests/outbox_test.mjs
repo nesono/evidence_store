@@ -154,3 +154,84 @@ test("acting on a record that is no longer queued does not invent one", async ()
   assert.equal(await outbox.recordAttempt("gone"), null);
   assert.equal(await outbox.count(), 0);
 });
+
+// --- Photos ---
+//
+// A queued photo is the only copy of itself. The sweep decides when that stops
+// being true, and getting it wrong either fills a phone or loses a photograph.
+
+const DIGEST_A = "sha256:" + "a".repeat(64);
+const DIGEST_B = "sha256:" + "b".repeat(64);
+
+const withPhoto = digest => ({
+  ...record,
+  metadata: { observations: `see ![shot](/api/v1/blobs/${digest}.png)` },
+});
+
+async function stash(outbox, digest, when) {
+  return outbox.stashBlob({
+    digest, ext: "png", contentType: "image/png",
+    bytes: new ArrayBuffer(64), now: at(when),
+  });
+}
+
+test("the same photo attached twice is stashed once", async () => {
+  const outbox = createOutbox(memoryStore());
+  await stash(outbox, DIGEST_A, "2026-08-25T10:00:00Z");
+  await stash(outbox, DIGEST_A, "2026-08-25T11:00:00Z");
+
+  const blobs = await outbox.blobs();
+  assert.equal(blobs.length, 1, "content addressing means one image is one object here too");
+  assert.equal(blobs[0].stashedAt, "2026-08-25T10:00:00.000Z", "the first stash is not overwritten");
+});
+
+test("a photo a queued record needs is never swept", async () => {
+  const outbox = createOutbox(memoryStore());
+  await outbox.save(newEntry(withPhoto(DIGEST_A), { id: "waiting" }));
+  await stash(outbox, DIGEST_A, "2026-01-01T00:00:00Z");   // long past any grace
+
+  const deleted = await outbox.sweepBlobs({ now: at("2026-08-25T10:00:00Z") });
+
+  assert.equal(deleted, 0);
+  assert.equal((await outbox.blobs()).length, 1, "its record has not been filed yet");
+});
+
+test("a photo pasted into a log still being written is spared", async () => {
+  const outbox = createOutbox(memoryStore());
+  // Nothing references it: the tester has not pressed Create yet.
+  await stash(outbox, DIGEST_A, "2026-08-25T09:59:00Z");
+
+  const deleted = await outbox.sweepBlobs({ now: at("2026-08-25T10:00:00Z") });
+
+  assert.equal(deleted, 0, "deleting this would delete the only copy of a photograph");
+});
+
+test("a photo the store has is swept as soon as its record is filed", async () => {
+  const outbox = createOutbox(memoryStore());
+  await stash(outbox, DIGEST_A, "2026-08-25T09:59:00Z");
+  await outbox.markBlobUploaded(DIGEST_A, at("2026-08-25T10:00:00Z"));
+
+  // A minute old, so the grace period would otherwise keep it for a day. On a
+  // campaign that is the difference between a few megabytes and all of them.
+  const deleted = await outbox.sweepBlobs({ now: at("2026-08-25T10:00:30Z") });
+
+  assert.equal(deleted, 1);
+  assert.equal((await outbox.blobs()).length, 0);
+});
+
+test("an abandoned photo goes once the grace period is up", async () => {
+  const outbox = createOutbox(memoryStore());
+  await stash(outbox, DIGEST_A, "2026-08-24T09:00:00Z");
+
+  const deleted = await outbox.sweepBlobs({ now: at("2026-08-25T10:00:00Z") });
+
+  assert.equal(deleted, 1, "a log that was never filed does not keep its photographs forever");
+});
+
+test("the queue reports how much of the device it is using", async () => {
+  const outbox = createOutbox(memoryStore());
+  await outbox.stashBlob({ digest: DIGEST_A, ext: "png", contentType: "image/png", bytes: new ArrayBuffer(1500) });
+  await outbox.stashBlob({ digest: DIGEST_B, ext: "png", contentType: "image/png", bytes: new ArrayBuffer(2500) });
+
+  assert.equal(await outbox.bytesHeld(), 4000);
+});

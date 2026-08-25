@@ -483,6 +483,10 @@
                     <h3>Waiting to send</h3>
                 </header>
                 <p id="outbox-explainer" class="outbox-explainer"></p>
+                <div id="outbox-progress" hidden>
+                    <progress value="0" max="1"></progress>
+                    <small class="outbox-progress-label"></small>
+                </div>
                 <div id="outbox-list"></div>
                 <footer>
                     <button id="outbox-send" class="secondary">Send now</button>

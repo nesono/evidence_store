@@ -8,6 +8,16 @@
 // the tag afterwards.
 
 import { API_BASE, apiFetch } from "./common.js";
+import { describe as describeBytes } from "./blobref.js";
+
+// Where a photo goes when there is nowhere to send it. Set by app.js once the
+// queue is open; until then, and in a browser that would not give us one,
+// attaching an image needs a connection like it always did.
+let stash = null;
+
+export function useStash(outbox) {
+  stash = outbox;
+}
 
 // Above this, an image is re-encoded before upload. Phone cameras produce a few
 // megabytes of JPEG for something that will be read at screen size, and a log
@@ -44,6 +54,16 @@ async function loadImage(img) {
   const cached = objectURLs.get(ref);
   if (cached) {
     img.src = cached;
+    return;
+  }
+
+  // A photo taken twenty minutes ago on a track is in the stash and nowhere
+  // else. Looking there first is also right when there *is* a connection: the
+  // bytes are already on the device, so the store need not be asked for them.
+  const local = await fromStash(ref);
+  if (local) {
+    objectURLs.set(ref, local);
+    img.src = local;
     return;
   }
 
@@ -126,19 +146,67 @@ function embedAll(field, files, onStatus) {
 
 async function embed(field, file, onStatus) {
   // A placeholder goes in at the caret straight away, so the tester can keep
-  // writing while the upload runs and can see where the image will land. It is
-  // replaced by text search rather than by position, because by the time the
-  // upload returns the caret has moved on.
-  const token = `![uploading…](#pending-${++uploadCounter})`;
+  // writing while the work runs and can see where the image will land. It is
+  // replaced by text search rather than by position, because by the time it
+  // returns the caret has moved on.
+  const token = `![attaching…](#pending-${++uploadCounter})`;
   insertAtCursor(field, token);
 
   try {
     const prepared = await prepareForUpload(file);
-    const { ref } = await uploadBlob(prepared);
+    const ref = await reference(prepared);
     replaceInField(field, token, `![${altFor(file)}](${ref})`);
   } catch (err) {
     replaceInField(field, token, "");
     onStatus(`Could not attach ${file.name || "image"}: ${err.message}`);
+  }
+}
+
+// reference settles what this image is called.
+//
+// A blob is named by the SHA-256 of its bytes and by nothing else, so the name
+// can be worked out here — and the name worked out here is the one the upload
+// would return. That is what lets a tester finish a log on a hillside: the
+// reference written into it is final, and only the bytes are still owed.
+//
+// So the stash is the first answer whenever there is one, connection or not.
+// Uploading immediately when online would be a second way of doing the same
+// thing, and the second way is the one that gets less use and breaks quietly.
+async function reference(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const described = await describeBytes(bytes);
+  if (!described) {
+    // The same allowlist the server enforces, applied before anything is
+    // written into the log rather than after.
+    throw new Error("a test log can embed PNG, JPEG, WebP or GIF");
+  }
+
+  if (stash) {
+    await stash.stashBlob({
+      digest: described.digest,
+      ext: described.ext,
+      contentType: described.contentType,
+      bytes: bytes.buffer,
+    });
+    return described.ref;
+  }
+
+  // No queue to stash into. Upload now, as this always did, and check that the
+  // store agrees about the name — if it ever did not, a log would be pointing
+  // at something nobody can fetch.
+  const { ref } = await uploadBlob(file);
+  return ref;
+}
+
+async function fromStash(ref) {
+  if (!stash) return null;
+  const digest = ref.slice(ref.lastIndexOf("/") + 1).split(".")[0];
+  try {
+    const blob = await stash.getBlob(digest);
+    if (!blob) return null;
+    return URL.createObjectURL(new Blob([blob.bytes], { type: blob.contentType }));
+  } catch {
+    return null;
   }
 }
 
