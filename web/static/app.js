@@ -1,6 +1,7 @@
 import {
   API_BASE,
   apiFetch,
+  apiFetchNoRedirect,
   esc,
   formatTime,
   getStoredAPIKey,
@@ -24,7 +25,9 @@ import {
   requestPosition,
 } from "./location.js";
 import { describeReading, fetchWeather, weatherPoint } from "./weather.js";
-import { OFFLINE, connectionState, registerServiceWorker, startConnectionIndicator } from "./offline.js";
+import { OFFLINE, connectionState, onConnectionChange, registerServiceWorker, startConnectionIndicator } from "./offline.js";
+import { BLOCKED, createOutbox, heldFrom, newEntry, openStore } from "./outbox.js";
+import { describeSync, syncOutbox } from "./sync.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -856,11 +859,25 @@ async function submitEvidence(andAnother) {
   const btn = form.querySelector('button[type="submit"]');
   btn.setAttribute("aria-busy", "true");
 
+  // The submission gets its identity here, at capture, whether or not it is
+  // about to reach anything. If it is queued and sent days later, it goes with
+  // the same token, so a retry files one record rather than two.
+  //
+  // Editing a queued record reuses its token: the corrected version is the
+  // same submission, not a second one.
+  const entry = newEntry(record, { id: editingEntryID || undefined, capturedBy: currentSubject });
+
   try {
+    if (connectionState() === OFFLINE) {
+      // Do not spend a timeout finding out what the header already says.
+      await queueEntry(entry, feedback, andAnother, form);
+      return;
+    }
+
     const resp = await apiFetch(`${API_BASE}/evidence`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(record),
+      body: JSON.stringify(entry.record),
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -868,24 +885,17 @@ async function submitEvidence(andAnother) {
       feedback.innerHTML = `<p class="feedback-error">${esc(msg)}</p>`;
       return;
     }
+    // Filed, so it is not waiting any more. This matters when the record came
+    // back out of the outbox to be corrected: the queued copy goes now.
+    if (editingEntryID) {
+      await outbox.remove(editingEntryID);
+      editingEntryID = null;
+      await refreshOutboxCount();
+    }
     refreshDatalists();
     if (andAnother) {
       feedback.innerHTML = `<p class="feedback-ok">Created <code>${data.id}</code></p>`;
-      form.querySelector('[name="result"]:checked').checked = false;
-      form.notes.value = "";
-      form.observations.value = "";
-      // Location and weather are deliberately kept: a tester filing several
-      // runs in a row is still standing where they were, under the same sky,
-      // and looking both up again for each one is how the fields stop being
-      // filled. The reading is an hour wide, which is longer than a burst of
-      // manual records takes.
-      updateTestLogPreview();
-      const currentTpl = document.getElementById("template-select").value;
-      if (currentTpl) {
-        applyTemplate(currentTpl);
-      } else {
-        document.getElementById("custom-fields-list").innerHTML = "";
-      }
+      resetFormForNext(form);
     } else {
       // Submit ends the sitting, and a weather line does not keep: it is a
       // reading for one hour, and the next record filled in on this form could
@@ -899,9 +909,250 @@ async function submitEvidence(andAnother) {
       }, 1000);
     }
   } catch (err) {
-    feedback.innerHTML = `<p class="feedback-error">Network error: ${esc(err.message)}</p>`;
+    // The post did not reach the store. That is not a reason to lose a record
+    // somebody was standing in a field to write, so it goes in the queue and
+    // the tester is told where it went. The token it already carries is what
+    // makes sending it again safe, even if this attempt did in fact land.
+    await queueEntry(entry, feedback, andAnother, form, err);
   } finally {
     btn.removeAttribute("aria-busy");
+  }
+}
+
+// queueEntry puts a record in the outbox and says so plainly. A tester has to
+// be able to tell "filed" from "waiting" at a glance — they are different
+// states of the evidence, and only one of them is safe to walk away from.
+async function queueEntry(entry, feedback, andAnother, form, err) {
+  await outbox.save(entry);
+  editingEntryID = null;
+  await refreshOutboxCount();
+
+  const why = err ? `Could not reach the store (${esc(err.message)}).` : "Offline.";
+  feedback.innerHTML =
+    `<p class="feedback-ok">${why} Saved here and it will be sent when there is a connection ` +
+    `&mdash; <a href="#" class="outbox-open">see what is waiting</a>.</p>`;
+  feedback.querySelector(".outbox-open").addEventListener("click", event => {
+    event.preventDefault();
+    openOutbox();
+  });
+
+  if (andAnother) resetFormForNext(form);
+}
+
+// resetFormForNext clears what belongs to the run just filed and keeps what
+// belongs to the sitting.
+//
+// Location and weather are deliberately kept: a tester filing several runs in a
+// row is still standing where they were, under the same sky, and looking both
+// up again for each one is how the fields stop being filled. The reading is an
+// hour wide, which is longer than a burst of manual records takes.
+function resetFormForNext(form) {
+  const chosen = form.querySelector('[name="result"]:checked');
+  if (chosen) chosen.checked = false;
+  form.notes.value = "";
+  form.observations.value = "";
+  updateTestLogPreview();
+  const currentTpl = document.getElementById("template-select").value;
+  if (currentTpl) {
+    applyTemplate(currentTpl);
+  } else {
+    document.getElementById("custom-fields-list").innerHTML = "";
+  }
+}
+
+// --- The outbox ---
+
+// Records written with nowhere to send them. See docs/offline-support-plan.md.
+let outbox = null;
+// Who is signed in, remembered so a queued record can record who wrote it.
+let currentSubject = null;
+// The queued record currently loaded back into the form, if any. Its token is
+// reused on submit, so correcting a record replaces it rather than filing a
+// second copy of the same run.
+let editingEntryID = null;
+// One sync at a time. Reconnecting, loading and pressing the button can all
+// arrive together, and three syncs racing would report three different things.
+let syncing = false;
+
+async function mountOutbox() {
+  outbox = createOutbox(await openStore());
+  await refreshOutboxCount();
+
+  document.getElementById("outbox-status").addEventListener("click", event => {
+    event.preventDefault();
+    openOutbox();
+  });
+  document.getElementById("close-outbox").addEventListener("click", () => {
+    document.getElementById("outbox-dialog").close();
+  });
+  document.getElementById("outbox-send").addEventListener("click", async () => {
+    await runSync({ announce: true });
+    await renderOutbox();
+  });
+
+  // The moment a signal returns is rarely a moment anyone is looking at the
+  // page — a laptop lid opening in a hotel lobby is the whole opportunity.
+  onConnectionChange(state => {
+    if (state !== OFFLINE) runSync();
+  });
+}
+
+async function refreshOutboxCount() {
+  const el = document.getElementById("outbox-status");
+  if (!outbox || !el) return;
+  const entries = await outbox.list();
+  el.hidden = entries.length === 0;
+  if (entries.length === 0) return;
+
+  const blocked = entries.filter(e => e.state === BLOCKED).length;
+  const needs = n => `${n} need${n === 1 ? "s" : ""} attention`;
+  if (blocked === 0) {
+    el.textContent = `${entries.length} waiting to send`;
+  } else if (blocked === entries.length) {
+    // Saying "3 waiting, 3 need attention" reads as six records.
+    el.textContent = needs(blocked);
+  } else {
+    el.textContent = `${entries.length} waiting, ${needs(blocked)}`;
+  }
+}
+
+function openOutbox() {
+  document.getElementById("outbox-dialog").showModal();
+  renderOutbox();
+}
+
+async function renderOutbox() {
+  const list = document.getElementById("outbox-list");
+  const explainer = document.getElementById("outbox-explainer");
+  const entries = await outbox.list();
+
+  if (entries.length === 0) {
+    explainer.textContent = "";
+    list.innerHTML = `<p class="test-log-empty">Nothing waiting. Everything filed here has reached the store.</p>`;
+    return;
+  }
+
+  explainer.textContent =
+    "These are on this device only, until they are sent. They survive closing the browser, " +
+    "and they go automatically when there is a connection.";
+
+  list.innerHTML = entries.map(entry => {
+    const r = entry.record;
+    const held = heldFrom(entry, currentSubject);
+    const heldClass = entry.state === BLOCKED ? "outbox-entry-error" : "outbox-entry-held";
+    return `
+      <div class="outbox-entry" data-id="${esc(entry.id)}">
+        <div class="outbox-entry-head">
+          ${resultBadge(r.result)}
+          <span class="outbox-entry-procedure">${esc(r.procedure_ref || "(no procedure)")}</span>
+        </div>
+        <div class="outbox-entry-meta">
+          ${esc(r.repo || "")} ${esc(r.branch || "")} ${esc((r.rcs_ref || "").slice(0, 12))}
+          &middot; written ${formatTime(entry.capturedAt)}
+        </div>
+        ${held ? `<div class="${heldClass}">${esc(held)}</div>` : ""}
+        <div class="outbox-entry-actions">
+          <button class="secondary outline outbox-edit">Edit</button>
+          <button class="secondary outline outbox-delete">Delete</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  list.querySelectorAll(".outbox-edit").forEach(btn => {
+    btn.addEventListener("click", () => editQueued(btn.closest(".outbox-entry").dataset.id));
+  });
+  list.querySelectorAll(".outbox-delete").forEach(btn => {
+    btn.addEventListener("click", () => deleteQueued(btn.closest(".outbox-entry").dataset.id));
+  });
+}
+
+// editQueued loads a waiting record back into the Add Result form.
+//
+// The queued copy stays where it is until the tester submits. Taking it out of
+// the queue on the way into the form would mean a closed tab loses the record,
+// which is the one thing this whole feature exists to prevent.
+async function editQueued(id) {
+  const entry = await outbox.get(id);
+  if (!entry) return;
+
+  editingEntryID = id;
+  fillFormFromRecord(entry.record);
+  document.getElementById("outbox-dialog").close();
+  document.querySelector('[data-tab="add"]').click();
+  document.getElementById("add-feedback").innerHTML =
+    `<p class="feedback-ok">Correcting a record that is waiting to send. ` +
+    `Submitting replaces it rather than filing a second copy.</p>`;
+}
+
+async function deleteQueued(id) {
+  const entry = await outbox.get(id);
+  if (!entry) return;
+  // No undo, and the record exists nowhere else. Worth a question.
+  const what = entry.record.procedure_ref || "this record";
+  if (!confirm(`Delete ${what}? It has not been sent, and this is the only copy.`)) return;
+
+  await outbox.remove(id);
+  await refreshOutboxCount();
+  await renderOutbox();
+}
+
+function fillFormFromRecord(record) {
+  const form = document.getElementById("add-form");
+  const metadata = record.metadata || {};
+
+  for (const field of ["repo", "branch", "rcs_ref", "procedure_ref", "evidence_type", "source"]) {
+    if (form[field]) form[field].value = record[field] || "";
+  }
+  const result = form.querySelector(`[name="result"][value="${record.result}"]`);
+  if (result) result.checked = true;
+  if (record.finished_at) {
+    form.finished_at.value = formatTime(record.finished_at);
+  }
+  form.tags.value = (metadata.tags || []).join(", ");
+  form.notes.value = metadata.notes || "";
+  form.observations.value = metadata.observations || "";
+  form.location.value = metadata.location || "";
+  form.weather_conditions.value = metadata.weather_conditions || "";
+  updateTestLogPreview();
+}
+
+// runSync drains the queue and says what happened.
+//
+// `announce` is on when a person pressed the button and is waiting for an
+// answer. An automatic sync stays quiet unless something needs a person: the
+// count in the header falling is the report, and a dialog that appears because
+// a train came out of a tunnel is not.
+async function runSync({ announce = false } = {}) {
+  if (!outbox || syncing) return null;
+  if (await outbox.count() === 0) return null;
+
+  syncing = true;
+  const button = document.getElementById("outbox-send");
+  button.setAttribute("aria-busy", "true");
+  try {
+    const summary = await syncOutbox({
+      outbox,
+      subject: currentSubject,
+      post: async (path, payload) => {
+        const resp = await apiFetchNoRedirect(`${API_BASE}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json().catch(() => null);
+        return { ok: resp.ok, status: resp.status, data };
+      },
+    });
+
+    await refreshOutboxCount();
+    const explainer = document.getElementById("outbox-explainer");
+    if (announce || summary.authRequired || summary.blocked) {
+      explainer.textContent = describeSync(summary);
+    }
+    return summary;
+  } finally {
+    syncing = false;
+    button.removeAttribute("aria-busy");
   }
 }
 
@@ -1524,6 +1775,13 @@ async function loadIdentity() {
   });
   mountAccess(me);
   pinSourceToCaller(me);
+  currentSubject = me.authenticated ? me.subject : null;
+
+  // After the identity is known, so a queued record is attributed to whoever
+  // is actually signed in, and so a sync does not send somebody else's records
+  // under this name.
+  await mountOutbox();
+  runSync();
   refreshTemplateDropdown();
   refreshDatalists();
   document.querySelector('#add-form [name="finished_at"]').value = formatTime(new Date().toISOString());

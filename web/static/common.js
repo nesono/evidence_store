@@ -135,6 +135,14 @@ function showLoginChoice() {
 
 // Wrapper around fetch that carries whichever credential this page has, and
 // deals with a 401 in whichever way the deployment allows.
+// A background sync must not throw a tester out of a half-written record and
+// off to an identity provider. It asks for the 401 instead and puts a "sign in
+// to send these" line in the outbox, where somebody can act on it when they
+// are ready. See sync.js.
+export async function apiFetchNoRedirect(url, options = {}) {
+  return apiFetch(url, { ...options, redirectOnAuth: false });
+}
+
 export async function apiFetch(url, options = {}) {
   const key = getStoredAPIKey();
   if (key) {
@@ -148,8 +156,10 @@ export async function apiFetch(url, options = {}) {
     if (token) options.headers = { ...options.headers, "X-CSRF-Token": token };
   }
 
-  const resp = await fetch(url, options);
+  const { redirectOnAuth = true, ...fetchOptions } = options;
+  const resp = await fetch(url, fetchOptions);
   if (resp.status !== 401) return resp;
+  if (!redirectOnAuth) return resp;
 
   // Logged out, or the session expired while the tab was open. Sending
   // somebody to the identity provider is a better answer than asking a human
@@ -161,8 +171,7 @@ export async function apiFetch(url, options = {}) {
 
   const newKey = promptForAPIKey("Authentication required. Enter your API key:");
   if (newKey) {
-    options.headers = { ...options.headers, Authorization: `Bearer ${newKey}` };
-    return fetch(url, options);
+    return fetch(url, { ...fetchOptions, headers: { ...options.headers, Authorization: `Bearer ${newKey}` } });
   }
   return resp;
 }
