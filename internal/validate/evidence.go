@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/nesono/evidence-store/internal/model"
 )
 
@@ -39,6 +41,16 @@ func EvidenceCreate(e *model.EvidenceCreate) []string {
 	}
 	if e.FinishedAt.Time.IsZero() {
 		errs = append(errs, "finished_at is required")
+	}
+	// Optional, but a token that is not a UUID cannot do the one job it has.
+	// Two clients whose "same submission" tokens collide would have their
+	// records silently merged, and a value that is not a UUID is the most
+	// likely way to get there — an empty string, a build number, a filename.
+	if e.ClientRecordID != nil {
+		if _, err := uuid.Parse(*e.ClientRecordID); err != nil {
+			errs = append(errs, fmt.Sprintf("client_record_id %q is invalid, must be a UUID",
+				*e.ClientRecordID))
+		}
 	}
 
 	return errs

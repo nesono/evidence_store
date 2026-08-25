@@ -107,6 +107,35 @@ func TestEvidenceTypeErrorNamesTheAllowedValues(t *testing.T) {
 	}
 }
 
+// client_record_id is optional, and the store treats it as the answer to "is
+// this the same submission I already sent". A value that is not a UUID cannot
+// carry that meaning, and letting one through would risk merging the records of
+// two clients whose tokens happened to collide.
+func TestClientRecordIDMustBeAUUIDWhenPresent(t *testing.T) {
+	e := validEvidence()
+	assert.Nil(t, e.ClientRecordID, "the field is optional and absent by default")
+	assert.Empty(t, EvidenceCreate(e), "a record without one is valid")
+
+	for _, valid := range []string{
+		"9f1c8b3e-2d4a-4f6b-8c1d-0e2f3a4b5c6d",
+		"9F1C8B3E-2D4A-4F6B-8C1D-0E2F3A4B5C6D",
+	} {
+		e := validEvidence()
+		e.ClientRecordID = &valid
+		assert.Empty(t, EvidenceCreate(e), "value %q", valid)
+	}
+
+	for _, invalid := range []string{"", "not-a-uuid", "12345", "9f1c8b3e-2d4a-4f6b-8c1d"} {
+		e := validEvidence()
+		e.ClientRecordID = &invalid
+		errs := EvidenceCreate(e)
+		if assert.Len(t, errs, 1, "value %q", invalid) {
+			assert.Contains(t, errs[0], "client_record_id",
+				"the error should name the field the client got wrong")
+		}
+	}
+}
+
 func TestInheritanceCreateValid(t *testing.T) {
 	c := &model.InheritanceCreate{
 		Repo:          "org/repo",

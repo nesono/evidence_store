@@ -197,6 +197,11 @@ CREATE TABLE evidence (
     source         TEXT NOT NULL,        -- CI build URL or username
     ingested_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
 
+    -- a token the client chooses for a submission, so that sending the same
+    -- one twice files one record. Optional, and nothing that omits it is
+    -- affected: see 5.1
+    client_record_id UUID,
+
     -- semi-structured extended fields
     metadata       JSONB NOT NULL DEFAULT '{}'
 );
@@ -209,6 +214,10 @@ CREATE INDEX idx_evidence_result         ON evidence (result);
 CREATE INDEX idx_evidence_procedure_ref  ON evidence (procedure_ref);
 CREATE INDEX idx_evidence_source         ON evidence (source);
 CREATE INDEX idx_evidence_metadata       ON evidence USING GIN (metadata);
+
+-- Partial: the column stays free for every client that sends no token.
+CREATE UNIQUE INDEX idx_evidence_client_record_id
+    ON evidence (client_record_id) WHERE client_record_id IS NOT NULL;
 
 CREATE TABLE inheritance_declaration (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -350,6 +359,12 @@ Content-Type: application/json
 ```
 
 **Response:** `201 Created` with array of `{id, status}` per record. Partial failures return `207 Multi-Status`.
+
+**Retrying safely.** A record may carry an optional `client_record_id` — a UUID the client chooses for the *submission*, not for the record. Sending the same one twice files one record: the repeat is answered `200 OK` with the record it became rather than `201`, and in a batch its status is `duplicate` rather than `created`.
+
+This exists for the one failure a bad link actually produces: the post that succeeds while the response is lost. The store has the record, the client cannot tell, and sending again files the event twice — after which the two rows differ only in `id` and `ingested_at`, which is indistinguishable from a test that genuinely ran twice and passed twice. Nothing in the data can separate them, so the client has to say. Clients that send no token are unaffected in every respect.
+
+Offline collection ([docs/offline-support-plan.md](docs/offline-support-plan.md)) makes that the expected case rather than the rare one: a queue drains over whatever link a test campaign can find, and a batch that loses its response leaves every record in it in doubt at once.
 
 ### 5.2 Query
 
