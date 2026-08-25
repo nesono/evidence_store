@@ -629,6 +629,35 @@ done
 `http://localhost:8000`. It has four tabs: **Search**, **Analytics**, **Add
 Result**, and **Access** (only shown to an administrator).
 
+### Working without a connection
+
+The page loads and stays usable with no server to ask, which is what a test
+campaign at a proving ground needs. A service worker keeps the application
+itself — HTML, styles, scripts, icons — so opening the UI in the field gives a
+working **Add Result** form rather than a browser error.
+
+What does *not* work offline is anything that is a question about the archive:
+**Search**, **Analytics**, the weather lookup, and the suggestions in the repo
+and procedure boxes. Those say so rather than failing obscurely. Nothing
+cached here is evidence — a record served from a browser cache would be a claim
+about the archive that might have been true last week, and a reader could not
+tell it from a live one.
+
+Two things to know before relying on it:
+
+- **It needs HTTPS.** Service workers only run in a secure context, so a
+  deployment on plain HTTP has no offline support at all (`localhost` is
+  exempt, which is why it works in development). The page says so in the
+  browser console rather than failing silently.
+- **On iOS, add it to the Home Screen before you leave.** Safari evicts
+  storage for a site not visited in seven days, which is shorter than a
+  campaign; an installed web app is exempt. Open the UI in Safari, then
+  *Share → Add to Home Screen*. On Android, Chrome offers to install it.
+
+Filing results while offline — queuing them and syncing when a signal returns —
+is the next step, designed in
+[docs/offline-support-plan.md](docs/offline-support-plan.md) and not built yet.
+
 ### Adding a manual test result
 
 The **Add Result** tab is how a person files what they ran. **Repo**,
@@ -799,6 +828,27 @@ copyright question) written through the real content-addressed blob store. It
 honours the same `EVIDENCE_BLOB_*` variables as `cmd/server` — set them to match
 if you want the images visible through a server pointed at S3/MinIO rather than
 the local `fs` default.
+
+### Refreshing the vendored stylesheet
+
+`web/static/pico.min.css` is [Pico CSS](https://picocss.com) (MIT), vendored
+rather than loaded from a CDN: the deployments that most need the offline UI
+are behind a firewall or on a proving ground with no route out, and a
+stylesheet that does not arrive leaves an unreadable page.
+
+To move to a new version, fetch it and check what you got before committing it:
+
+```bash
+curl -sL "https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css" -o web/static/pico.min.css
+```
+
+The current file is v2.1.1, 83,319 bytes, `sha256:fbc9a63fc9fc9f72d12fd7fc9806e11fa9f77ae4f9cad146b27003a1119ba3db`.
+
+Adding any file to `web/static/` also means adding it to `embedsrcs` in
+`web/BUILD.bazel` and, if the page loads it, to the shell list in
+`web/static/sw.js`. Both are checked by `node --test web/tests/*_test.mjs`,
+which is what stops a file that works in development from going missing in a
+container or on a page with no connection.
 
 ### Releasing the Bazel adapter
 

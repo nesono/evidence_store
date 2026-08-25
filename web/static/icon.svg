@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Evidence Store">
+  <title>Evidence Store</title>
+  <rect width="512" height="512" rx="96" fill="#0172ad"/>
+  <!-- A filed sheet: what the store keeps is a record of a run, not the run. -->
+  <path d="M150 104h150l62 62v242a16 16 0 0 1-16 16H150a16 16 0 0 1-16-16V120a16 16 0 0 1 16-16z" fill="#fff"/>
+  <path d="M300 104l62 62h-46a16 16 0 0 1-16-16v-46z" fill="#b3d9ea"/>
+  <!-- The verdict on it. -->
+  <path d="M186 268l46 46 94-94" fill="none" stroke="#0172ad" stroke-width="34"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

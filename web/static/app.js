@@ -24,6 +24,7 @@ import {
   requestPosition,
 } from "./location.js";
 import { describeReading, fetchWeather, weatherPoint } from "./weather.js";
+import { OFFLINE, connectionState, registerServiceWorker, startConnectionIndicator } from "./offline.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -346,30 +347,6 @@ async function refreshDatalists() {
   }));
 }
 
-const HEALTH_POLL_MS = 5000;
-
-async function checkHealth() {
-  const el = document.getElementById("health-status");
-  try {
-    const resp = await fetch("/healthz", { cache: "no-store" });
-    if (resp.ok) {
-      el.innerHTML = `<span class="health-dot health-ok"></span> Connected`;
-    } else {
-      el.innerHTML = `<span class="health-dot health-fail"></span> Unhealthy`;
-    }
-  } catch {
-    el.innerHTML = `<span class="health-dot health-fail"></span> Offline`;
-  }
-}
-
-function startHealthPolling() {
-  checkHealth();
-  setInterval(checkHealth, HEALTH_POLL_MS);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") checkHealth();
-  });
-}
-
 // --- Rendering ---
 
 function renderTags(metadata) {
@@ -595,7 +572,14 @@ async function doSearch(filters, { clamped = false } = {}) {
     renderRange((data.records || []).length);
     renderWindowNav();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Error: ${esc(err.message)}</td></tr>`;
+    // "Failed to fetch" is what the browser says and not what happened. With
+    // no connection there is nothing wrong with the search or the store: the
+    // archive is simply somewhere else, and saying so stops a tester on a
+    // proving ground hunting for a fault that is not there.
+    const message = connectionState() === OFFLINE
+      ? "Offline \u2014 searching needs a connection. Filing a result does not."
+      : `Error: ${esc(err.message)}`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${message}</td></tr>`;
     document.getElementById("results-summary").textContent = "";
     renderInherited(null);
     renderWindowNav();
@@ -1526,7 +1510,10 @@ async function loadIdentity() {
 }
 
 (async function init() {
-  startHealthPolling();
+  startConnectionIndicator();
+  // Not awaited: the page has nothing to wait for. The worker takes over on
+  // the next load, and a tester who installs this today is covered tomorrow.
+  registerServiceWorker();
 
   const [authConfig, me] = await Promise.all([loadAuthConfig(), loadIdentity()]);
   ssoAvailable = !!authConfig.sso_enabled;

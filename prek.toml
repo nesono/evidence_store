@@ -5,8 +5,12 @@
 [[repos]]
 repo = "builtin"
 hooks = [
-    { id = "trailing-whitespace" },
-    { id = "end-of-file-fixer" },
+    # web/static/pico.min.css is vendored third-party CSS and is kept
+    # byte-identical to what upstream publishes, so that the sha256 recorded in
+    # the README means something. A whitespace fixer editing it would make the
+    # file we ship differ from the file anyone can download and compare.
+    { id = "trailing-whitespace", exclude = "^web/static/pico\\.min\\.css$" },
+    { id = "end-of-file-fixer", exclude = "^web/static/pico\\.min\\.css$" },
     { id = "check-added-large-files", args = ["--maxkb=500"] },
     { id = "check-merge-conflict" },
 
