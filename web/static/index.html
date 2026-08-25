@@ -4,8 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evidence Store</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <!-- Vendored rather than fetched from a CDN: the deployments that most need
+         this page are behind a firewall or on a proving ground with no route
+         out, and a stylesheet that does not arrive leaves an unreadable page.
+         See "Refreshing the vendored stylesheet" in the README. -->
+    <link rel="stylesheet" href="pico.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
+         also what exempts the site from Safari's eviction of storage for a site
+         not visited in seven days, which is longer than a campaign. -->
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="theme-color" content="#0172ad">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Evidence">
 </head>
 <body>
     <header class="container">

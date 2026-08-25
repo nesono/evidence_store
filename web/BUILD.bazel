@@ -3,18 +3,30 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "web",
     srcs = ["embed.go"],
+    # embed.go globs static/*, so Go picks new files up on its own; this list
+    # does not, and a file missing from it is served by `go run` and absent
+    # from the container. web/tests/offline_shell_test.mjs fails when the two
+    # disagree.
     embedsrcs = [
         "static/access.js",
-        "static/app.js",
-        "static/index.html",
-        "static/style.css",
         "static/analytics.js",
+        "static/app.js",
+        "static/apple-touch-icon.png",
         "static/common.js",
-        "static/datetime.js",
         "static/datepicker.js",
+        "static/datetime.js",
+        "static/icon-192.png",
+        "static/icon-512.png",
+        "static/icon.svg",
         "static/images.js",
+        "static/index.html",
         "static/location.js",
+        "static/manifest.webmanifest",
         "static/markdown.js",
+        "static/offline.js",
+        "static/pico.min.css",
+        "static/style.css",
+        "static/sw.js",
         "static/weather.js",
     ],
     importpath = "github.com/nesono/evidence-store/web",
