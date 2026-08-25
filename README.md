@@ -30,15 +30,8 @@ To upload results from **any other Bazel workspace**, add the adapter as a
 dependency and run it after your tests, the same way CI or `dogfood.sh` does:
 
 ```starlark
-# MODULE.bazel
-bazel_dep(name = "evidence_store_bazel", version = "0.0.1")
-
-git_override(
-    module_name = "evidence_store_bazel",
-    remote = "https://github.com/nesono/evidence_store.git",
-    commit = "<pinned-sha>",
-    strip_prefix = "adapters/bazel",
-)
+# MODULE.bazel — published to the Bazel Central Registry, so this is all it takes
+bazel_dep(name = "evidence_store_bazel", version = "0.0.2")
 ```
 
 ```bash
@@ -414,11 +407,16 @@ pulling in the server's own dependencies.
 
 ### Add it to a workspace
 
-From the consuming repo's `MODULE.bazel`:
+The module is published to the [Bazel Central Registry](https://registry.bazel.build/modules/evidence_store_bazel), so a plain `bazel_dep` in the consuming repo's `MODULE.bazel` is all it takes:
 
 ```starlark
-bazel_dep(name = "evidence_store_bazel", version = "0.0.1")
+bazel_dep(name = "evidence_store_bazel", version = "0.0.2")
+```
 
+To track an unreleased commit instead of a published version — testing a fix
+before it's tagged, say — add a `git_override`:
+
+```starlark
 git_override(
     module_name = "evidence_store_bazel",
     remote = "https://github.com/nesono/evidence_store.git",
