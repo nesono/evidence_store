@@ -154,3 +154,52 @@ test("says when the point came from the device", () => {
 test("still says something for a reading with no hour", () => {
   assert.ok(describeReading({ summary: "Fog" }, "location").length > 0);
 });
+
+// --- Writing the weather down ---
+//
+// Offline there is no reading to be had, and no need for one: the tester is
+// standing in the weather. What the composer has to get right is the shape,
+// because a line typed on a hillside and a line the service returned end up in
+// the same field and are read by the same person months later.
+//
+// Reading.Summary() in internal/weather/weather.go defines that shape. The
+// expectations below are lifted from its own tests in
+// internal/weather/weather_test.go, so the two cannot drift apart quietly.
+
+import { composeWeather } from "../static/weather.js";
+
+test("a written line reads exactly as a fetched one", () => {
+  assert.equal(
+    composeWeather({
+      description: "Partly cloudy", temperatureC: 18.7,
+      windKph: 14.8, humidity: 52, precipitationMm: 0.3,
+    }),
+    "Partly cloudy, 18.7 °C, wind 15 km/h, humidity 52%, precipitation 0.3 mm");
+});
+
+test("dry is said, not left out", () => {
+  // "no precipitation" is a fact about a braking test, not the absence of one.
+  assert.equal(
+    composeWeather({ description: "Clear sky", temperatureC: 24, precipitationMm: 0 }),
+    "Clear sky, 24 °C, no precipitation");
+});
+
+test("what the tester did not fill in is left out", () => {
+  assert.equal(composeWeather({ description: "Fog", temperatureC: 3.5 }), "Fog, 3.5 °C");
+  assert.equal(composeWeather({}), "");
+  assert.equal(composeWeather(), "");
+});
+
+test("no precision is invented", () => {
+  assert.equal(
+    composeWeather({ temperatureC: 18, windKph: 14.8, humidity: 52.4 }),
+    "18 °C, wind 15 km/h, humidity 52%");
+});
+
+test("empty boxes are not zeroes", () => {
+  // A form gives back "" for a box nobody typed in, and filing that as 0 °C
+  // would be a claim about the temperature the tester never made.
+  assert.equal(composeWeather({ description: "Overcast", temperatureC: "", windKph: "" }), "Overcast");
+  assert.equal(composeWeather({ temperatureC: "0" }), "0 °C", "but a typed zero is a temperature");
+  assert.equal(composeWeather({ description: "  Hail  " }), "Hail");
+});

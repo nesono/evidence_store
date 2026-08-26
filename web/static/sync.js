@@ -27,6 +27,7 @@ export function emptySummary() {
     heldBack: 0,    // not this session's to send, or already blocked
     retryable: 0,   // nothing wrong with it; the link was
     photos: 0,      // images uploaded, ahead of the records that name them
+    weather: 0,     // readings filled in for records that named a place but no sky
     authRequired: false,
   };
 }
@@ -53,7 +54,7 @@ export function formatBytes(n) {
 // wrapper that redirects to a login page on its own: a background sync that
 // throws a tester out of a half-written record to an identity provider is a
 // worse outcome than a queue that waits.
-export async function syncOutbox({ outbox, post, putBlob, subject, onProgress = noProgress }) {
+export async function syncOutbox({ outbox, post, putBlob, lookUpWeather, subject, onProgress = noProgress }) {
   const summary = emptySummary();
   const entries = await outbox.list();
 
@@ -63,6 +64,25 @@ export async function syncOutbox({ outbox, post, putBlob, subject, onProgress = 
     else summary.heldBack++;
   }
   if (ready.length === 0) return summary;
+
+  // Weather the record could still gain, before it becomes something nobody
+  // can add to.
+  //
+  // The plan had this as an offer in the outbox, per record, before sending.
+  // Automatic sync makes that offer unreachable: the queue drains the moment a
+  // signal appears, usually with nobody looking at the page, and a filed record
+  // is immutable — so the chance would be gone for good. Doing it here is the
+  // same lookup at the only moment it can still happen.
+  //
+  // It is bounded to what cannot misrepresent anybody: a record that has no
+  // weather line at all, and a point it already names. A tester's own words are
+  // never replaced, and what is filled in carries weather_observed_at, so it
+  // reads as the fetched reading it is rather than as their account of the sky.
+  // A lookup that fails changes nothing and the record goes anyway — weather is
+  // not worth holding evidence back for.
+  if (lookUpWeather) {
+    for (const entry of ready) await addWeather({ outbox, entry, lookUpWeather, summary });
+  }
 
   // Photos first, always. A record must never be filed pointing at bytes the
   // store does not have: the reference in its log would resolve to nothing, and
@@ -88,6 +108,32 @@ export async function syncOutbox({ outbox, post, putBlob, subject, onProgress = 
   }
 
   return summary;
+}
+
+// addWeather fills in a reading for one record, if there is one to be had and
+// nothing already in the field.
+async function addWeather({ outbox, entry, lookUpWeather, summary }) {
+  const metadata = entry.record.metadata || {};
+  if (metadata.weather_conditions) return;
+  if (!metadata.location) return;
+
+  let reading;
+  try {
+    reading = await lookUpWeather(metadata.location, entry.record.finished_at);
+  } catch {
+    // No reading for that place and hour — a date outside the window the
+    // service keeps, or the service being unreachable. Neither is the record's
+    // problem, and neither is worth delaying it for.
+    return;
+  }
+  if (!reading || !reading.summary) return;
+
+  const filled = { ...metadata, weather_conditions: reading.summary };
+  if (reading.observed_at) filled.weather_observed_at = reading.observed_at;
+
+  entry.record = { ...entry.record, metadata: filled };
+  await outbox.save(entry);
+  summary.weather++;
 }
 
 // sendPhotos uploads the images the records about to go are going to name.
@@ -255,6 +301,7 @@ export function describeSync(summary) {
 
   const parts = [];
   if (summary.photos) parts.push(`${summary.photos} photo${summary.photos === 1 ? "" : "s"} uploaded`);
+  if (summary.weather) parts.push(`weather filled in for ${summary.weather}`);
   if (summary.filed) parts.push(`${summary.filed} filed`);
   // Worth saying rather than folding into "filed": it tells a tester their
   // earlier attempt did get through, which is otherwise invisible.

@@ -130,8 +130,28 @@
                     <span class="input-with-button">
                         <input type="text" name="weather_conditions" placeholder="Overcast, 8 °C, wind 20 km/h, light rain">
                         <button type="button" id="fill-weather" class="secondary outline" title="Look up the weather for the location and finish time">Look up</button>
+                        <!-- The other way to fill this in, and the only one that
+                             works on a proving ground: the tester is standing in
+                             the weather and does not need a model to tell them
+                             what it is doing. -->
+                        <button type="button" id="compose-weather" class="secondary outline" title="Write the conditions down yourself">Write it down</button>
                     </span>
                     <small class="location-status" id="weather-status"></small>
+                    <!-- Boxes rather than a free-text hint, so that a line
+                         written by hand comes out in the same order and the same
+                         units as one the service returned. It stays editable
+                         afterwards; this is a keyboard convenience, not a
+                         schema. -->
+                    <div id="weather-compose" class="weather-compose" hidden>
+                        <div class="grid">
+                            <input type="text" id="wc-description" placeholder="Overcast, light rain…" aria-label="Conditions">
+                            <input type="number" id="wc-temperature" step="0.1" placeholder="°C" aria-label="Temperature in °C">
+                            <input type="number" id="wc-wind" step="1" min="0" placeholder="km/h" aria-label="Wind speed in km/h">
+                            <input type="number" id="wc-humidity" step="1" min="0" max="100" placeholder="humidity %" aria-label="Relative humidity, percent">
+                            <input type="number" id="wc-precipitation" step="0.1" min="0" placeholder="rain mm" aria-label="Precipitation in mm">
+                        </div>
+                        <small class="weather-compose-preview" id="wc-preview"></small>
+                    </div>
                 </label>
                 <label>Notes
                     <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>

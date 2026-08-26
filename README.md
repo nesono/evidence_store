@@ -681,9 +681,21 @@ A record also remembers who wrote it, and is only ever sent by that person. If
 someone else is signed in, it waits for its author rather than being filed
 under the wrong name.
 
+**The weather field works offline too**, by a different route. The lookup is a
+server call by design, so with no connection there is nobody to ask — but the
+tester is standing in the weather and does not need a model to tell them what it
+is doing. **Write it down** opens a few boxes (conditions, temperature, wind,
+humidity, rain) that compose into the same one line, in the same order and units,
+that a fetched reading produces. A line written by hand carries no
+`weather_observed_at`, which is what lets a reader tell a measurement from a
+person's account of the sky.
+
+If the field is left empty and the record names a point, the reading is fetched
+during the sync instead — the last moment it can be, since a filed record is
+immutable. Your own words are never replaced.
+
 What does *not* work offline is anything that is a question about the archive:
-**Search**, **Analytics**, the weather lookup, and the suggestions in the repo
-and procedure boxes. Those say so rather than failing obscurely. Nothing
+**Search**, **Analytics**, and the suggestions in the repo and procedure boxes. Those say so rather than failing obscurely. Nothing
 cached here is evidence — a record served from a browser cache would be a claim
 about the archive that might have been true last week, and a reader could not
 tell it from a live one.
@@ -699,7 +711,7 @@ Two things to know before relying on it:
   campaign; an installed web app is exempt. Open the UI in Safari, then
   *Share → Add to Home Screen*. On Android, Chrome offers to install it.
 
-The weather lookup is the last piece that still needs a connection; see
+The full design, including what is deliberately left out, is in
 [docs/offline-support-plan.md](docs/offline-support-plan.md).
 
 ### Adding a manual test result

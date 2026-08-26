@@ -24,7 +24,7 @@ import {
   parseCoordinates,
   requestPosition,
 } from "./location.js";
-import { describeReading, fetchWeather, weatherPoint } from "./weather.js";
+import { composeWeather, describeReading, fetchWeather, weatherPoint } from "./weather.js";
 import { OFFLINE, connectionState, onConnectionChange, registerServiceWorker, startConnectionIndicator } from "./offline.js";
 import { BLOCKED, createOutbox, heldFrom, newEntry, openStore } from "./outbox.js";
 import { describeProgress, describeSync, formatBytes, progressFraction, syncOutbox } from "./sync.js";
@@ -1063,6 +1063,7 @@ async function renderOutbox() {
         ${digests.length ? `<div class="outbox-entry-photos" data-digests="${esc(digests.join(","))}"></div>` : ""}
         ${held ? `<div class="${heldClass}">${esc(held)}</div>` : ""}
         <div class="outbox-entry-actions">
+          ${canLookUpWeather(r) ? `<button class="secondary outline outbox-weather">Look up weather</button>` : ""}
           <button class="secondary outline outbox-edit">Edit</button>
           <button class="secondary outline outbox-delete">Delete</button>
         </div>
@@ -1082,12 +1083,65 @@ async function renderOutbox() {
     }
   }
 
+  list.querySelectorAll(".outbox-weather").forEach(btn => {
+    btn.addEventListener("click", () => lookUpQueuedWeather(btn.closest(".outbox-entry").dataset.id, btn));
+  });
   list.querySelectorAll(".outbox-edit").forEach(btn => {
     btn.addEventListener("click", () => editQueued(btn.closest(".outbox-entry").dataset.id));
   });
   list.querySelectorAll(".outbox-delete").forEach(btn => {
     btn.addEventListener("click", () => deleteQueued(btn.closest(".outbox-entry").dataset.id));
   });
+}
+
+// canLookUpWeather reports whether the reading is still worth offering.
+//
+// A record that already carries a weather line is left alone, whoever wrote it:
+// overwriting a tester's own account of the sky with a model's would be exactly
+// the wrong way round. What is needed is a point to ask about, which means the
+// location has to be coordinates rather than "Lab 2, bay 4".
+function canLookUpWeather(record) {
+  const metadata = record.metadata || {};
+  if (metadata.weather_conditions) return false;
+  return !!parseCoordinates(metadata.location || "");
+}
+
+// lookUpQueuedWeather fills in the weather for a record written earlier.
+//
+// The lookup wants a point and an hour, and a queued record already carries
+// both, so a reading fetched now is still a reading for the hour the test ran
+// in. That is what lets weather_observed_at go on it: the record synced on
+// Friday for a test run on Tuesday is not passed off as having been checked
+// live, and a reader can still go back and check it.
+//
+// The bound worth knowing is that the service keeps a recent window. Outside
+// it the answer is a 404 carrying the service's own account of why, which is
+// shown as it stands — it tells a tester what to do next in a way "unavailable"
+// cannot, and what to do next is write the weather down.
+async function lookUpQueuedWeather(id, btn) {
+  const entry = await outbox.get(id);
+  if (!entry) return;
+
+  const explainer = document.getElementById("outbox-explainer");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  try {
+    const point = parseCoordinates(entry.record.metadata.location);
+    const when = entry.record.finished_at ? new Date(entry.record.finished_at) : null;
+    const reading = await fetchWeather(point, when);
+
+    const metadata = { ...entry.record.metadata, weather_conditions: reading.summary };
+    if (reading.observed_at) metadata.weather_observed_at = reading.observed_at;
+    await outbox.save({ ...entry, record: { ...entry.record, metadata } });
+
+    explainer.textContent = `Weather filled in: ${reading.summary}`;
+    await renderOutbox();
+  } catch (err) {
+    explainer.textContent = `${err.message} You can write the weather in by editing the record.`;
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
 }
 
 // editQueued loads a waiting record back into the Add Result form.
@@ -1158,6 +1212,13 @@ async function runSync({ announce = false } = {}) {
       outbox,
       subject: currentSubject,
       onProgress: showProgress,
+      // A record that named a place but no sky can still gain the reading,
+      // right up until it is filed and becomes something nobody can add to.
+      lookUpWeather: async (location, finishedAt) => {
+        const point = parseCoordinates(location);
+        if (!point) return null;
+        return fetchWeather(point, finishedAt ? new Date(finishedAt) : null, apiFetchNoRedirect);
+      },
       // Uploading is a straight replay of bytes that are already named: the
       // store answers with the reference the browser worked out when the photo
       // was attached, and storing the same bytes twice is one object.
@@ -1341,6 +1402,18 @@ document.getElementById("fill-weather").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
 
   status.classList.remove("location-status-error");
+
+  if (connectionState() === OFFLINE) {
+    // The lookup is a server call by design (DESIGN.md §4.5), so there is
+    // nothing to wait for. Saying so beats a spinner that ends in a timeout.
+    status.textContent = "No connection, so there is nobody to ask. Write down what you can see instead.";
+    status.classList.add("location-status-error");
+    document.getElementById("weather-compose").hidden = false;
+    updateComposePreview();
+    document.getElementById("wc-description").focus();
+    return;
+  }
+
   status.textContent = "Looking up the weather…";
   btn.setAttribute("aria-busy", "true");
   btn.disabled = true;
@@ -1370,6 +1443,61 @@ document.getElementById("fill-weather").addEventListener("click", async (e) => {
   }
 });
 
+// --- Writing the weather down ---
+
+// The lookup needs a server; the sky does not. Offline the button says so and
+// the tester writes what they can see, which on a proving ground is better
+// information anyway: they are standing in it.
+const composeFields = {
+  description: "wc-description",
+  temperatureC: "wc-temperature",
+  windKph: "wc-wind",
+  humidity: "wc-humidity",
+  precipitationMm: "wc-precipitation",
+};
+
+function readComposeFields() {
+  const values = {};
+  for (const [key, elementID] of Object.entries(composeFields)) {
+    values[key] = document.getElementById(elementID).value;
+  }
+  return values;
+}
+
+function updateComposePreview() {
+  const line = composeWeather(readComposeFields());
+  document.getElementById("wc-preview").textContent = line
+    ? `Will be filed as: ${line}`
+    : "Fill in whatever you can see. Anything you leave empty is left out.";
+
+  // Live, into the field itself. There is no Apply button because there is
+  // nothing to apply: the boxes are a way of typing the line, and the line is
+  // what is filed.
+  const input = document.querySelector('#add-form [name="weather_conditions"]');
+  input.value = line;
+  // A written line is the tester's own account and never a reading, so the hour
+  // an actual reading would have carried stays off it. That difference is what
+  // lets a reader tell the two apart months later.
+  delete input.dataset.fromService;
+  delete input.dataset.observedAt;
+}
+
+document.getElementById("compose-weather").addEventListener("click", () => {
+  const panel = document.getElementById("weather-compose");
+  panel.hidden = !panel.hidden;
+  if (panel.hidden) return;
+
+  const status = document.getElementById("weather-status");
+  status.classList.remove("location-status-error");
+  status.textContent = "";
+  updateComposePreview();
+  document.getElementById("wc-description").focus();
+});
+
+for (const elementID of Object.values(composeFields)) {
+  document.getElementById(elementID).addEventListener("input", updateComposePreview);
+}
+
 // Editing the line makes it the tester's account of the weather again — which
 // is the point of leaving it editable, since the person who was standing there
 // outranks a model that put the hailstorm two valleys away. The hour the
@@ -1392,6 +1520,12 @@ function clearWeather() {
   const status = document.getElementById("weather-status");
   status.textContent = "";
   status.classList.remove("location-status-error");
+
+  const panel = document.getElementById("weather-compose");
+  panel.hidden = true;
+  for (const elementID of Object.values(composeFields)) {
+    document.getElementById(elementID).value = "";
+  }
 }
 
 function updateUtcPreview(input) {
