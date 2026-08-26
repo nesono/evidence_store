@@ -641,6 +641,15 @@ Create. The feedback says the record was saved here rather than filed, and a
 counter appears in the header. From it you can see what is waiting, correct a
 record before it goes, or delete one.
 
+**Photos work offline too.** Paste or drop an image into the test log with no
+connection and it is named, kept on the device, and referenced from the log
+straight away — the log is finished when you write it, and only the bytes are
+still owed. That works because a blob is named by the SHA-256 of its bytes and
+nothing else, so the browser can work out the reference the upload *would*
+return; nothing has to be rewritten when the record eventually goes. The photos
+show in the outbox, from the device's own copy, so you can see the pictures are
+safe and not just the words about them.
+
 The queue is held in IndexedDB, so it survives closing the tab, quitting the
 browser, and restarting the machine. It also survives the login expiring, which
 it usually will: a session lasts 12 hours by default and a campaign does not.
@@ -657,6 +666,13 @@ answered on its own terms:
 | Already filed | It leaves the queue too — an earlier attempt got through and its response did not, which is what `client_record_id` is for |
 | Refused (a bad field) | It stays, flagged with the store's own message, and is not retried until you change it |
 | No answer at all | It stays, unchanged, and goes with the next attempt |
+
+Photos are uploaded **before** the records that name them, always: a record
+filed first would point at bytes the store does not have, and a test log cannot
+be edited once filed. Uploading the same image twice costs one object, so an
+upload interrupted halfway through a campaign's photographs is free to repeat.
+Once the store has a photo and its record is filed, the device releases the
+bytes.
 
 Nothing leaves the queue until the store has said what became of it, so there
 is no state in which the page has forgotten a record the store never received.
@@ -683,7 +699,7 @@ Two things to know before relying on it:
   campaign; an installed web app is exempt. Open the UI in Safari, then
   *Share → Add to Home Screen*. On Android, Chrome offers to install it.
 
-Photos attached to a record still need a connection; that and the rest are in
+The weather lookup is the last piece that still needs a connection; see
 [docs/offline-support-plan.md](docs/offline-support-plan.md).
 
 ### Adding a manual test result

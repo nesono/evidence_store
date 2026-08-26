@@ -17,12 +17,27 @@
 // source that is not the sender's — because that will not fix itself, and
 // retrying it every time a signal appears would bury the one thing the tester
 // has to look at.
+import { digestsInRecord } from "./blobref.js";
+
 export const QUEUED = "queued";
 export const BLOCKED = "blocked";
 
 export const DB_NAME = "evidence-outbox";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const RECORD_STORE = "records";
+// Photo bytes, keyed by their own digest — the same name the store will give
+// them. Added in version 2; a browser holding a version 1 queue keeps its
+// records and gains an empty blob store.
+export const BLOB_STORE = "blobs";
+
+// How long a photo with no record pointing at it is kept.
+//
+// The same reasoning the server's orphan sweep uses (DESIGN.md §4.4): between
+// pasting an image into a log and pressing Create, a blob is legitimately
+// unreferenced, and a sweep that ran in that window would delete the photo out
+// of a log still being written. Matching the server's 24 hours keeps one number
+// to explain rather than two.
+export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 
 // newEntry wraps a record for the queue.
 //
@@ -140,6 +155,81 @@ export function createOutbox(store) {
       return attempted;
     },
 
+    // --- Photos ---
+    //
+    // Stashed by digest, which is what the store will call them, so an upload
+    // is a straight replay of bytes that are already named.
+
+    async stashBlob({ digest, ext, contentType, bytes, now = () => new Date() }) {
+      // Already held: the same photo attached to two records is one stash
+      // entry, for the same reason it is one object in the store.
+      const existing = await store.getBlob(digest);
+      if (existing) return existing;
+      const blob = {
+        digest, ext, contentType, bytes,
+        size: bytes.byteLength ?? bytes.size ?? 0,
+        stashedAt: now().toISOString(),
+      };
+      await store.putBlob(blob);
+      return blob;
+    },
+
+    async getBlob(digest) {
+      return store.getBlob(digest);
+    },
+
+    async blobs() {
+      return store.allBlobs();
+    },
+
+    // markBlobUploaded records that the store now has these bytes, which is
+    // what lets the sweep tell two unreachable photos apart: one that has been
+    // delivered, and one that is still the only copy in the world.
+    async markBlobUploaded(digest, now = () => new Date()) {
+      const blob = await store.getBlob(digest);
+      if (!blob) return null;
+      const uploaded = { ...blob, uploadedAt: now().toISOString() };
+      await store.putBlob(uploaded);
+      return uploaded;
+    },
+
+    // sweepBlobs deletes photos no queued record points at any more, which is
+    // what an upload leaves behind once its record has been filed.
+    //
+    // Reachability rather than a reference count, the same way the store
+    // decides it: a count can drift, and what a queue actually holds is always
+    // readable.
+    //
+    // The grace period is for bytes that have never been anywhere else. A log
+    // still being written has no record to be reachable from yet, and deleting
+    // its photographs would be deleting the only copy. Once the store has the
+    // bytes that stops being true, so an uploaded photo whose record has been
+    // filed goes at once rather than sitting on a phone for another day — on a
+    // campaign that is the difference between a few megabytes and all of them.
+    async sweepBlobs({ now = () => new Date(), grace = ORPHAN_GRACE_MS } = {}) {
+      const entries = await outbox.list();
+      const reachable = new Set();
+      for (const entry of entries) {
+        for (const digest of digestsInRecord(entry.record)) reachable.add(digest);
+      }
+
+      const cutoff = now().getTime() - grace;
+      let deleted = 0;
+      for (const blob of await store.allBlobs()) {
+        if (reachable.has(blob.digest)) continue;
+        if (!blob.uploadedAt && Date.parse(blob.stashedAt) > cutoff) continue;
+        await store.deleteBlob(blob.digest);
+        deleted++;
+      }
+      return deleted;
+    },
+
+    // How much of this device the queue is using, which a tester carrying a
+    // week of photographs has a right to see.
+    async bytesHeld() {
+      return (await store.allBlobs()).reduce((total, blob) => total + (blob.size || 0), 0);
+    },
+
     // Put a blocked record back in the queue, for a tester who has corrected
     // whatever the store objected to.
     async unblock(id) {
@@ -160,11 +250,16 @@ export function createOutbox(store) {
 // silent substitute: nothing in it survives the page, so the caller is told.
 export function memoryStore() {
   const rows = new Map();
+  const blobs = new Map();
   return {
     durable: false,
     async all() { return [...rows.values()].map(e => structuredClone(e)); },
     async put(entry) { rows.set(entry.id, structuredClone(entry)); },
     async delete(id) { rows.delete(id); },
+    async allBlobs() { return [...blobs.values()]; },
+    async getBlob(digest) { return blobs.get(digest) || null; },
+    async putBlob(blob) { blobs.set(blob.digest, blob); },
+    async deleteBlob(digest) { blobs.delete(digest); },
   };
 }
 
@@ -180,6 +275,9 @@ export function indexedDBStore(indexedDB = globalThis.indexedDB) {
         if (!db.objectStoreNames.contains(RECORD_STORE)) {
           db.createObjectStore(RECORD_STORE, { keyPath: "id" });
         }
+        if (!db.objectStoreNames.contains(BLOB_STORE)) {
+          db.createObjectStore(BLOB_STORE, { keyPath: "digest" });
+        }
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -187,11 +285,11 @@ export function indexedDBStore(indexedDB = globalThis.indexedDB) {
     return dbPromise;
   };
 
-  const run = async (mode, fn) => {
+  const run = async (mode, fn, storeName = RECORD_STORE) => {
     const db = await open();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(RECORD_STORE, mode);
-      const request = fn(tx.objectStore(RECORD_STORE));
+      const tx = db.transaction(storeName, mode);
+      const request = fn(tx.objectStore(storeName));
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
       if (request) {
@@ -208,6 +306,10 @@ export function indexedDBStore(indexedDB = globalThis.indexedDB) {
     async all() { return (await run("readonly", s => s.getAll())) || []; },
     async put(entry) { await run("readwrite", s => s.put(entry)); },
     async delete(id) { await run("readwrite", s => s.delete(id)); },
+    async allBlobs() { return (await run("readonly", s => s.getAll(), BLOB_STORE)) || []; },
+    async getBlob(digest) { return (await run("readonly", s => s.get(digest), BLOB_STORE)) || null; },
+    async putBlob(blob) { await run("readwrite", s => s.put(blob), BLOB_STORE); },
+    async deleteBlob(digest) { await run("readwrite", s => s.delete(digest), BLOB_STORE); },
   };
 }
 

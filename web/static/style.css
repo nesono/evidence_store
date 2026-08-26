@@ -1763,3 +1763,14 @@ body > main {
     color: #e67e22;
     margin-top: 0.25rem;
 }
+
+#outbox-progress { margin-bottom: 0.5rem; }
+#outbox-progress progress { margin-bottom: 0.2rem; }
+.outbox-progress-label { color: var(--pico-muted-color); }
+
+/* A photo attached to a queued record, shown from the device's own copy. */
+.outbox-entry-photos { display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap; }
+.outbox-entry-photos img {
+    width: 44px; height: 44px; object-fit: cover;
+    border-radius: 4px; border: 1px solid var(--pico-muted-border-color);
+}

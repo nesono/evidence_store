@@ -27,7 +27,9 @@ import {
 import { describeReading, fetchWeather, weatherPoint } from "./weather.js";
 import { OFFLINE, connectionState, onConnectionChange, registerServiceWorker, startConnectionIndicator } from "./offline.js";
 import { BLOCKED, createOutbox, heldFrom, newEntry, openStore } from "./outbox.js";
-import { describeSync, syncOutbox } from "./sync.js";
+import { describeProgress, describeSync, formatBytes, progressFraction, syncOutbox } from "./sync.js";
+import { useStash } from "./images.js";
+import { digestsInRecord } from "./blobref.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -976,6 +978,11 @@ let syncing = false;
 
 async function mountOutbox() {
   outbox = createOutbox(await openStore());
+  // Photos attached from now on are named and kept here rather than uploaded,
+  // so a log written with no connection is finished when the tester writes it.
+  useStash(outbox);
+  // Bytes belonging to logs that were never filed, from some earlier sitting.
+  outbox.sweepBlobs().catch(() => {});
   await refreshOutboxCount();
 
   document.getElementById("outbox-status").addEventListener("click", event => {
@@ -1032,12 +1039,15 @@ async function renderOutbox() {
     return;
   }
 
+  const held = await outbox.bytesHeld();
   explainer.textContent =
     "These are on this device only, until they are sent. They survive closing the browser, " +
-    "and they go automatically when there is a connection.";
+    "and they go automatically when there is a connection." +
+    (held ? ` Photos waiting here take up ${formatBytes(held)}.` : "");
 
   list.innerHTML = entries.map(entry => {
     const r = entry.record;
+    const digests = digestsInRecord(r);
     const held = heldFrom(entry, currentSubject);
     const heldClass = entry.state === BLOCKED ? "outbox-entry-error" : "outbox-entry-held";
     return `
@@ -1050,6 +1060,7 @@ async function renderOutbox() {
           ${esc(r.repo || "")} ${esc(r.branch || "")} ${esc((r.rcs_ref || "").slice(0, 12))}
           &middot; written ${formatTime(entry.capturedAt)}
         </div>
+        ${digests.length ? `<div class="outbox-entry-photos" data-digests="${esc(digests.join(","))}"></div>` : ""}
         ${held ? `<div class="${heldClass}">${esc(held)}</div>` : ""}
         <div class="outbox-entry-actions">
           <button class="secondary outline outbox-edit">Edit</button>
@@ -1057,6 +1068,19 @@ async function renderOutbox() {
         </div>
       </div>`;
   }).join("");
+
+  // The photographs, from the device's own copy. Seeing them is how a tester
+  // knows the pictures are safe and not just the words about them.
+  for (const holder of list.querySelectorAll(".outbox-entry-photos")) {
+    for (const digest of holder.dataset.digests.split(",")) {
+      const blob = await outbox.getBlob(digest);
+      if (!blob) continue;
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(new Blob([blob.bytes], { type: blob.contentType }));
+      img.alt = "attached photo";
+      holder.appendChild(img);
+    }
+  }
 
   list.querySelectorAll(".outbox-edit").forEach(btn => {
     btn.addEventListener("click", () => editQueued(btn.closest(".outbox-entry").dataset.id));
@@ -1133,6 +1157,18 @@ async function runSync({ announce = false } = {}) {
     const summary = await syncOutbox({
       outbox,
       subject: currentSubject,
+      onProgress: showProgress,
+      // Uploading is a straight replay of bytes that are already named: the
+      // store answers with the reference the browser worked out when the photo
+      // was attached, and storing the same bytes twice is one object.
+      putBlob: async blob => {
+        const resp = await apiFetchNoRedirect(`${API_BASE}/blobs`, {
+          method: "POST",
+          headers: { "Content-Type": blob.contentType || "application/octet-stream" },
+          body: blob.bytes,
+        });
+        return { ok: resp.ok, status: resp.status };
+      },
       post: async (path, payload) => {
         const resp = await apiFetchNoRedirect(`${API_BASE}${path}`, {
           method: "POST",
@@ -1144,7 +1180,10 @@ async function runSync({ announce = false } = {}) {
       },
     });
 
+    // Photos whose records have now been filed are owed to nobody.
+    await outbox.sweepBlobs();
     await refreshOutboxCount();
+    clearProgress();
     const explainer = document.getElementById("outbox-explainer");
     if (announce || summary.authRequired || summary.blocked) {
       explainer.textContent = describeSync(summary);
@@ -1152,8 +1191,28 @@ async function runSync({ announce = false } = {}) {
     return summary;
   } finally {
     syncing = false;
+    clearProgress();
     button.removeAttribute("aria-busy");
   }
+}
+
+// showProgress reports a sync as it runs.
+//
+// A week of manual results is a few kilobytes of JSON behind a few hundred
+// megabytes of photographs, over whatever link a hotel lobby provides. A tester
+// who cannot see it moving has no way to tell an upload in progress from one
+// that has quietly wedged — which is exactly when they close the laptop.
+function showProgress(progress) {
+  const el = document.getElementById("outbox-progress");
+  if (!el) return;
+  el.hidden = false;
+  el.querySelector("progress").value = progressFraction(progress);
+  el.querySelector(".outbox-progress-label").textContent = describeProgress(progress);
+}
+
+function clearProgress() {
+  const el = document.getElementById("outbox-progress");
+  if (el) el.hidden = true;
 }
 
 // --- Custom metadata fields ---

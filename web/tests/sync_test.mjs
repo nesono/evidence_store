@@ -8,7 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { BLOCKED, QUEUED, createOutbox, memoryStore, newEntry } from "../static/outbox.js";
-import { describeSync, syncOutbox } from "../static/sync.js";
+import {
+  RECORDS_SHARE, describeProgress, describeSync, formatBytes, progressFraction, syncOutbox,
+} from "../static/sync.js";
 
 const record = {
   repo: "org/firmware", branch: "main", rcs_ref: "abc123",
@@ -232,4 +234,145 @@ test("an empty queue asks the server nothing", async () => {
 
   assert.equal(post.sent.length, 0);
   assert.equal(describeSync(summary), "Nothing waiting to send.");
+});
+
+// --- Photos ---
+//
+// The ordering here is the one rule that cannot bend: a record must never be
+// filed pointing at bytes the store does not have, because the reference in its
+// log would resolve to nothing and the log is immutable once filed.
+
+const PNG = "sha256:" + "d".repeat(64);
+const JPG = "sha256:" + "e".repeat(64);
+
+function withPhoto(id, digest, ext = "png") {
+  const entry = newEntry({
+    ...record,
+    metadata: { observations: `Damage here ![shot](/api/v1/blobs/${digest}.${ext})` },
+  }, { id, capturedBy: "jdoe" });
+  return entry;
+}
+
+function fakeBlobs(outbox) {
+  return async (digest, size) => outbox.stashBlob({
+    digest, ext: "png", contentType: "image/png",
+    bytes: new ArrayBuffer(size), now: () => new Date("2026-08-25T10:00:00Z"),
+  });
+}
+
+test("photos go before the records that name them", async () => {
+  const outbox = await outboxWith(withPhoto("a", PNG));
+  await fakeBlobs(outbox)(PNG, 1024);
+
+  const order = [];
+  const putBlob = async blob => { order.push("photo:" + blob.digest.slice(7, 11)); return { ok: true, status: 201 }; };
+  const post = fakePost(payload => { order.push("records"); return allCreated(payload); });
+
+  const summary = await syncOutbox({ outbox, post, putBlob, subject: "jdoe" });
+
+  assert.deepEqual(order, ["photo:dddd", "records"],
+    "a record filed first would point at bytes that are not there yet");
+  assert.equal(summary.photos, 1);
+  assert.equal(summary.filed, 1);
+});
+
+test("a photo that will not upload holds its record back", async () => {
+  const outbox = await outboxWith(withPhoto("a", PNG));
+  await fakeBlobs(outbox)(PNG, 2048);
+
+  const post = fakePost(allCreated);
+  const putBlob = async () => ({ ok: false, status: 500 });
+
+  const summary = await syncOutbox({ outbox, post, putBlob, subject: "jdoe" });
+
+  assert.equal(post.sent.length, 0, "the record must not go without its photo");
+  assert.equal(summary.retryable, 1);
+  assert.equal(await outbox.count(), 1);
+  assert.equal((await outbox.list())[0].state, QUEUED, "nothing is wrong with the record");
+});
+
+test("an expired session during the photos stops the whole sync", async () => {
+  const outbox = await outboxWith(withPhoto("a", PNG));
+  await fakeBlobs(outbox)(PNG, 512);
+
+  const post = fakePost(allCreated);
+  const summary = await syncOutbox({
+    outbox, post, subject: "jdoe",
+    putBlob: async () => ({ ok: false, status: 401 }),
+  });
+
+  assert.equal(summary.authRequired, true);
+  assert.equal(post.sent.length, 0);
+  assert.equal(await outbox.count(), 1);
+});
+
+test("only the photos the outgoing records name are uploaded", async () => {
+  const outbox = await outboxWith(withPhoto("mine", PNG));
+  const stash = fakeBlobs(outbox);
+  await stash(PNG, 100);
+  // A photo pasted into a log that was never submitted. It is not owed to
+  // anybody yet, and uploading it would send bytes no record points at.
+  await stash(JPG, 100);
+
+  const uploaded = [];
+  const putBlob = async blob => { uploaded.push(blob.digest); return { ok: true, status: 201 }; };
+
+  await syncOutbox({ outbox, post: fakePost(allCreated), putBlob, subject: "jdoe" });
+
+  assert.deepEqual(uploaded, [PNG]);
+});
+
+test("a record with no photos needs no upload step", async () => {
+  const outbox = await outboxWith(newEntry(record, { id: "plain", capturedBy: "jdoe" }));
+  let asked = false;
+  const putBlob = async () => { asked = true; return { ok: true, status: 201 }; };
+
+  const summary = await syncOutbox({ outbox, post: fakePost(allCreated), putBlob, subject: "jdoe" });
+
+  assert.equal(asked, false);
+  assert.equal(summary.filed, 1);
+});
+
+// --- Watching it go ---
+
+test("progress is weighted by bytes, not by photo count", async () => {
+  const outbox = await outboxWith(withPhoto("a", PNG), withPhoto("b", JPG));
+  const stash = fakeBlobs(outbox);
+  await stash(PNG, 9_000_000);   // a photograph
+  await stash(JPG, 1_000_000);   // a screenshot
+
+  const seen = [];
+  const putBlob = async () => ({ ok: true, status: 201 });
+  await syncOutbox({
+    outbox, post: fakePost(allCreated), putBlob, subject: "jdoe",
+    onProgress: p => seen.push({ ...p }),
+  });
+
+  const afterFirst = seen.filter(p => p.phase === "photos" && p.done === 1).pop();
+  assert.equal(afterFirst.bytesDone, 9_000_000);
+  assert.equal(afterFirst.bytesTotal, 10_000_000);
+
+  // One of two photos done is 90% of the work here, not 50%.
+  assert.ok(progressFraction(afterFirst) > 0.8,
+    `expected most of the bar after the big photo, got ${progressFraction(afterFirst)}`);
+
+  assert.ok(seen.some(p => p.phase === "records"), "the records phase is reported too");
+});
+
+test("the bar keeps a sliver for the records", async () => {
+  // A batch of JSON against a week of photographs is not half the work, and a
+  // bar that says it is would sit still and then finish instantly.
+  assert.equal(progressFraction({ phase: "photos", bytesDone: 10, bytesTotal: 10 }), 1 - RECORDS_SHARE);
+  assert.equal(progressFraction({ phase: "records", done: 4, total: 4 }), 1);
+  assert.equal(progressFraction(null), 0);
+  // No photos at all: the phase reports without dividing by zero.
+  assert.equal(progressFraction({ phase: "photos", bytesDone: 0, bytesTotal: 0 }), 0);
+});
+
+test("the progress line names the phase", () => {
+  assert.match(
+    describeProgress({ phase: "photos", done: 7, total: 23, bytesDone: 18_400_000, bytesTotal: 62_100_000 }),
+    /Uploading photos 7 of 23 \(17\.5 MB of 59\.2 MB\)/);
+  assert.equal(describeProgress({ phase: "records", total: 12 }), "Filing 12 records");
+  assert.equal(describeProgress({ phase: "records", total: 1 }), "Filing 1 record");
 });
