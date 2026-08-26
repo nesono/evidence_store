@@ -700,6 +700,26 @@ cached here is evidence — a record served from a browser cache would be a clai
 about the archive that might have been true last week, and a reader could not
 tell it from a live one.
 
+### What can lose an unsent record
+
+Until a record syncs, the only copy is in this browser. The page says which of
+these applies rather than leaving you to find out:
+
+| What | Effect | What the page does |
+|---|---|---|
+| **Ordinary use** | Nothing. IndexedDB is on disk and survives closing the tab, quitting the browser, and restarting the machine | Asks the browser to mark the data persistent, so eviction needs a deliberate act |
+| **The browser will not promise** | It may reclaim the space if the device runs low | Says so in the outbox, in orange |
+| **No storage at all** (some private windows) | The queue lasts only as long as the tab | Warns in red **when the first record is queued**, not later |
+| **iOS Safari, site not installed** | Storage for a site not visited in **7 days** is evicted | Add to Home Screen exempts it — see below |
+| **"Clear browsing data"** | Gone, with everything else | Nothing can prevent it; the header counter means it is not invisible beforehand |
+| **A different browser, profile or device** | Has its own empty outbox | The counter is per-browser |
+
+A record that has been waiting is the failure this feature can actually
+produce, so the header stops counting and starts saying how long: **7 days**
+gets a warning, **30 days** turns it red. Nothing ever expires or is refused —
+a record queued in March is still a true account of a test that happened in
+March, and refusing it would destroy the only copy to punish the delay.
+
 Two things to know before relying on it:
 
 - **It needs HTTPS.** Service workers only run in a secure context, so a

@@ -464,6 +464,35 @@ The API is the single point of entry. Adapters run outside the backend and trans
 | **JUnit (generic)** | JUnit XML | CI build URL | Any CI system |
 | **Manual test CLI** | Interactive prompts | Username of tester | Tester workstation |
 
+### Collecting Without a Connection
+
+Test campaigns happen at proving grounds, workshops and tracks, where there is
+often no route back to the store. The web UI is therefore an adapter as much as
+a front end: it can collect evidence with nothing to send it to, and file it
+later.
+
+The pieces that make it work are all decisions taken elsewhere in this document,
+used differently rather than added to:
+
+- **A record's identity is a client's to choose** (§5.1). `client_record_id`
+  lets a queue be retried over a bad link without filing anything twice.
+- **A blob is named by its bytes** (§4.4). The browser can compute a photo's
+  final reference offline, so a test log written in a field is finished when it
+  is written, and only the bytes are still owed.
+- **References are extracted server-side at ingest** (§4.4), so a log authored
+  offline needs no special handling on arrival.
+- **`weather_conditions` is text, and the hour is filed only for a reading**
+  (§2.2). A tester with no connection writes down what they can see; a record
+  that named a point and no sky can still gain a reading before it is filed.
+
+Nothing about the archive is available offline — search, analytics and the
+suggestion lists all need the store, and a record answered from a browser cache
+would be a claim about the archive that a reader could not tell from a live one.
+
+[docs/offline-support-plan.md](docs/offline-support-plan.md) has the full
+design, including what is deliberately left out: a portable export bundle for
+sites that never get a signal, and an offline path for the Bazel adapter.
+
 ### Developer Workstation Ingestion
 
 Developer-local test runs are a first-class ingestion source. This enables:

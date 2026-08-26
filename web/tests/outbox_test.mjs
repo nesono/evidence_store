@@ -8,8 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  BLOCKED, QUEUED,
-  createOutbox, heldFrom, memoryStore, newEntry, sendableBy,
+  BLOCKED, QUEUED, STALE_WARN_DAYS,
+  ageInDays, assessDurability, createOutbox, heldFrom, memoryStore, newEntry,
+  roomIsTight, sendableBy, staleness,
 } from "../static/outbox.js";
 
 const record = {
@@ -234,4 +235,103 @@ test("the queue reports how much of the device it is using", async () => {
   await outbox.stashBlob({ digest: DIGEST_B, ext: "png", contentType: "image/png", bytes: new ArrayBuffer(2500) });
 
   assert.equal(await outbox.bytesHeld(), 4000);
+});
+
+// --- How long something has been waiting ---
+//
+// A record that sits unsent is the failure this whole feature can produce, so
+// the queue has to say so while the evidence is still there to save. Nothing
+// here expires or refuses a record: one queued in March is still a true account
+// of a test that happened in March.
+
+const NOW = new Date("2026-08-25T12:00:00Z");
+const written = iso => ({ ...newEntry(record), capturedAt: iso });
+
+test("a record written today is not nagged about", () => {
+  const entries = [written("2026-08-25T09:00:00Z"), written("2026-08-23T09:00:00Z")];
+  assert.equal(staleness(entries, NOW).level, "none");
+});
+
+test("a week waiting is worth saying", () => {
+  // Seven days is Safari's eviction horizon for a site nobody has visited, so
+  // the warning arrives while the records still exist.
+  const result = staleness([written("2026-08-18T11:00:00Z")], NOW);
+  assert.equal(result.level, "warn");
+  assert.equal(result.days, STALE_WARN_DAYS);
+});
+
+test("a month waiting is worth insisting on", () => {
+  const result = staleness([written("2026-07-01T12:00:00Z")], NOW);
+  assert.equal(result.level, "urgent");
+  assert.equal(result.days, 55);
+});
+
+test("the oldest record is the one that speaks", () => {
+  const entries = [written("2026-08-25T11:00:00Z"), written("2026-07-01T12:00:00Z")];
+  assert.equal(staleness(entries, NOW).level, "urgent");
+});
+
+test("an empty queue says nothing", () => {
+  assert.deepEqual(staleness([], NOW), { level: "none", days: 0 });
+});
+
+test("a record with an unreadable date is not called old", () => {
+  // Better to under-warn than to tell somebody their evidence is rotting
+  // because of a parse failure.
+  assert.equal(ageInDays({ capturedAt: "not a date" }, NOW), 0);
+});
+
+// --- What the browser has promised ---
+
+test("no disk storage at all is the strongest answer", async () => {
+  const assessment = await assessDurability(memoryStore(), null);
+  assert.equal(assessment.level, "session",
+    "a queue that lasts as long as the tab is not somewhere to leave evidence");
+});
+
+test("a browser that promises to keep it says so", async () => {
+  const storage = { persisted: async () => true, estimate: async () => ({ quota: 100, usage: 1 }) };
+  const assessment = await assessDurability({ durable: true }, storage);
+
+  assert.equal(assessment.level, "durable");
+  assert.equal(assessment.persisted, true);
+});
+
+test("permission is asked for, not just checked", async () => {
+  let asked = false;
+  const storage = {
+    persisted: async () => false,
+    persist: async () => { asked = true; return true; },
+    estimate: async () => ({}),
+  };
+
+  const assessment = await assessDurability({ durable: true }, storage);
+
+  assert.equal(asked, true, "asking is free and usually granted for a site in use");
+  assert.equal(assessment.level, "durable");
+});
+
+test("a refusal is reported rather than assumed away", async () => {
+  // A private window refuses. So does a browser about to reclaim space. Both
+  // are worth a tester knowing, and neither needs fingerprinting to detect —
+  // the Storage API answers the question directly.
+  const storage = { persisted: async () => false, persist: async () => false, estimate: async () => ({}) };
+  const assessment = await assessDurability({ durable: true }, storage);
+
+  assert.equal(assessment.level, "evictable");
+});
+
+test("a browser that will not discuss it has promised nothing", async () => {
+  const storage = { persisted: async () => { throw new Error("denied"); } };
+  const assessment = await assessDurability({ durable: true }, storage);
+
+  assert.equal(assessment.level, "evictable");
+});
+
+test("a device running out of room is worth mentioning", () => {
+  assert.equal(roomIsTight({ quota: 1000, usage: 850 }), true);
+  assert.equal(roomIsTight({ quota: 1000, usage: 200 }), false);
+  // Nothing to say when the browser did not tell us.
+  assert.equal(roomIsTight({}), false);
+  assert.equal(roomIsTight(), false);
 });
