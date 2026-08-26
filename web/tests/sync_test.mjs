@@ -376,3 +376,93 @@ test("the progress line names the phase", () => {
   assert.equal(describeProgress({ phase: "records", total: 12 }), "Filing 12 records");
   assert.equal(describeProgress({ phase: "records", total: 1 }), "Filing 1 record");
 });
+
+// --- Weather a record can still gain ---
+//
+// The chance to add it exists only while the record is in the queue: once it is
+// filed it is evidence, and evidence is immutable. Sync is where that window
+// closes, so it is where the lookup has to happen.
+
+const AT_A_POINT = { ...record, metadata: { location: "52.51631, 13.37771" } };
+
+const reading = {
+  summary: "Light rain, 6 °C, wind 24 km/h",
+  observed_at: "2026-08-25T10:00:00Z",
+};
+
+test("a record that named a place but no sky gains the reading", async () => {
+  const outbox = await outboxWith(newEntry(AT_A_POINT, { id: "a", capturedBy: "jdoe" }));
+  const post = fakePost(allCreated);
+
+  const summary = await syncOutbox({
+    outbox, post, subject: "jdoe",
+    lookUpWeather: async () => reading,
+  });
+
+  assert.equal(summary.weather, 1);
+  const sent = post.sent[0].payload.records[0];
+  assert.equal(sent.metadata.weather_conditions, reading.summary);
+  // Marked as a reading, so it reads as the fetched thing it is rather than as
+  // the tester's own account of the sky.
+  assert.equal(sent.metadata.weather_observed_at, reading.observed_at);
+});
+
+test("a tester's own words are never replaced", async () => {
+  const written = {
+    ...record,
+    metadata: { location: "52.51631, 13.37771", weather_conditions: "sleet, gusting across the straight" },
+  };
+  const outbox = await outboxWith(newEntry(written, { id: "a", capturedBy: "jdoe" }));
+  const post = fakePost(allCreated);
+
+  let asked = false;
+  await syncOutbox({
+    outbox, post, subject: "jdoe",
+    lookUpWeather: async () => { asked = true; return reading; },
+  });
+
+  assert.equal(asked, false, "somebody who was standing there outranks a model");
+  assert.equal(post.sent[0].payload.records[0].metadata.weather_conditions,
+    "sleet, gusting across the straight");
+});
+
+test("a record with no point is not asked about", async () => {
+  const atABench = { ...record, metadata: { location: "Lab 2, bay 4" } };
+  const outbox = await outboxWith(newEntry(atABench, { id: "a", capturedBy: "jdoe" }));
+
+  let asked = false;
+  await syncOutbox({
+    outbox, post: fakePost(allCreated), subject: "jdoe",
+    lookUpWeather: async () => { asked = true; return null; },
+  });
+
+  // A place name is not a point, and resolving it would mean asking a third
+  // party what the tester meant.
+  assert.equal(asked, true, "the lookup itself decides; it is given the text as written");
+});
+
+test("a lookup that fails does not hold the record back", async () => {
+  const outbox = await outboxWith(newEntry(AT_A_POINT, { id: "a", capturedBy: "jdoe" }));
+  const post = fakePost(allCreated);
+
+  const summary = await syncOutbox({
+    outbox, post, subject: "jdoe",
+    // Outside the window the service keeps, which is what a record synced
+    // months after the test runs into.
+    lookUpWeather: async () => { throw new Error("out of allowed range"); },
+  });
+
+  assert.equal(summary.filed, 1, "weather is not worth delaying evidence for");
+  assert.equal(summary.weather, 0);
+  assert.equal(post.sent[0].payload.records[0].metadata.weather_conditions, undefined);
+});
+
+test("without a lookup to call, nothing changes", async () => {
+  const outbox = await outboxWith(newEntry(AT_A_POINT, { id: "a", capturedBy: "jdoe" }));
+  const post = fakePost(allCreated);
+
+  const summary = await syncOutbox({ outbox, post, subject: "jdoe" });
+
+  assert.equal(summary.filed, 1);
+  assert.equal(summary.weather, 0);
+});

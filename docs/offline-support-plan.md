@@ -87,10 +87,25 @@ lets a reader tell, months later, which records carry a reading and which carry
 a person's account.
 
 **Looked up afterwards.** The lookup takes a point and an hour, and a queued
-record already carries both, so the outbox offers **Look up** per record before
-it is sent, and a reading fetched then is still a reading for the hour the test
-ran in. `weather_observed_at` keeps its meaning, so a record synced on Friday
-for a test run on Tuesday is not passed off as having been checked live.
+record already carries both, so a reading fetched later is still a reading for
+the hour the test ran in. `weather_observed_at` keeps its meaning, so a record
+synced on Friday for a test run on Tuesday is not passed off as having been
+checked live.
+
+*Corrected while building this (phase 5).* The plan had the outbox **offer**
+this per record, before sending. Building it showed that offer is unreachable:
+sync is automatic, so the queue drains the moment a signal appears — usually
+with nobody looking at the page — and a filed record is immutable, so the chance
+would be gone for good. The lookup therefore happens during the sync itself,
+which is the only moment it can still happen.
+
+It is bounded to what cannot misrepresent anybody: a record with no weather line
+at all, and a point it already names. A tester's own words are never replaced,
+what gets filled in carries `weather_observed_at` so it reads as the fetched
+reading it is, and a lookup that fails changes nothing and the record goes
+anyway — weather is not worth holding evidence back for. The outbox keeps a
+manual **Look up weather** button for records that stay in the queue, which is
+where the original offer still applies.
 
 One bound, and the plan does not paper over it: the default endpoint
 (`https://api.open-meteo.com/v1/forecast`) keeps a recent window — weeks, not

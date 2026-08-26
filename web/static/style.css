@@ -1774,3 +1774,9 @@ body > main {
     width: 44px; height: 44px; object-fit: cover;
     border-radius: 4px; border: 1px solid var(--pico-muted-border-color);
 }
+
+/* Writing the weather down, for when there is nobody to ask. */
+.weather-compose { margin-top: 0.4rem; }
+.weather-compose .grid { gap: 0.4rem; }
+.weather-compose input { margin-bottom: 0.3rem; font-size: 0.9em; }
+.weather-compose-preview { color: var(--pico-muted-color); font-style: italic; }

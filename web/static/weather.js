@@ -62,6 +62,52 @@ export async function fetchWeather({ lat, lon }, when, fetchImpl = apiFetch) {
   return data;
 }
 
+// --- Writing it down ---
+
+// composeWeather turns what a tester can see into the one line the field holds.
+//
+// Offline there is no reading to be had, and there is also no need for one: the
+// tester is standing in the weather. What they lack is not the information but
+// somewhere to put it in the shape everything else uses.
+//
+// So the shape is not invented here. Reading.Summary() in
+// internal/weather/weather.go already defines the canonical order and units of
+// weather_conditions, and this emits the same: description, temperature, wind,
+// humidity, precipitation — with dry said rather than left out, because "no
+// precipitation" is a fact about a braking test and not the absence of one.
+// A line typed on a hillside then reads, filters and compares exactly like a
+// line the service returned.
+//
+// What it does not do is claim to be a reading. The caller files no
+// weather_observed_at for a composed line, which is what lets a reader tell
+// months later which records carry a measurement and which carry a person's
+// account of the sky.
+export function composeWeather({ description, temperatureC, windKph, humidity, precipitationMm } = {}) {
+  const parts = [];
+
+  const text = (description || "").trim();
+  if (text) parts.push(text);
+  if (isNumber(temperatureC)) parts.push(`${trim(temperatureC)} °C`);
+  if (isNumber(windKph)) parts.push(`wind ${trim(Math.round(windKph))} km/h`);
+  if (isNumber(humidity)) parts.push(`humidity ${trim(Math.round(humidity))}%`);
+  if (isNumber(precipitationMm)) {
+    parts.push(precipitationMm > 0 ? `precipitation ${trim(precipitationMm)} mm` : "no precipitation");
+  }
+
+  return parts.join(", ");
+}
+
+function isNumber(v) {
+  if (v === null || v === undefined || v === "") return false;
+  return Number.isFinite(Number(v));
+}
+
+// trim prints a measurement without the trailing zeros of a precision nobody
+// claimed — what trimFloat does on the Go side.
+function trim(v) {
+  return String(Number(v));
+}
+
 // describeReading says which hour the line in the field is for, and where the
 // point came from.
 //
