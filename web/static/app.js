@@ -34,6 +34,7 @@ import {
 import { describeProgress, describeSync, formatBytes, progressFraction, syncOutbox } from "./sync.js";
 import { useStash } from "./images.js";
 import { digestsInRecord } from "./blobref.js";
+import { setValue } from "./editing.js";
 
 // Fields shown in the collapsed bar; everything else lives behind "More filters".
 // `ref` is one box matching a branch, a tag or a commit, the same as analytics
@@ -1444,7 +1445,9 @@ attachImageUploads(
 
 document.getElementById("fill-now").addEventListener("click", () => {
   const input = document.querySelector('#add-form [name="finished_at"]');
-  input.value = formatTime(new Date().toISOString());
+  // Undoably: a button that fills a field in is one a tester may want to take
+  // back, and taking it back is what Cmd-Z is for (issue #83).
+  setValue(input, formatTime(new Date().toISOString()));
   updateUtcPreview(input);
 });
 
@@ -1466,7 +1469,7 @@ document.getElementById("fill-location").addEventListener("click", async (e) => 
 
   try {
     const { lat, lon, accuracy } = await requestPosition();
-    input.value = formatCoordinates(lat, lon);
+    setValue(input, formatCoordinates(lat, lon));
     input.dataset.fromDevice = input.value;
     input.dataset.accuracyM = accuracy;
     status.textContent = formatAccuracy(accuracy)
@@ -1534,7 +1537,7 @@ document.getElementById("fill-weather").addEventListener("click", async (e) => {
     const when = rawFinished ? parseUserDateTime(rawFinished) : null;
 
     const reading = await fetchWeather(point, when);
-    input.value = reading.summary;
+    setValue(input, reading.summary);
     input.dataset.fromService = reading.summary;
     if (reading.observed_at) input.dataset.observedAt = reading.observed_at;
     status.textContent = describeReading(reading, point.source);
@@ -1578,6 +1581,12 @@ function updateComposePreview() {
   // nothing to apply: the boxes are a way of typing the line, and the line is
   // what is filed.
   const input = document.querySelector('#add-form [name="weather_conditions"]');
+  // A plain assignment, unlike the buttons above, and deliberately. This runs on
+  // every keystroke in the composer boxes, and an undoable write has to focus
+  // the field it writes to — which would pull the caret out of the box being
+  // typed in and back again, dozens of times, breaking IME along the way. The
+  // composer's own boxes keep their undo; the line they compose is not
+  // somewhere anybody is typing.
   input.value = line;
   // A written line is the tester's own account and never a reading, so the hour
   // an actual reading would have carried stays off it. That difference is what

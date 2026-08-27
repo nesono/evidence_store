@@ -9,6 +9,7 @@
 
 import { API_BASE, apiFetch } from "./common.js";
 import { describe as describeBytes } from "./blobref.js";
+import { insertAtCursor as insertUndoably, replaceFirst } from "./editing.js";
 
 // Where a photo goes when there is nowhere to send it. Set by app.js once the
 // queue is open; until then, and in a browser that would not give us one,
@@ -257,20 +258,17 @@ function altFor(file) {
 
 function insertAtCursor(field, text) {
   const start = field.selectionStart ?? field.value.length;
-  const end = field.selectionEnd ?? start;
 
   // On its own line, because an image in the middle of a sentence reads as a
   // gap in the sentence once it is rendered.
   const before = field.value.slice(0, start);
   const prefix = before === "" || before.endsWith("\n") ? "" : "\n";
 
-  field.setRangeText(prefix + text + "\n", start, end, "end");
-  field.dispatchEvent(new Event("input", { bubbles: true }));
-  field.focus();
+  // Through editing.js rather than setRangeText: an edit that does not join the
+  // undo stack takes the tester's own typing down with it (issue #83).
+  insertUndoably(field, prefix + text + "\n");
 }
 
 function replaceInField(field, token, replacement) {
-  if (!field.value.includes(token)) return; // the tester deleted it meanwhile
-  field.value = field.value.split(token).join(replacement);
-  field.dispatchEvent(new Event("input", { bubbles: true }));
+  replaceFirst(field, token, replacement);
 }
