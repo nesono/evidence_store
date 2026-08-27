@@ -525,6 +525,15 @@
         </dialog>
     </main>
 
+    <!-- Which build is answering. In the footer rather than the header because
+         it is not something anybody acts on — it is something they read out
+         when reporting that something else went wrong. Empty when the server
+         has not been reached, since a remembered version is a claim about a
+         deployment nobody has checked. -->
+    <footer class="container app-footer">
+        <small>Evidence Store <span id="server-version"></span></small>
+    </footer>
+
     <datalist id="repos-list"></datalist>
     <datalist id="sources-list"></datalist>
 

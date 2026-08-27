@@ -26,6 +26,7 @@ import (
 	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/server"
 	"github.com/nesono/evidence-store/internal/store"
+	"github.com/nesono/evidence-store/internal/version"
 )
 
 var (
@@ -680,4 +681,29 @@ type listResponse struct {
 
 type inheritanceListResponse struct {
 	Declarations []model.InheritanceDeclaration `json:"declarations"`
+}
+
+// --- Which build is running (issue #111) ---
+
+func TestVersionIsPublicAndWellFormed(t *testing.T) {
+	// Public on purpose: the page names the build before anybody has logged in,
+	// which is when somebody reporting "it does this on the login screen" most
+	// needs to say which build they were looking at.
+	resp := getJSON(t, "/version")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "no-store", resp.Header.Get("Cache-Control"),
+		"a remembered version would name a build that may have been replaced since")
+
+	got := decodeJSON[version.Version](t, resp)
+	require.NotEmpty(t, got.Version)
+	require.NotEmpty(t, got.Source)
+
+	if got.Source == version.SourceUnknown {
+		// The test binary is usually built from a working copy, which matches
+		// no commit and so claims no time.
+		assert.Equal(t, version.Unknown, got.Version)
+		return
+	}
+	_, err := time.Parse(version.Layout, got.Version)
+	assert.NoError(t, err, "a version that claims a time must be readable as one: %q", got.Version)
 }

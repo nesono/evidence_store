@@ -21,6 +21,7 @@ Base URL: `/api/v1`
 | `GET` | `/api/v1/analytics/tests` | Per-test reliability metrics (see [Analytics](#analytics)) |
 | `GET` | `/api/v1/analytics/clusters` | Co-failure clusters and the minimal covering set |
 | `GET` | `/api/v1/weather` | Conditions at a point and an hour (see [Weather while a test ran](#weather-while-a-test-ran)) |
+| `GET` | `/version` | Which build is running (public) |
 | `GET` | `/healthz` | Health check |
 
 ## Creating evidence
@@ -117,6 +118,38 @@ is why it has to be a UUID rather than a build number or a filename.
 
 This is what makes offline collection safe to sync over a bad link — see
 [docs/offline-support-plan.md](offline-support-plan.md).
+
+## Which build is running
+
+```bash
+curl http://localhost:8000/version
+```
+
+```json
+{"version": "2026.08.27.16.23", "source": "build"}
+```
+
+`version` is the minute the build was made, in UTC — `YYYY.MM.DD.hh.mm`. Not a
+semantic version, because nothing here is released: the store is deployed from a
+branch, and the useful question is whether this is the build you deployed on
+Tuesday.
+
+`source` says where that came from, which matters when it looks wrong:
+
+| Value | Meaning |
+|---|---|
+| `build` | Stamped when the binary was linked. What a deployment runs |
+| `commit` | Not stamped, but built from a clean checkout — the time is the commit's |
+| `unknown` | Built from a working copy with uncommitted changes, so it matches no commit. `version` reads `dev` |
+
+Public, like `/healthz` and unlike everything under `/api/v1`: the web UI names
+the build before anybody has logged in, and there is nothing here to protect
+that the unauthenticated frontend does not already reveal. The response is
+`Cache-Control: no-store` — a remembered version would name a build that may
+have been replaced since, and this is the field somebody reads out when they
+are already confused.
+
+The web UI shows it in the page footer.
 
 ## Test logs
 

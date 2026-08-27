@@ -762,6 +762,19 @@ defaults to Manual Test.
   from the dropdown, for a bench that runs the same handful of manual
   procedures over and over.
 
+### Which build is running
+
+The page footer names the server's build: `2026.08.27.16.23`, the minute it was
+made in UTC. It is what to quote when reporting that something misbehaved, and
+`curl http://localhost:8000/version` answers the same question from a script —
+see [Which build is running](docs/api-reference.md#which-build-is-running).
+
+Builds made with `docker compose build` are stamped at link time. A `go run`
+build from a clean checkout falls back to the commit's own time, and one from a
+working copy with uncommitted changes reads `dev`, because it matches no commit.
+The footer is empty when the server has not been reached at all — a remembered
+version would be a claim about a deployment nobody has checked.
+
 ### Searching evidence
 
 The **Search** tab lists and filters records, with the same regex support the
