@@ -1787,3 +1787,12 @@ body > main {
 
 .outbox-explainer-warn { color: #e67e22; }
 .outbox-explainer-alarm { color: #d32f2f; font-weight: 600; }
+
+/* Which build is answering. Quiet on purpose: read when something else has
+   already gone wrong, ignored the rest of the time. */
+.app-footer {
+    padding-top: 0;
+    padding-bottom: 1.5rem;
+    color: var(--pico-muted-color);
+}
+.app-footer #server-version { font-variant-numeric: tabular-nums; }

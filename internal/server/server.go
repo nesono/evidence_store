@@ -46,6 +46,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// Which build this is. Public for the same reason /healthz is, and because
+	// the page names it before anybody has logged in.
+	r.Get("/version", api.NewVersionHandler().Get)
+
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)

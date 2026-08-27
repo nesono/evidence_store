@@ -50,7 +50,11 @@ const SHELL = [
 // Paths that must always reach the server, whatever happens. The API is the
 // obvious one; the login flows matter just as much, because a cached redirect
 // is a login that can never complete.
-const NEVER_CACHED = ["/api/", "/auth/", "/healthz"];
+// /version is here for a different reason from the rest: it would cache
+// perfectly well, and a cached one is exactly the problem. The version is what
+// somebody reads out when they are already confused, and a remembered answer
+// would name a build that may have been replaced since.
+const NEVER_CACHED = ["/api/", "/auth/", "/healthz", "/version"];
 
 self.addEventListener("install", event => {
   event.waitUntil(

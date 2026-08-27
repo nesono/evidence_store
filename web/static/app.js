@@ -973,6 +973,35 @@ function resetFormForNext(form) {
   }
 }
 
+// --- Which build is answering ---
+
+// Asked for directly rather than through apiFetch: /version is public, sits
+// outside /api/v1, and sending a credential to it would be sending one where
+// none is wanted.
+//
+// A failure is silent and leaves the footer reading just "Evidence Store".
+// There is nothing for a tester to do about it, and an error line about a
+// version number would be noise on a page that has just failed to reach its
+// server for reasons they can already see in the header.
+async function showServerVersion() {
+  const el = document.getElementById("server-version");
+  if (!el) return;
+  try {
+    const resp = await fetch("/version", { cache: "no-store" });
+    if (!resp.ok) return;
+    const { version, source } = await resp.json();
+    if (!version) return;
+    el.textContent = version;
+    el.title = source === "build"
+      ? "The build the server is running, by the minute it was built (UTC)"
+      : source === "commit"
+        ? "Built from a commit made at this time (UTC); the build itself was not stamped"
+        : "This server was built from a working copy, so it matches no particular commit";
+  } catch {
+    // Offline, or the server is not answering. The header already says so.
+  }
+}
+
 // --- The outbox ---
 
 // Records written with nowhere to send them. See docs/offline-support-plan.md.
@@ -2030,6 +2059,7 @@ async function loadIdentity() {
 
 (async function init() {
   startConnectionIndicator();
+  showServerVersion();
   // Not awaited: the page has nothing to wait for. The worker takes over on
   // the next load, and a tester who installs this today is covered tomorrow.
   registerServiceWorker();

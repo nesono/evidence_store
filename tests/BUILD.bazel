@@ -45,6 +45,7 @@ go_test(
         "//internal/retention",
         "//internal/server",
         "//internal/store",
+        "//internal/version",
         "@com_github_crewjam_saml//:saml",
         "@com_github_crewjam_saml//samlsp",
         "@com_github_go_jose_go_jose_v4//:go-jose",
