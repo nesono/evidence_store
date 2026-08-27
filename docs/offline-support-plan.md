@@ -343,6 +343,14 @@ age; the header goes from a count to a warning when the oldest queued record
 passes **7 days**, and escalates at 30. Seven is not arbitrary — it is the iOS
 eviction horizon above, so the warning arrives while the data is still there.
 
+*Corrected while building this (phase 6).* The table above promised to detect a
+private window. There is no honest way to do that — every technique that claims
+to is fingerprinting, and each one breaks with a browser release. There is a
+direct question instead, and the Storage API answers it: *will you keep this?*
+A private window says no, and so does a browser about to reclaim space. Those
+are the two cases worth warning about and the only two a tester can act on, so
+the page asks rather than guesses, and reports what it was told.
+
 None of this makes a browser a safe place to keep evidence for a fortnight. The
 README will say so plainly: sync whenever a signal turns up, rather than once
 at the end of the trip.
@@ -392,7 +400,10 @@ No new endpoints, no new permissions.
 
 ## Implementation phases
 
-Each is a PR that stands on its own and leaves the system working.
+Each is a PR that stands on its own and leaves the system working. **All six
+have landed**; the two corrections the work forced on this plan are recorded in
+place, under [Weather](#weather-written-down-on-site-or-looked-up-afterwards)
+and below.
 
 1. **Idempotent ingest.** Migration, model, validation, store, API, tests, API
    reference. Useful on its own: any client retrying a post stops risking

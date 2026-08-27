@@ -99,6 +99,91 @@ export function heldFrom(entry, subject) {
   return null;
 }
 
+// --- How long a record has been waiting ---
+//
+// A record that sits unsent is the failure this feature can actually produce,
+// so it is not left to the tester to notice. Seven days is not arbitrary: it is
+// Safari's eviction horizon for a site that has not been visited, so the
+// warning arrives while the data is still there to save.
+export const STALE_WARN_DAYS = 7;
+export const STALE_URGENT_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function ageInDays(entry, now = new Date()) {
+  const written = Date.parse(entry.capturedAt);
+  if (Number.isNaN(written)) return 0;
+  return Math.max(0, Math.floor((now.getTime() - written) / DAY_MS));
+}
+
+// staleness reports the oldest thing in the queue, which is the one worth
+// saying something about. Nothing here refuses or expires a record: a record
+// queued in March is still a true account of a test that happened in March, and
+// refusing it at the door would destroy the only copy to punish the delay.
+export function staleness(entries, now = new Date()) {
+  if (entries.length === 0) return { level: "none", days: 0 };
+  const days = Math.max(...entries.map(e => ageInDays(e, now)));
+  if (days >= STALE_URGENT_DAYS) return { level: "urgent", days };
+  if (days >= STALE_WARN_DAYS) return { level: "warn", days };
+  return { level: "none", days };
+}
+
+// --- Whether the browser will keep any of this ---
+
+// assessDurability asks whether what is queued will still be here later.
+//
+// It asks rather than guesses. There is no honest way to detect a private
+// window — the tricks that claim to are fingerprinting, and they break with
+// every browser release — but there is a direct question, and the Storage API
+// answers it: will you keep this? A private window says no, and so does a
+// browser about to reclaim space, which are the two cases worth warning about
+// and the only two a tester can act on.
+//
+// Three answers:
+//
+//   session   — no IndexedDB at all, so the queue lives as long as the tab.
+//               The strongest warning there is; a tester relying on this would
+//               lose a day of evidence by closing a window.
+//   evictable — stored on disk, but the browser has not promised to keep it.
+//   durable   — granted. Eviction now needs a deliberate act by the person.
+export async function assessDurability(store, storage = globalThis.navigator?.storage) {
+  if (!store.durable) return { level: "session", persisted: false };
+  if (!storage) return { level: "evictable", persisted: false };
+
+  let persisted = false;
+  try {
+    persisted = await storage.persisted();
+    // Asking is free and usually granted for a site somebody has interacted
+    // with, which is every site that has anything in this queue.
+    if (!persisted && storage.persist) persisted = await storage.persist();
+  } catch {
+    // A browser that will not discuss it is one that has not promised anything.
+    return { level: "evictable", persisted: false };
+  }
+
+  const room = await estimateRoom(storage);
+  return { level: persisted ? "durable" : "evictable", persisted, ...room };
+}
+
+async function estimateRoom(storage) {
+  if (!storage.estimate) return {};
+  try {
+    const { quota, usage } = await storage.estimate();
+    return { quota, usage };
+  } catch {
+    return {};
+  }
+}
+
+// Above this share of the quota, a tester should hear about it before the
+// browser starts making the decision for them.
+export const QUOTA_WARN_SHARE = 0.8;
+
+export function roomIsTight({ quota, usage } = {}) {
+  if (!quota || !usage) return false;
+  return usage / quota >= QUOTA_WARN_SHARE;
+}
+
 export function createOutbox(store) {
   const outbox = {
     // Oldest first: a queue drains in the order it filled, and the record a

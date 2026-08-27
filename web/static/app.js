@@ -26,7 +26,11 @@ import {
 } from "./location.js";
 import { composeWeather, describeReading, fetchWeather, weatherPoint } from "./weather.js";
 import { OFFLINE, connectionState, onConnectionChange, registerServiceWorker, startConnectionIndicator } from "./offline.js";
-import { BLOCKED, createOutbox, heldFrom, newEntry, openStore } from "./outbox.js";
+import {
+  BLOCKED, STALE_URGENT_DAYS, STALE_WARN_DAYS,
+  ageInDays, assessDurability, createOutbox, heldFrom, newEntry, openStore,
+  roomIsTight, staleness,
+} from "./outbox.js";
 import { describeProgress, describeSync, formatBytes, progressFraction, syncOutbox } from "./sync.js";
 import { useStash } from "./images.js";
 import { digestsInRecord } from "./blobref.js";
@@ -932,7 +936,14 @@ async function queueEntry(entry, feedback, andAnother, form, err) {
   const why = err ? `Could not reach the store (${esc(err.message)}).` : "Offline.";
   feedback.innerHTML =
     `<p class="feedback-ok">${why} Saved here and it will be sent when there is a connection ` +
-    `&mdash; <a href="#" class="outbox-open">see what is waiting</a>.</p>`;
+    `&mdash; <a href="#" class="outbox-open">see what is waiting</a>.</p>` +
+    // Said at the moment the tester first relies on the queue, not buried in a
+    // dialog they may never open. A private window is the usual reason, and
+    // finding out afterwards means finding out by losing a day of evidence.
+    (durability.level === "session"
+      ? `<p class="feedback-error">This browser is not storing anything on disk &mdash; ` +
+        `these records will be gone when you close this tab. Send them before you do.</p>`
+      : "");
   feedback.querySelector(".outbox-open").addEventListener("click", event => {
     event.preventDefault();
     openOutbox();
@@ -976,8 +987,15 @@ let editingEntryID = null;
 // arrive together, and three syncs racing would report three different things.
 let syncing = false;
 
+// What this browser has promised about the queue, learned once at startup.
+let durability = { level: "durable", persisted: true };
+
 async function mountOutbox() {
-  outbox = createOutbox(await openStore());
+  const store = await openStore();
+  outbox = createOutbox(store);
+  // Asked for before anything is queued, so the promise is in place by the
+  // time there is something to keep.
+  durability = await assessDurability(store);
   // Photos attached from now on are named and kept here rather than uploaded,
   // so a log written with no connection is finished when the tester writes it.
   useStash(outbox);
@@ -1009,7 +1027,15 @@ async function refreshOutboxCount() {
   if (!outbox || !el) return;
   const entries = await outbox.list();
   el.hidden = entries.length === 0;
-  if (entries.length === 0) return;
+  if (entries.length === 0) {
+    // Cleared, not just hidden. Leaving "3 unsent for 45 days" behind an empty
+    // queue means it reappears the moment one record is queued again, saying
+    // something that stopped being true weeks ago.
+    el.textContent = "";
+    el.title = "";
+    el.classList.remove("outbox-status-urgent");
+    return;
+  }
 
   const blocked = entries.filter(e => e.state === BLOCKED).length;
   const needs = n => `${n} need${n === 1 ? "s" : ""} attention`;
@@ -1020,6 +1046,20 @@ async function refreshOutboxCount() {
     el.textContent = needs(blocked);
   } else {
     el.textContent = `${entries.length} waiting, ${needs(blocked)}`;
+  }
+
+  // How long the oldest has been waiting, once that becomes the more useful
+  // fact than how many there are. Nothing expires and nothing is refused; the
+  // point is to say so while the evidence is still there to save.
+  const stale = staleness(entries);
+  el.classList.toggle("outbox-status-urgent", stale.level === "urgent");
+  if (stale.level !== "none") {
+    el.textContent = `${entries.length} unsent for ${stale.days} days`;
+    el.title = stale.level === "urgent"
+      ? `The oldest record here was written ${stale.days} days ago and has never reached the store.`
+      : `Waiting ${stale.days} days. Send these while they are still here.`;
+  } else {
+    el.title = "Records written on this device that have not reached the store yet";
   }
 }
 
@@ -1040,10 +1080,12 @@ async function renderOutbox() {
   }
 
   const held = await outbox.bytesHeld();
-  explainer.textContent =
-    "These are on this device only, until they are sent. They survive closing the browser, " +
-    "and they go automatically when there is a connection." +
-    (held ? ` Photos waiting here take up ${formatBytes(held)}.` : "");
+  explainer.className = "outbox-explainer";
+  explainer.textContent = describeDurability(durability, held);
+  if (durability.level === "session") explainer.classList.add("outbox-explainer-alarm");
+  else if (durability.level === "evictable" || roomIsTight(durability)) {
+    explainer.classList.add("outbox-explainer-warn");
+  }
 
   list.innerHTML = entries.map(entry => {
     const r = entry.record;
@@ -1058,7 +1100,7 @@ async function renderOutbox() {
         </div>
         <div class="outbox-entry-meta">
           ${esc(r.repo || "")} ${esc(r.branch || "")} ${esc((r.rcs_ref || "").slice(0, 12))}
-          &middot; written ${formatTime(entry.capturedAt)}
+          &middot; written ${formatTime(entry.capturedAt)}${describeAge(entry)}
         </div>
         ${digests.length ? `<div class="outbox-entry-photos" data-digests="${esc(digests.join(","))}"></div>` : ""}
         ${held ? `<div class="${heldClass}">${esc(held)}</div>` : ""}
@@ -1092,6 +1134,30 @@ async function renderOutbox() {
   list.querySelectorAll(".outbox-delete").forEach(btn => {
     btn.addEventListener("click", () => deleteQueued(btn.closest(".outbox-entry").dataset.id));
   });
+}
+
+// describeDurability says plainly what this browser has promised about the
+// queue, because a tester deciding whether to keep working in the field is
+// entitled to know before they rely on it rather than after.
+function describeDurability(assessment, bytesHeld) {
+  const photos = bytesHeld ? ` Photos waiting here take up ${formatBytes(bytesHeld)}.` : "";
+
+  if (assessment.level === "session") {
+    return "This browser will not store anything on disk, so these records last only " +
+      "as long as this tab. Send them before you close it, or file them somewhere else." + photos;
+  }
+
+  const base = "These are on this device only, until they are sent. They survive closing the " +
+    "browser, and they go automatically when there is a connection." + photos;
+
+  if (assessment.level === "evictable") {
+    return base + " This browser has not promised to keep them, so it may reclaim the space " +
+      "if the device runs low. Send them when you can.";
+  }
+  if (roomIsTight(assessment)) {
+    return base + " This device is running low on space for them.";
+  }
+  return base;
 }
 
 // canLookUpWeather reports whether the reading is still worth offering.
@@ -1172,6 +1238,15 @@ async function deleteQueued(id) {
   await outbox.remove(id);
   await refreshOutboxCount();
   await renderOutbox();
+}
+
+// describeAge adds the waiting time to a row, once it is long enough to be the
+// point. A record written this morning does not need telling.
+function describeAge(entry) {
+  const days = ageInDays(entry);
+  if (days < STALE_WARN_DAYS) return "";
+  const emphasis = days >= STALE_URGENT_DAYS ? "outbox-entry-error" : "outbox-entry-held";
+  return ` &middot; <span class="${emphasis}">waiting ${days} days</span>`;
 }
 
 function fillFormFromRecord(record) {
