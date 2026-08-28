@@ -757,6 +757,10 @@ defaults to Manual Test.
   the server — never the browser — so a tester's coordinates are never handed
   to a third party. The line stays editable for the same reason the location
   does. Details: [Weather while a test ran](docs/api-reference.md#weather-while-a-test-ran).
+- **Undo and redo** work the way they do in any text field, including across
+  attaching an image: `Cmd-Z`/`Ctrl-Z` steps back through what you typed *and*
+  through the reference an upload wrote into the log. Buttons that fill a field
+  in for you — **Now**, **Locate**, **Look up** — can be undone too.
 - **Template** — save the current Repo/Branch/Commit/Procedure/Evidence
   type/Source/Tags as a named preset (stored in `localStorage`) and reapply it
   from the dropdown, for a bench that runs the same handful of manual

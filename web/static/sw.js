@@ -33,6 +33,7 @@ const SHELL = [
   "/common.js",
   "/datepicker.js",
   "/datetime.js",
+  "/editing.js",
   "/images.js",
   "/location.js",
   "/markdown.js",
