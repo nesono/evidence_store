@@ -25,7 +25,10 @@ import {
   requestPosition,
 } from "./location.js";
 import { composeWeather, describeReading, fetchWeather, weatherPoint } from "./weather.js";
-import { OFFLINE, connectionState, onConnectionChange, registerServiceWorker, startConnectionIndicator } from "./offline.js";
+import {
+  OFFLINE, announceUpdates, connectionState, followHashChanges, offerInstall,
+  onConnectionChange, openTabFromHash, registerServiceWorker, startConnectionIndicator,
+} from "./offline.js";
 import {
   BLOCKED, STALE_URGENT_DAYS, STALE_WARN_DAYS,
   ageInDays, assessDurability, createOutbox, heldFrom, newEntry, openStore,
@@ -972,6 +975,18 @@ function resetFormForNext(form) {
   } else {
     document.getElementById("custom-fields-list").innerHTML = "";
   }
+}
+
+// --- A newer build is waiting ---
+
+function showUpdateNotice() {
+  const notice = document.getElementById("update-notice");
+  if (!notice || !notice.hidden) return;
+  notice.hidden = false;
+  document.getElementById("update-reload").addEventListener("click", event => {
+    event.preventDefault();
+    window.location.reload();
+  });
 }
 
 // --- Which build is answering ---
@@ -2069,9 +2084,10 @@ async function loadIdentity() {
 (async function init() {
   startConnectionIndicator();
   showServerVersion();
+  offerInstall();
   // Not awaited: the page has nothing to wait for. The worker takes over on
   // the next load, and a tester who installs this today is covered tomorrow.
-  registerServiceWorker();
+  registerServiceWorker().then(registration => announceUpdates(registration, showUpdateNotice));
 
   const [authConfig, me] = await Promise.all([loadAuthConfig(), loadIdentity()]);
   ssoAvailable = !!authConfig.sso_enabled;
@@ -2082,6 +2098,11 @@ async function loadIdentity() {
   });
   mountAccess(me);
   pinSourceToCaller(me);
+  // The installed app's Add Result shortcut opens "/#add". Done after Access is
+  // mounted, so a fragment naming a tab this caller does not have selects
+  // nothing rather than a tab that is not there.
+  openTabFromHash();
+  followHashChanges();
   currentSubject = me.authenticated ? me.subject : null;
 
   // After the identity is known, so a queued record is attributed to whoever

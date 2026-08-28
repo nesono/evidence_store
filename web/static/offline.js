@@ -123,6 +123,100 @@ export function startConnectionIndicator(el = document.getElementById("health-st
   tick();
 }
 
+// --- Installing, and being told about a new version ---
+
+// TABS is the set of tab names a URL may name. The manifest's Add Result
+// shortcut opens "/#add", and a shortcut that lands on the wrong tab is worse
+// than no shortcut.
+const TABS = ["search", "analytics", "add", "access"];
+
+// tabFromHash reads which tab a URL asks for, or null for anything else.
+// Deliberately strict: an unknown fragment selects nothing rather than
+// guessing, and the page opens where it always did.
+export function tabFromHash(hash) {
+  const name = String(hash || "").replace(/^#/, "").trim().toLowerCase();
+  return TABS.includes(name) ? name : null;
+}
+
+// openTabFromHash follows a fragment on load, which is what makes the installed
+// app's shortcut work.
+export function openTabFromHash(hash = window.location.hash) {
+  const tab = tabFromHash(hash);
+  if (!tab) return null;
+  const link = document.querySelector(`.nav-tab[data-tab="${tab}"]`);
+  // Access is only mounted for an administrator; a shortcut to a tab this
+  // caller does not have is silently the ordinary page.
+  if (!link || link.closest("[hidden]")) return null;
+  link.click();
+  return tab;
+}
+
+// followHashChanges keeps the shortcut working when the app is already open.
+//
+// Activating a shortcut while the app is running is a same-document navigation
+// — the fragment changes and nothing reloads — so the load-time call never
+// happens and the tab never moves. Cold launches were fine, which is exactly
+// how this would have shipped unnoticed.
+export function followHashChanges() {
+  window.addEventListener("hashchange", () => openTabFromHash());
+}
+
+// offerInstall shows the button that installs the app, but only where the
+// browser has said it would accept one.
+//
+// Installing matters more here than the word suggests. On iOS it is what
+// exempts the queue from Safari discarding storage for a site not visited in
+// seven days, which is shorter than a campaign — so the button is not a
+// nicety, it is how a tester keeps their evidence. Browsers that fire no
+// beforeinstallprompt (Safari among them) get nothing: an inert button would
+// be worse than the Share-menu instruction in the README.
+export function offerInstall(button = document.getElementById("install-app")) {
+  if (!button) return;
+  let deferred = null;
+
+  window.addEventListener("beforeinstallprompt", event => {
+    // Keep the browser's own banner from appearing as well as this button.
+    event.preventDefault();
+    deferred = event;
+    button.hidden = false;
+  });
+
+  button.addEventListener("click", async () => {
+    if (!deferred) return;
+    button.hidden = true;
+    const prompt = deferred;
+    // The event is good for one use, whatever the person chooses.
+    deferred = null;
+    await prompt.prompt();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    button.hidden = true;
+    deferred = null;
+  });
+}
+
+// announceUpdates says when a newer build has been fetched.
+//
+// It says, and does not act. The worker takes over as soon as it installs, so
+// the *next* load is already the new version — but this page is still running
+// the JavaScript it started with, and reloading it out from under somebody
+// would throw away a half-written test log. Whoever is typing decides when.
+export function announceUpdates(registration, notify) {
+  if (!registration) return;
+  registration.addEventListener("updatefound", () => {
+    const incoming = registration.installing;
+    if (!incoming) return;
+    incoming.addEventListener("statechange", () => {
+      // A worker reaching `installed` with something already in control means a
+      // replacement, not a first visit.
+      if (incoming.state === "installed" && navigator.serviceWorker.controller) {
+        notify();
+      }
+    });
+  });
+}
+
 // --- Keeping the page loadable ---
 
 // registerServiceWorker installs the worker that serves the page with no

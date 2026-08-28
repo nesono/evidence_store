@@ -19,6 +19,7 @@
     <meta name="theme-color" content="#0172ad">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Evidence">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body>
     <header class="container">
@@ -37,6 +38,10 @@
                      thing on the page. -->
                 <li><a href="#" id="outbox-status" class="outbox-status" hidden></a></li>
                 <li id="health-status"></li>
+                <!-- Unhidden only where the browser has said it would accept an
+                     install. On iOS, which fires no such event, the Share menu
+                     is the way in and the README says so. -->
+                <li><a href="#" id="install-app" class="secondary" style="font-size:0.8em" hidden>Install</a></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
                 <li><a href="#" id="auth-logout" class="secondary" style="font-size:0.8em" hidden>Logout</a></li>
             </ul>
@@ -530,6 +535,10 @@
          when reporting that something else went wrong. Empty when the server
          has not been reached, since a remembered version is a claim about a
          deployment nobody has checked. -->
+    <div class="container" id="update-notice" hidden>
+        <small>A newer version of this page is available. <a href="#" id="update-reload">Reload</a> when you are ready &mdash; nothing you have typed is sent or lost by waiting.</small>
+    </div>
+
     <footer class="container app-footer">
         <small>Evidence Store <span id="server-version"></span></small>
     </footer>

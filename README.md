@@ -726,10 +726,20 @@ Two things to know before relying on it:
   deployment on plain HTTP has no offline support at all (`localhost` is
   exempt, which is why it works in development). The page says so in the
   browser console rather than failing silently.
-- **On iOS, add it to the Home Screen before you leave.** Safari evicts
+- **Install it before you leave.** On iOS this is not optional: Safari evicts
   storage for a site not visited in seven days, which is shorter than a
-  campaign; an installed web app is exempt. Open the UI in Safari, then
-  *Share → Add to Home Screen*. On Android, Chrome offers to install it.
+  campaign, and an installed web app is exempt. Where the browser supports it,
+  an **Install** button appears in the header; on iOS, which has no such
+  prompt, use *Share → Add to Home Screen*.
+
+Installed, it runs in its own window with no browser chrome, and long-pressing
+the icon offers **Add Result**, which opens straight on the form — the only
+thing anybody opens this for on a campaign. The same shortcut works as a plain
+link: `/#add`, `/#search`, `/#analytics`.
+
+When a newer build has been fetched, a line appears offering to reload. It only
+offers: reloading a page with a half-written test log in it would throw the log
+away, so when to take the new version is the tester's call.
 
 The full design, including what is deliberately left out, is in
 [docs/offline-support-plan.md](docs/offline-support-plan.md).

@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 
 import {
   ONLINE, OFFLINE, UNHEALTHY,
-  checkHealth, connectionLabel, nextDelay,
+  checkHealth, connectionLabel, nextDelay, tabFromHash,
 } from "../static/offline.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -159,4 +159,60 @@ test("a request that cannot complete is offline", async () => {
 test("a server that answers is online", async () => {
   const state = await checkHealth(async () => ({ ok: true }), () => true);
   assert.equal(state, ONLINE);
+});
+
+// --- Opening the app at a particular tab (issue #117) ---
+//
+// The installed app's shortcut opens "/#add". A shortcut that lands on the
+// wrong tab, or on nothing, is worse than no shortcut at all.
+
+test("a fragment names a tab", () => {
+  assert.equal(tabFromHash("#add"), "add");
+  assert.equal(tabFromHash("add"), "add", "with or without the hash");
+  assert.equal(tabFromHash("#ADD"), "add", "however it is cased");
+  assert.equal(tabFromHash("#analytics"), "analytics");
+  assert.equal(tabFromHash("#search"), "search");
+  assert.equal(tabFromHash("#access"), "access");
+});
+
+test("anything else selects nothing rather than guessing", () => {
+  // Fragments belong to whoever put them there. An unrecognised one means the
+  // page opens where it always did.
+  for (const hash of ["", "#", "#nope", "#add-form", "#/add", null, undefined]) {
+    assert.equal(tabFromHash(hash), null, `hash ${JSON.stringify(hash)}`);
+  }
+});
+
+test("the manifest's shortcut points at a tab that exists", () => {
+  const manifest = JSON.parse(readFileSync(join(staticDir, "manifest.webmanifest"), "utf8"));
+  assert.ok(manifest.shortcuts?.length, "the installed app should offer a shortcut");
+
+  for (const shortcut of manifest.shortcuts) {
+    const hash = shortcut.url.includes("#") ? shortcut.url.slice(shortcut.url.indexOf("#")) : "";
+    assert.ok(tabFromHash(hash),
+      `shortcut ${shortcut.name} opens ${shortcut.url}, which names no tab`);
+    for (const icon of shortcut.icons || []) {
+      assert.ok(existsSync(join(staticDir, icon.src)),
+        `shortcut icon ${icon.src} is not in web/static`);
+    }
+  }
+});
+
+test("the manifest carries what an install needs", () => {
+  const manifest = JSON.parse(readFileSync(join(staticDir, "manifest.webmanifest"), "utf8"));
+
+  for (const member of ["id", "name", "short_name", "start_url", "scope", "display", "icons"]) {
+    assert.ok(manifest[member], `manifest is missing ${member}`);
+  }
+  // Chrome wants a 192 and a 512 to offer an install at all.
+  const sizes = manifest.icons.map(i => i.sizes);
+  for (const wanted of ["192x192", "512x512"]) {
+    assert.ok(sizes.includes(wanted), `no ${wanted} icon`);
+  }
+  // A maskable icon is what stops Android framing the whole square.
+  assert.ok(manifest.icons.some(i => (i.purpose || "").split(" ").includes("maskable")),
+    "no maskable icon");
+  for (const icon of manifest.icons) {
+    assert.ok(existsSync(join(staticDir, icon.src)), `icon ${icon.src} is not in web/static`);
+  }
 });
