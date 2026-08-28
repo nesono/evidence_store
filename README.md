@@ -967,4 +967,5 @@ The adapter module (`evidence_store_bazel`) is published to the [Bazel Central R
 - [docs/analytics-plan.md](docs/analytics-plan.md) — how the Analytics tab's metrics were designed
 - [docs/retention-rules-plan.md](docs/retention-rules-plan.md) — retention rule syntax
 - [docs/offline-support-plan.md](docs/offline-support-plan.md) — collecting evidence with no connection, and syncing it later
+- [docs/lightdash-assessment.md](docs/lightdash-assessment.md) — why the store keeps its own search and analytics
 - [docs/api-reference.md](docs/api-reference.md) — every HTTP endpoint, in full
