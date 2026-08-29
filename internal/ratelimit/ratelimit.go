@@ -5,9 +5,16 @@
 // methods (everything else) share separate buckets so a burst of reads cannot
 // starve writes and vice versa. The limiter is in-memory; deployments that
 // scale beyond a single instance should swap the backing store.
+//
+// Two things keep the in-memory part honest. Callers are held under a digest,
+// never under the token they authenticated with, so the map is not a copy of
+// every live credential. And limiters whose bucket has refilled are collected
+// once a bucket grows past sweepThreshold, so the map is bounded by how many
+// callers are active rather than by how many have ever appeared.
 package ratelimit
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"math"
 	"net"
@@ -55,6 +62,11 @@ func Middleware(cfg config.RateLimit) func(http.Handler) http.Handler {
 	}
 }
 
+// sweepThreshold is how many limiters one bucket may hold before the idle ones
+// are collected. High enough that an ordinary deployment never sweeps, low
+// enough that the map cannot grow without anybody noticing.
+const sweepThreshold = 1024
+
 type store struct {
 	cfg     config.RateLimit
 	mu      sync.Mutex
@@ -87,14 +99,49 @@ func (s *store) limiterFor(key string, write bool) *rate.Limiter {
 		bucket = s.writers
 	}
 
+	// Keyed on a digest rather than on `key` itself, because for an
+	// authenticated caller `key` contains their bearer token. A long-lived map
+	// of live credentials is a copy of every secret in use, sitting in the heap
+	// of a process that will eventually be dumped or profiled. The limiter only
+	// needs to tell callers apart, and a hash does that.
+	id := identify(key)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if l, ok := bucket[key]; ok {
+	if l, ok := bucket[id]; ok {
 		return l
 	}
+	if len(bucket) >= sweepThreshold {
+		sweepRefilled(bucket, burst)
+	}
 	l := rate.NewLimiter(rate.Limit(rps), burst)
-	bucket[key] = l
+	bucket[id] = l
 	return l
+}
+
+// identify reduces a caller key to something safe to keep.
+func identify(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return string(sum[:])
+}
+
+// sweepRefilled drops limiters whose bucket has filled back up.
+//
+// Every caller ever seen used to keep a limiter for the life of the process,
+// which on a deployment reachable by many addresses — or one that rotates API
+// keys — is a map that only grows.
+//
+// A full bucket is the right thing to drop, and the reason is worth stating: a
+// limiter created fresh starts full. So discarding one that has already
+// refilled and recreating it on the caller's next request produces exactly the
+// state they would have had anyway. Eviction cannot forgive rate debt, because
+// a caller who still owes any has a bucket that is not full and is kept.
+func sweepRefilled(bucket map[string]*rate.Limiter, burst int) {
+	for id, l := range bucket {
+		if l.Tokens() >= float64(burst) {
+			delete(bucket, id)
+		}
+	}
 }
 
 // callerKey returns the bearer token if present, otherwise the remote IP.
