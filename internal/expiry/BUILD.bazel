@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "expiry",
+    srcs = ["sweeper.go"],
+    importpath = "github.com/nesono/evidence-store/internal/expiry",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "expiry_test",
+    srcs = ["sweeper_test.go"],
+    embed = [":expiry"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

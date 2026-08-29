@@ -9,6 +9,7 @@ go_library(
         "//internal/auth",
         "//internal/blob",
         "//internal/config",
+        "//internal/expiry",
         "//internal/migrate",
         "//internal/retention",
         "//internal/server",

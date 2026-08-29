@@ -15,6 +15,7 @@ import (
 	"github.com/nesono/evidence-store/internal/auth"
 	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/expiry"
 	"github.com/nesono/evidence-store/internal/migrate"
 	"github.com/nesono/evidence-store/internal/retention"
 	"github.com/nesono/evidence-store/internal/server"
@@ -104,6 +105,17 @@ func main() {
 	}
 
 	srv := server.New(cfg, pool, blobs, sso)
+
+	// Delete rows that have already stopped meaning anything. Unconditional,
+	// unlike retention below: whether to delete old evidence is a policy an
+	// operator decides and may answer "never", but a spent login session is not
+	// a policy at all, and the tables grow for as long as the process lives
+	// otherwise. Cheap against an empty table, so a deployment with no SSO pays
+	// nothing for it.
+	go expiry.New(slog.Default(), map[string]expiry.Deleter{
+		"sessions":      store.NewSessionStore(pool),
+		"saml_requests": store.NewSAMLRequestStore(pool),
+	}).Start(ctx)
 
 	// Start retention worker if configured.
 	if retentionPath := os.Getenv("EVIDENCE_RETENTION_CONFIG"); retentionPath != "" {

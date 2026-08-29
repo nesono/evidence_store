@@ -377,6 +377,17 @@ export EVIDENCE_RATE_LIMIT_WRITE_RPS=10
 - When a limit is exceeded the server returns `429 Too Many Requests` with a `Retry-After` header (seconds).
 - Limits are in-memory and per process — deployments running multiple replicas should add a shared limiter (e.g. Redis) if precise global enforcement is required.
 
+### Expired sessions and SAML requests
+
+Login sessions and half-finished SAML handshakes both carry an expiry and are
+checked against it on every use, so an expired row is already inert — but it
+still occupies a table. The server deletes them hourly, and does so
+**unconditionally**: unlike evidence retention below, this is not a policy an
+operator might reasonably answer "never" to, and the sweep costs nothing against
+the empty tables of a deployment that has no SSO configured.
+
+Nothing to configure. It logs only when it actually deleted something.
+
 ### Retention
 
 Old evidence can be evicted automatically instead of growing the database
