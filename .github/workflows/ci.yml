@@ -18,6 +18,15 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # Pinned to a release built against the Go version go.mod targets. That
+      # pinning is the point: the linters installed on developer machines were
+      # built against an older Go and silently refused to load this module at
+      # all, so nobody was running static analysis anywhere (#125).
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

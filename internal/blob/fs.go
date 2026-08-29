@@ -43,8 +43,16 @@ func (s *FS) Put(ctx context.Context, r io.Reader) (Digest, int64, error) {
 		return "", 0, err
 	}
 	name := f.Name()
-	f.Close()
-	defer os.Remove(name)
+	// Checked, unlike the other closes here, because this file was written to
+	// and is about to be renamed into the store under a digest computed while
+	// writing it. A close that reports a failed flush means the bytes on disk
+	// are not the bytes that were hashed, and filing them anyway would put
+	// content in a content-addressed store that its own name does not describe.
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", 0, fmt.Errorf("finish staging blob: %w", err)
+	}
+	defer func() { _ = os.Remove(name) }()
 
 	dst := s.path(d)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -69,7 +77,7 @@ func (s *FS) Get(ctx context.Context, d Digest) (io.ReadCloser, int64, error) {
 	}
 	info, err := f.Stat()
 	if err != nil {
-		f.Close()
+		_ = f.Close() // nothing was written; the stat error is the one to report
 		return nil, 0, fmt.Errorf("stat blob: %w", err)
 	}
 	return f, info.Size(), nil

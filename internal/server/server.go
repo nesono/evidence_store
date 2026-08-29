@@ -56,7 +56,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok")) // a health probe that hung up wants nothing
 	})
 
 	evidenceStore := store.NewEvidenceStoreWithCache(pool, cfg.AnalyticsCacheTTL)

@@ -15,7 +15,14 @@ func Run(databaseURL, migrationsPath string) error {
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
-	defer m.Close()
+	// Close returns the source and database errors together. Migrations have
+	// already run by then, so this cannot fail the call — but a database
+	// connection that would not close is worth a line in the log.
+	defer func() {
+		if sourceErr, dbErr := m.Close(); sourceErr != nil || dbErr != nil {
+			slog.Warn("closing migrator", "source_error", sourceErr, "database_error", dbErr)
+		}
+	}()
 
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("run migrations: %w", err)

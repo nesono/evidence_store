@@ -26,7 +26,7 @@ func okHandler() http.Handler {
 // non-empty, which is the shape every route in server.go has.
 func serve(t *testing.T, authenticator Authenticator, perm Permission, method, token string) *httptest.ResponseRecorder {
 	t.Helper()
-	var handler http.Handler = okHandler()
+	handler := okHandler()
 	if perm != "" {
 		handler = Require(perm)(handler)
 	}

@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to start postgres container: %v\n", err)
 		os.Exit(1)
 	}
-	defer pgContainer.Terminate(ctx)
+	defer func() { _ = pgContainer.Terminate(ctx) }()
 
 	host, _ := pgContainer.Host(ctx)
 	port, _ := pgContainer.MappedPort(ctx, "5432")
@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create blob directory: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(blobDir)
+	defer func() { _ = os.RemoveAll(blobDir) }()
 
 	testBlobStore, err = blob.NewFS(blobDir)
 	if err != nil {

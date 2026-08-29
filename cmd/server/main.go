@@ -141,5 +141,10 @@ func main() {
 	<-quit
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	srv.Shutdown(shutdownCtx)
+	// Worth reporting: it means requests were still in flight when the deadline
+	// passed, and whoever is reading the logs after a deploy wants to know that
+	// rather than see a clean exit.
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server did not shut down cleanly", "error", err)
+	}
 }
