@@ -23,14 +23,14 @@ func serverWithBudget(t *testing.T, budget time.Duration) *httptest.Server {
 	t.Helper()
 
 	cfg := &config.Config{
-		DatabaseURL:           testPool.Config().ConnString(),
-		ListenAddr:            ":0",
-		DefaultPageSize:       100,
-		MaxPageSize:           1000,
-		MaxBatchSize:          1000,
-		LogLevel:              "ERROR",
-		AnalyticsQueryTimeout: budget,
-		Blob:                  testBlobConfig,
+		DatabaseURL:     testPool.Config().ConnString(),
+		ListenAddr:      ":0",
+		DefaultPageSize: 100,
+		MaxPageSize:     1000,
+		MaxBatchSize:    1000,
+		LogLevel:        "ERROR",
+		QueryTimeout:    budget,
+		Blob:            testBlobConfig,
 	}
 
 	srv := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
@@ -95,4 +95,56 @@ func TestAnalyticsBudgetZeroDisables(t *testing.T) {
 	resp, body := getFrom(t, srv, "/api/v1/analytics/tests?repo="+url.QueryEscape(f.repo))
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, float64(6), body["total"])
+}
+
+// --- The same budget on the search path (issue #123) ---
+//
+// Search accepts a POSIX regex behind a leading `~`, which Postgres evaluates.
+// The pattern is bound as an argument so there is nothing to inject; it is the
+// cost of evaluating it that is worth bounding, and until now only analytics
+// was bounded at all.
+
+func TestSearchBudgetRefusesInsteadOfHanging(t *testing.T) {
+	srv := serverWithBudget(t, time.Nanosecond)
+
+	for _, path := range []string{
+		"/api/v1/evidence?repo=" + url.QueryEscape("~.*"),
+		"/api/v1/evidence",
+		"/api/v1/evidence/distinct?field=repo",
+	} {
+		resp, body := getFrom(t, srv, path)
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, path)
+		assert.Contains(t, body["error"], "narrow the filter or the time window", path)
+	}
+}
+
+// The two paths must refuse in the same words. A caller who has learned what
+// the message means on one endpoint should not have to learn it again.
+func TestSearchAndAnalyticsRefuseIdentically(t *testing.T) {
+	f := seedAnalyticsFixture(t)
+	srv := serverWithBudget(t, time.Nanosecond)
+
+	_, search := getFrom(t, srv, "/api/v1/evidence")
+	_, analytics := getFrom(t, srv, "/api/v1/analytics/summary?repo="+url.QueryEscape(f.repo))
+
+	assert.Equal(t, analytics["error"], search["error"])
+}
+
+// With a budget that can be met, nothing changes: the same query answers.
+func TestSearchWithAWorkableBudgetStillAnswers(t *testing.T) {
+	srv := serverWithBudget(t, 15*time.Second)
+
+	resp, body := getFrom(t, srv, "/api/v1/evidence?limit=1")
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NotContains(t, body, "error")
+}
+
+// Zero switches the budget off, as it always has for analytics.
+func TestSearchBudgetCanBeDisabled(t *testing.T) {
+	srv := serverWithBudget(t, 0)
+
+	resp, _ := getFrom(t, srv, "/api/v1/evidence?limit=1")
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }

@@ -70,7 +70,7 @@ open `http://localhost:8000`.
 | `EVIDENCE_MAX_PAGE_SIZE` | `1000` | Max page size |
 | `EVIDENCE_MAX_BATCH_SIZE` | `1000` | Max records per batch |
 | `EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS` | `30` | How long an analytics aggregation is reused for an identical filter (`0` disables) |
-| `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` | `15` | Budget for one analytics aggregation before it is refused (`0` disables) |
+| `EVIDENCE_QUERY_TIMEOUT_SECONDS` | `15` | Budget for one evidence query — a search or an aggregation — before it is refused (`0` disables). `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` is still read and supplies the default, from when the budget covered analytics only |
 | `EVIDENCE_API_KEYS` | *(empty — auth disabled)* | Comma-separated API keys (see [Authentication](#authentication-and-authorization)) |
 | `EVIDENCE_AUTH_DB` | `false` | Authenticate against the `principals` table (see [Database-backed principals](#database-backed-principals)) |
 | `EVIDENCE_BOOTSTRAP_ADMIN` | *(empty)* | Subject of an administrator seeded on first start; its key is logged once |
