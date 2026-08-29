@@ -68,8 +68,10 @@ func (s *S3) Put(ctx context.Context, r io.Reader) (Digest, int64, error) {
 		return "", 0, err
 	}
 	defer func() {
-		f.Close()
-		os.Remove(f.Name())
+		// The staging file is only read from here — the upload either sent the
+		// bytes or reported why it could not.
+		_ = f.Close()
+		_ = os.Remove(f.Name())
 	}()
 
 	// Content-Type is deliberately not set. The type is a function of the bytes
@@ -91,7 +93,7 @@ func (s *S3) Get(ctx context.Context, d Digest) (io.ReadCloser, int64, error) {
 	// stat, so the error has to be translated here rather than above.
 	info, err := obj.Stat()
 	if err != nil {
-		obj.Close()
+		_ = obj.Close() // read side; the stat error is what the caller needs
 		return nil, 0, s3Error(err, "stat blob")
 	}
 	return obj, info.Size, nil

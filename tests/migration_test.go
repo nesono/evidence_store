@@ -43,7 +43,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 
 	m, err := migrate.New("file://"+testMigrationsPath, scratchURL)
 	require.NoError(t, err)
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	require.NoError(t, m.Up(), "up on an empty database")
 	require.NoError(t, m.Down(), "down from the head")

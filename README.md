@@ -953,6 +953,26 @@ Adding any file to `web/static/` also means adding it to `embedsrcs` in
 which is what stops a file that works in development from going missing in a
 container or on a page with no connection.
 
+### Linting
+
+CI runs `go vet` and `golangci-lint`, the latter pinned in
+`.github/workflows/ci.yml` to a release built against the Go version `go.mod`
+targets. To run the same checks locally, install that same version:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+```
+
+The pin matters more than it looks. A `golangci-lint` built against an older Go
+than the module targets does not warn — it refuses to load the packages and
+reports nothing, which is indistinguishable from a clean run if nobody reads the
+output. That is how this repo went without static analysis for months.
+
+`.golangci.yml` keeps the enabled set small on purpose: `errcheck`, `govet`,
+`ineffassign`, `staticcheck` and `unused`. The stylistic `ST*` checks are off
+because they want every package comment to begin "Package x ...", and the
+comments here deliberately open by saying what the package is for.
+
 ### Releasing the Bazel adapter
 
 The adapter module (`evidence_store_bazel`) is published to the [Bazel Central Registry](https://registry.bazel.build/) so consumers can pin it via `bazel_dep` without a `git_override`.

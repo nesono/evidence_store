@@ -46,7 +46,7 @@ func newS3(t *testing.T) *S3 {
 	if err != nil {
 		t.Skipf("no container runtime available: %v", err)
 	}
-	t.Cleanup(func() { container.Terminate(ctx) })
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
 
 	host, err := container.Host(ctx)
 	require.NoError(t, err)

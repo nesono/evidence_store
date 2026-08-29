@@ -185,8 +185,11 @@ func stage(r io.Reader, dir string) (_ *os.File, _ Digest, _ int64, err error) {
 	// it still has something to remove on the paths that return a nil file.
 	defer func() {
 		if err != nil {
-			f.Close()
-			os.Remove(f.Name())
+			// Best effort on a path that is already failing: the caller is
+			// being told why, and a second error about the tidying up would
+			// only bury the first.
+			_ = f.Close()
+			_ = os.Remove(f.Name())
 		}
 	}()
 
