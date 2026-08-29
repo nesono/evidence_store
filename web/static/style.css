@@ -1796,3 +1796,9 @@ body > main {
     color: var(--pico-muted-color);
 }
 .app-footer #server-version { font-variant-numeric: tabular-nums; }
+
+/* A newer build has been fetched; the page is still running the old one. */
+#update-notice {
+    padding-top: 0.5rem;
+    color: var(--pico-muted-color);
+}
