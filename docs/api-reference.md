@@ -151,6 +151,29 @@ are already confused.
 
 The web UI shows it in the page footer.
 
+## When a query is refused
+
+Searching and aggregating share one budget, `EVIDENCE_QUERY_TIMEOUT_SECONDS`
+(default 15, `0` disables). A query that does not finish inside it comes back
+as:
+
+```json
+{"error": "query did not finish within 15s; narrow the filter or the time window"}
+```
+
+with `422 Unprocessable Content` — the same status, and the same sentence, from
+`/evidence`, `/evidence/distinct` and every `/analytics` endpoint.
+
+Analytics needs the budget because an unfiltered aggregation over a long window
+scales with the rows it scans. Search needs it for a less obvious reason: a
+leading `~` on a filter hands a POSIX regex to Postgres, and a pattern can be
+made to cost far more than the table it runs over. The pattern is bound as a
+query argument, so there is nothing to inject — it is the evaluation that is
+worth bounding.
+
+Without a budget neither fails cleanly: the query runs until the server's
+request timeout and the caller gets a dropped connection rather than an answer.
+
 ## Test logs
 
 A manual result is only as useful as the account of what the tester saw. That
@@ -573,7 +596,7 @@ curl -o tests.csv "http://localhost:8000/api/v1/analytics/tests?repo=org/repo&so
 The export covers the whole filtered set rather than the requested page — filters and sorting apply, `limit` and `offset` do not. Rates are written as plain decimals (`0.106`) rather than percentages so a spreadsheet reads them as numbers, and labels come through space-separated in one column. The **Export CSV** button on the Analytics tab downloads exactly what the table is currently showing.
 
 Column order is a contract: new columns are appended, existing ones are not reordered or renamed.
-A query that cannot finish within `EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS` is refused the same way. Analytics scales with the rows scanned, so an unfiltered query over a long window on a large corpus can take tens of seconds; without a budget it runs until the server's request timeout and the caller gets a dropped connection rather than an answer. Scoping to a repo is what keeps these queries fast — a full year of one repo's history aggregates in about two seconds at six million rows.
+A query that cannot finish within `EVIDENCE_QUERY_TIMEOUT_SECONDS` is refused the same way. Analytics scales with the rows scanned, so an unfiltered query over a long window on a large corpus can take tens of seconds; without a budget it runs until the server's request timeout and the caller gets a dropped connection rather than an answer. Scoping to a repo is what keeps these queries fast — a full year of one repo's history aggregates in about two seconds at six million rows.
 
 ### Co-failure clusters and test selection
 

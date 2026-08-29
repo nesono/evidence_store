@@ -31,11 +31,14 @@ type Config struct {
 	// query, so this mostly serves those without a round trip; the cost is that
 	// a window can lag new evidence by up to this long.
 	AnalyticsCacheTTL time.Duration
-	// AnalyticsQueryTimeout bounds how long a single analytics aggregation may
-	// run. Zero means no budget beyond the server's own request timeout.
-	AnalyticsQueryTimeout time.Duration
-	Blob                  Blob
-	Weather               Weather
+	// QueryTimeout bounds how long a single evidence query may run — a search
+	// as well as an aggregation. Zero means no budget beyond the server's own
+	// request timeout. One value rather than two because a caller who has hit
+	// the limit on one endpoint should meet the same limit, and the same
+	// wording, on the other.
+	QueryTimeout time.Duration
+	Blob         Blob
+	Weather      Weather
 }
 
 // Auth configures database-backed identities — principals with names, roles
@@ -199,8 +202,11 @@ func Load() (*Config, error) {
 		LogLevel:        envOrDefault("EVIDENCE_LOG_LEVEL", "INFO"),
 		AnalyticsCacheTTL: time.Duration(
 			envOrDefaultInt("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS", 30)) * time.Second,
-		AnalyticsQueryTimeout: time.Duration(
-			envOrDefaultInt("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS", 15)) * time.Second,
+		// The older, analytics-only name still works and supplies the default,
+		// so a deployment that set it before the budget covered search keeps
+		// the value it chose.
+		QueryTimeout: time.Duration(envOrDefaultInt("EVIDENCE_QUERY_TIMEOUT_SECONDS",
+			envOrDefaultInt("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS", 15))) * time.Second,
 	}
 
 	cfg.Blob = Blob{
@@ -253,8 +259,8 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS must not be negative")
 	}
 
-	if cfg.AnalyticsQueryTimeout < 0 {
-		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS must not be negative")
+	if cfg.QueryTimeout < 0 {
+		return nil, fmt.Errorf("EVIDENCE_QUERY_TIMEOUT_SECONDS must not be negative")
 	}
 
 	if cfg.DatabaseURL == "" {

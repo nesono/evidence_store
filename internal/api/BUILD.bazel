@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "analytics.go",
         "blobs.go",
+        "budget.go",
         "evidence.go",
         "filter.go",
         "inheritance.go",

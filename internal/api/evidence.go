@@ -173,8 +173,15 @@ func (h *EvidenceHandler) Distinct(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	values, err := h.evidence.Distinct(r.Context(), field, q.Get("q"), limit)
+	ctx, cancel, budgetExceeded := queryBudget(r, h.cfg.QueryTimeout)
+	defer cancel()
+
+	values, err := h.evidence.Distinct(ctx, field, q.Get("q"), limit)
 	if err != nil {
+		if budgetExceeded(err) {
+			writeBudgetExceeded(w, h.cfg.QueryTimeout)
+			return
+		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -288,8 +295,17 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Check if inheritance should be included.
 	includeInherited := q.Get("include_inherited") != "false"
 
-	result, err := h.evidence.List(r.Context(), params)
+	// A filter may carry a regex, and a regex is worth bounding — see
+	// queryBudget. The same budget and the same wording as analytics.
+	ctx, cancel, budgetExceeded := queryBudget(r, h.cfg.QueryTimeout)
+	defer cancel()
+
+	result, err := h.evidence.List(ctx, params)
 	if err != nil {
+		if budgetExceeded(err) {
+			writeBudgetExceeded(w, h.cfg.QueryTimeout)
+			return
+		}
 		slog.Error("failed to list evidence", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -330,7 +346,7 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 					Limit:  h.cfg.MaxPageSize,
 				}
 
-				inheritedResult, err := h.evidence.List(r.Context(), inheritedParams)
+				inheritedResult, err := h.evidence.List(ctx, inheritedParams)
 				if err != nil {
 					slog.Error("failed to list inherited evidence", "error", err)
 					continue
