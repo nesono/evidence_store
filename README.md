@@ -96,6 +96,13 @@ open `http://localhost:8000`.
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
 | `EVIDENCE_RATE_LIMIT_WRITE_BURST` | `2 × write RPS` | Token-bucket burst capacity for writes |
+
+Limiters live in memory, held under a digest of the caller rather than under
+the API key they authenticated with. Once a bucket holds more than a thousand
+callers, the ones whose token bucket has refilled are dropped — which cannot
+forgive anybody's rate debt, since a limiter created fresh starts full and a
+caller who still owes has a bucket that is not. Memory is therefore bounded by
+how many callers are active, not by how many have ever appeared.
 | `EVIDENCE_BLOB_BACKEND` | `fs` | Where images live: `fs` or `s3` (see [Images in test logs](docs/api-reference.md#images-in-test-logs)) |
 | `EVIDENCE_BLOB_PATH` | `blobs` | Directory for the `fs` backend |
 | `EVIDENCE_BLOB_S3_ENDPOINT` | *(empty)* | `host:port` of the S3/MinIO endpoint |
