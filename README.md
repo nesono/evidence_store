@@ -96,13 +96,6 @@ open `http://localhost:8000`.
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
 | `EVIDENCE_RATE_LIMIT_WRITE_BURST` | `2 × write RPS` | Token-bucket burst capacity for writes |
-
-Limiters live in memory, held under a digest of the caller rather than under
-the API key they authenticated with. Once a bucket holds more than a thousand
-callers, the ones whose token bucket has refilled are dropped — which cannot
-forgive anybody's rate debt, since a limiter created fresh starts full and a
-caller who still owes has a bucket that is not. Memory is therefore bounded by
-how many callers are active, not by how many have ever appeared.
 | `EVIDENCE_BLOB_BACKEND` | `fs` | Where images live: `fs` or `s3` (see [Images in test logs](docs/api-reference.md#images-in-test-logs)) |
 | `EVIDENCE_BLOB_PATH` | `blobs` | Directory for the `fs` backend |
 | `EVIDENCE_BLOB_S3_ENDPOINT` | *(empty)* | `host:port` of the S3/MinIO endpoint |
@@ -116,6 +109,13 @@ how many callers are active, not by how many have ever appeared.
 | `EVIDENCE_RETENTION_CONFIG` | *(empty — retention off)* | Path to a retention rules YAML file (see [Retention](#retention)) |
 | `EVIDENCE_WEATHER_ENDPOINT` | `https://api.open-meteo.com/v1/forecast` | Forecast API the weather lookup asks. Set it to an empty value to switch the lookup off (see [Weather while a test ran](docs/api-reference.md#weather-while-a-test-ran)) |
 | `EVIDENCE_WEATHER_TIMEOUT_SECONDS` | `10` | Budget for one weather lookup before the tester is told to type the conditions in |
+
+Note that limiters live in memory, held under a digest of the caller rather than under
+the API key they authenticated with. Once a bucket holds more than a thousand
+callers, the ones whose token bucket has refilled are dropped — which cannot
+forgive anybody's rate debt, since a limiter created fresh starts full and a
+caller who still owes has a bucket that is not. Memory is therefore bounded by
+how many callers are active, not by how many have ever appeared.
 
 ### Authentication and authorization
 
