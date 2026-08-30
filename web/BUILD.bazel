@@ -9,6 +9,7 @@ go_library(
     # disagree.
     embedsrcs = [
         "static/access.js",
+        "static/addform.js",
         "static/analytics.js",
         "static/app.js",
         "static/apple-touch-icon.png",

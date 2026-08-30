@@ -29,6 +29,7 @@ const SHELL = [
   "/app.js",
   "/blobref.js",
   "/access.js",
+  "/addform.js",
   "/analytics.js",
   "/common.js",
   "/datalists.js",
