@@ -971,6 +971,22 @@ Adding any file to `web/static/` also means adding it to `embedsrcs` in
 which is what stops a file that works in development from going missing in a
 container or on a page with no connection.
 
+### Browser smoke test
+
+`node --test web/tests/*_test.mjs` covers the frontend logic that can be tested
+without a browser. What it cannot cover is whether the page still works — a
+missing import or a function moved into the wrong module leaves every test
+passing and the page dead.
+
+```bash
+node --test web/smoke/*_test.mjs
+```
+
+Ten seconds against a running `docker compose` stack, driving headless Chrome.
+It files records under `smoke/browser-check`; see
+[web/smoke/README.md](web/smoke/README.md) for what it covers, what it leaves
+behind, and why it exists.
+
 ### Linting
 
 CI runs `go vet` and `golangci-lint`, the latter pinned in
