@@ -35,8 +35,12 @@ type mockIdP struct {
 	// What the next issued token will say.
 	subject string
 	email   string
-	name    string
-	groups  []string
+	// preferredUsername is what Entra sends as the login name, frequently a UPN
+	// that is not the address in email. Empty leaves the claim out entirely,
+	// which is what a provider that does not send it looks like.
+	preferredUsername string
+	name              string
+	groups            []string
 
 	// Levers for the unhappy paths.
 	signWithWrongKey bool
@@ -182,6 +186,9 @@ func (m *mockIdP) signIDToken(t *testing.T) string {
 		"email":  m.email,
 		"name":   m.name,
 		"groups": m.groups,
+	}
+	if m.preferredUsername != "" {
+		claims["preferred_username"] = m.preferredUsername
 	}
 	raw, err := jwt.Signed(signer).Claims(claims).Serialize()
 	require.NoError(t, err)

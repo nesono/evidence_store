@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -85,9 +86,13 @@ type Claims struct {
 	// what a principal is matched on.
 	Subject string
 	Email   string
-	Name    string
-	Groups  []string
-	Issuer  string
+	// PreferredUsername is what the provider calls this person's login name.
+	// Entra sends the UPN, which is frequently not the address in Email — and a
+	// directory that provisioned them may know them by only one of the two.
+	PreferredUsername string
+	Name              string
+	Groups            []string
+	Issuer            string
 	// IDToken is the raw token this login arrived on, kept so that logging out
 	// can hand it back as id_token_hint. Empty from any front end that does not
 	// have one, SAML included.
@@ -109,6 +114,21 @@ func (c Claims) PrincipalSubject() string {
 		return "user:" + c.Email
 	}
 	return "user:" + c.Subject
+}
+
+// LoginNames are the names somebody may already be known by to a provisioner
+// that created their account before they first logged in. Both are offered
+// because a UPN and an email address are often not the same string, and which
+// of them a directory sends is its own choice.
+func (c Claims) LoginNames() []string {
+	names := make([]string, 0, 2)
+	for _, name := range []string{c.Email, c.PreferredUsername} {
+		if name == "" || slices.Contains(names, name) {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 // Exchange redeems the authorization code and verifies the ID token that comes
@@ -140,12 +160,13 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*Cl
 	}
 
 	return &Claims{
-		Subject: idToken.Subject,
-		IDToken: rawID,
-		Issuer:  idToken.Issuer,
-		Email:   stringClaim(raw, "email"),
-		Name:    stringClaim(raw, "name"),
-		Groups:  stringsClaim(raw, p.cfg.GroupsClaim),
+		Subject:           idToken.Subject,
+		IDToken:           rawID,
+		Issuer:            idToken.Issuer,
+		Email:             stringClaim(raw, "email"),
+		PreferredUsername: stringClaim(raw, "preferred_username"),
+		Name:              stringClaim(raw, "name"),
+		Groups:            stringsClaim(raw, p.cfg.GroupsClaim),
 	}, nil
 }
 
