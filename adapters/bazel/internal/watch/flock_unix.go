@@ -18,7 +18,7 @@ func isFileLocked(path string) bool {
 	if err != nil {
 		return false // file doesn't exist = not locked
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Try a non-blocking exclusive lock.
 	err = syscallFlock(f, syscall.LOCK_EX|syscall.LOCK_NB)
@@ -26,6 +26,9 @@ func isFileLocked(path string) bool {
 		return true // lock held by another process (Bazel)
 	}
 	// We got the lock — Bazel is not running. Release it.
-	syscallFlock(f, syscall.LOCK_UN)
+	//
+	// Nothing to do if the release fails: the descriptor is closed on the way
+	// out of this function, which drops the lock anyway.
+	_ = syscallFlock(f, syscall.LOCK_UN)
 	return false
 }
