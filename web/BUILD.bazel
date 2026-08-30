@@ -28,6 +28,7 @@ go_library(
         "static/markdown.js",
         "static/offline.js",
         "static/outbox.js",
+        "static/outboxview.js",
         "static/pico.min.css",
         "static/style.css",
         "static/sw.js",
