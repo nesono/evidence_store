@@ -1,0 +1,61 @@
+# What CI checks in the adapter, beyond building and testing it.
+#
+# A copy of the root module's config rather than a link to it, because this is a
+# separate Go module: it is published to the Bazel Central Registry on its own,
+# consumers resolve it without the rest of this repo, and it targets an older Go
+# than the root does. A shared file would have to be vendored into the module
+# anyway to travel with it.
+#
+# Keep the two in step by hand. They are twenty lines and they change rarely.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck      # errors assigned and dropped
+    - govet         # the standard suspicious-construct set
+    - ineffassign   # values computed and then overwritten unread
+    - staticcheck   # misused stdlib, impossible conditions, unreachable code
+    - unused        # unreferenced identifiers
+
+  settings:
+    errcheck:
+      # Closing something we only read from has no useful failure path, and
+      # neither does rolling back a transaction that has already committed —
+      # the deferred-rollback idiom returns ErrTxClosed by design.
+      #
+      # Deliberately NOT excluded: (*os.File).Close. Closing a file we have
+      # written to can report a failed flush, and this store renames staged
+      # files into a content-addressed layout where short bytes would sit under
+      # a digest that no longer describes them. Those sites say `_ =` one at a
+      # time, with a reason, or they check.
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+
+    staticcheck:
+      # The default set, minus one. Not "all": that switches on the ST* naming
+      # and package-comment checks, which want every package comment to begin
+      # "Package weather ..." — and the comments in this tree deliberately open
+      # by saying what the package is for. Forty of those is how a linter gets
+      # turned off.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # QF1008 wants the embedded field dropped from a selector:
+        # `ft.Time.UTC()` becomes `ft.UTC()`. On a type that embeds time.Time
+        # precisely so it can carry its own parsing, naming the field is what
+        # tells a reader which UTC() they are looking at.
+        - -QF1008
+
+issues:
+  # Report everything, every run. The defaults show only the first three of each
+  # kind, which makes a noisy run look like a clean one.
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -116,7 +116,7 @@ func ResultFromLog(logPath string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read only
 
 	var lastLine string
 	scanner := bufio.NewScanner(f)

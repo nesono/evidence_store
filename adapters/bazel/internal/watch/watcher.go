@@ -114,7 +114,6 @@ func (w *Watcher) poll(ctx context.Context) error {
 	}
 
 	// Filter entries to only changed ones, and read test.xml data into memory.
-	var changedEntries []testlogs.TestLogEntry
 	type parsedResult struct {
 		entry    testlogs.TestLogEntry
 		result   string
@@ -126,8 +125,6 @@ func (w *Watcher) poll(ctx context.Context) error {
 		if _, ok := changedSet[entry.XMLPath]; !ok {
 			continue
 		}
-		changedEntries = append(changedEntries, entry)
-
 		result, duration, err := w.parseEntry(entry)
 		if err != nil {
 			// If the file vanished between scan and read, a new Bazel run
@@ -234,7 +231,7 @@ func (w *Watcher) parseEntry(entry testlogs.TestLogEntry) (string, float64, erro
 	if err != nil {
 		return "", 0, fmt.Errorf("open %s: %w", entry.XMLPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read only; the parse error is the one to report
 
 	ts, err := junitxml.Parse(f)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 func TestParseSinglePass(t *testing.T) {
 	f, err := os.Open("testdata/single_pass.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestParseSinglePass(t *testing.T) {
 func TestParseMixedResults(t *testing.T) {
 	f, err := os.Open("testdata/mixed_results.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestParseMixedResults(t *testing.T) {
 func TestParseNestedSuites(t *testing.T) {
 	f, err := os.Open("testdata/nested_suites.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestParseNestedSuites(t *testing.T) {
 func TestParseErrorResult(t *testing.T) {
 	f, err := os.Open("testdata/with_error.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestParseErrorResult(t *testing.T) {
 func TestParseAllSkipped(t *testing.T) {
 	f, err := os.Open("testdata/all_skipped.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestParseAllSkipped(t *testing.T) {
 func TestParseEmptyStub(t *testing.T) {
 	f, err := os.Open("testdata/empty_stub.xml")
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts, err := Parse(f)
 	require.NoError(t, err)

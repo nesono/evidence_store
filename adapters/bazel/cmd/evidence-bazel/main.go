@@ -110,7 +110,7 @@ func main() {
 		}
 
 		ts, err := junitxml.Parse(f)
-		f.Close()
+		_ = f.Close() // read only; the parse error below is the one to report
 		if err != nil {
 			slog.Error("failed to parse test.xml", "path", entry.XMLPath, "error", err)
 			parseErrors++
@@ -246,7 +246,7 @@ func runWatch(args []string) {
 func runWatchStart(workspaceDir string, args []string) {
 	fs := flag.NewFlagSet("watch start", flag.ExitOnError)
 	foreground := fs.Bool("foreground", false, "Run in foreground (don't daemonize)")
-	fs.Parse(args)
+	_ = fs.Parse(args) // ExitOnError: a bad flag exits rather than returning
 
 	// Check if already running.
 	if pid, alive := watch.IsRunning(workspaceDir); alive {
@@ -298,8 +298,11 @@ func runWatchStart(workspaceDir string, args []string) {
 			fmt.Fprintf(os.Stderr, "error starting daemon: %v\n", err)
 			os.Exit(1)
 		}
-		logFile.Close()
-		proc.Release()
+		// The child holds its own descriptors and its own process handle from
+		// here; these are the parent's copies and nothing depends on them
+		// closing cleanly.
+		_ = logFile.Close()
+		_ = proc.Release()
 
 		fmt.Printf("watcher started in background (check .evidence/watch.log for output)\n")
 		return

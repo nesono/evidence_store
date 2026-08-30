@@ -1003,6 +1003,11 @@ output. That is how this repo went without static analysis for months.
 because they want every package comment to begin "Package x ...", and the
 comments here deliberately open by saying what the package is for.
 
+`adapters/bazel` is a separate Go module and carries its own copy of the same
+config, linted by its own CI job. A copy rather than a link, because the module
+is published to the Bazel Central Registry on its own and has to travel with its
+own settings; keep the two in step by hand.
+
 ### Releasing the Bazel adapter
 
 The adapter module (`evidence_store_bazel`) is published to the [Bazel Central Registry](https://registry.bazel.build/) so consumers can pin it via `bazel_dep` without a `git_override`.

@@ -39,7 +39,7 @@ func TestScan(t *testing.T) {
 
 	// //foo/bar:baz_test (cached)
 	mkTestXML(t, dir, "foo/bar/baz_test/test.xml")
-	os.WriteFile(filepath.Join(dir, "foo/bar/baz_test/test.cache_status"), []byte("REMOTE_CACHE_HIT"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "foo/bar/baz_test/test.cache_status"), []byte("REMOTE_CACHE_HIT"), 0644)
 
 	// //pkg:sharded_test shard 1
 	mkTestXML(t, dir, "pkg/sharded_test/shard_1_of_2/test.xml")

@@ -17,7 +17,7 @@ func TestPostBatch(t *testing.T) {
 		assert.Equal(t, "/api/v1/evidence/batch", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		json.NewDecoder(r.Body).Decode(&received)
+		_ = json.NewDecoder(r.Body).Decode(&received)
 
 		resp := BatchResponse{}
 		for i := range received.Records {
@@ -29,7 +29,7 @@ func TestPostBatch(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -59,7 +59,7 @@ func TestPostBatchWithAPIKey(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer my-secret-key", r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(BatchResponse{})
+		_ = json.NewEncoder(w).Encode(BatchResponse{})
 	}))
 	defer server.Close()
 
@@ -73,14 +73,14 @@ func TestPostBatchChunking(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		batchCount++
 		var req batchRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		resp := BatchResponse{}
 		for i := range req.Records {
 			resp.Results = append(resp.Results, BatchRecordStatus{Index: i, Status: "created"})
 		}
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

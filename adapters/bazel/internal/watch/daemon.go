@@ -19,7 +19,8 @@ func WritePID(workspaceDir string) error {
 
 // RemovePID removes the PID file.
 func RemovePID(workspaceDir string) {
-	os.Remove(filepath.Join(EvidenceDir(workspaceDir), pidFile))
+	// Best effort: a stale PID file is detected and removed by IsRunning.
+	_ = os.Remove(filepath.Join(EvidenceDir(workspaceDir), pidFile))
 }
 
 // ReadPID reads the PID from .evidence/watch.pid.
