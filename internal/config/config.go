@@ -121,7 +121,15 @@ type OIDC struct {
 	// proxy chose to forward, and guessing it wrong sends people to a URL the
 	// provider will refuse.
 	RedirectURL string
-	Scopes      []string
+	// PostLogoutURL is where the provider returns the browser once it has ended
+	// its own session. Defaults to the store's root, carrying the marker that
+	// stops the page bouncing straight back out to log in again.
+	//
+	// Providers generally require this to be registered alongside the redirect
+	// URL; one that does not recognise it will refuse the logout rather than
+	// redirect somewhere unexpected, which is the right way round.
+	PostLogoutURL string
+	Scopes        []string
 	// GroupsClaim is the token claim carrying group membership. Providers
 	// disagree: "groups" is common, Entra says "roles".
 	GroupsClaim string
@@ -350,9 +358,13 @@ func loadOIDC(roleMap map[string]string) OIDC {
 		ClientID:     strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_CLIENT_ID")),
 		ClientSecret: os.Getenv("EVIDENCE_OIDC_CLIENT_SECRET"),
 		RedirectURL:  strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_REDIRECT_URL")),
-		Scopes:       splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
-		GroupsClaim:  envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
-		RoleMap:      roleMap,
+		// Left empty unless an operator says otherwise: where a logout lands
+		// is derived from the redirect URL, which already says where the store
+		// is, and deriving it in one place beats two that can disagree.
+		PostLogoutURL: strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_POST_LOGOUT_URL")),
+		Scopes:        splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
+		GroupsClaim:   envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
+		RoleMap:       roleMap,
 	}
 }
 

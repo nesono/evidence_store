@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ type SSOHandler struct {
 	sessions    *store.SessionStore
 	samlPending *store.SAMLRequestStore
 	roleMap     map[string]string
+	oidcCfg     config.OIDC
 	cfg         config.Session
 	logger      *slog.Logger
 }
@@ -49,6 +51,7 @@ type SSODeps struct {
 	Sessions    *store.SessionStore
 	SAMLPending *store.SAMLRequestStore
 	RoleMap     map[string]string
+	OIDCConfig  config.OIDC
 	Session     config.Session
 	Logger      *slog.Logger
 }
@@ -61,7 +64,7 @@ func NewSSOHandler(d SSODeps) *SSOHandler {
 	return &SSOHandler{
 		oidc: d.OIDC, saml: d.SAML,
 		principals: d.Principals, sessions: d.Sessions, samlPending: d.SAMLPending,
-		roleMap: d.RoleMap, cfg: d.Session, logger: logger,
+		roleMap: d.RoleMap, oidcCfg: d.OIDCConfig, cfg: d.Session, logger: logger,
 	}
 }
 
@@ -274,7 +277,7 @@ func (h *SSOHandler) completeLogin(w http.ResponseWriter, r *http.Request, claim
 		return
 	}
 	expires := time.Now().Add(h.cfg.TTL)
-	if _, err := h.sessions.Create(r.Context(), principal.ID, auth.HashKey(token), expires, r.UserAgent()); err != nil {
+	if _, err := h.sessions.Create(r.Context(), principal.ID, auth.HashKey(token), expires, r.UserAgent(), claims.IDToken); err != nil {
 		h.fail(w, "start the session", err)
 		return
 	}
@@ -296,17 +299,81 @@ func (h *SSOHandler) completeLogin(w http.ResponseWriter, r *http.Request, claim
 }
 
 // Logout ends this session now rather than at expiry — which is what storing
-// sessions rather than signing them buys.
+// sessions rather than signing them buys — and then says where to go to end the
+// provider's session as well.
+//
+// Ending only the local one is not a logout. The provider still has its own
+// session, so the next login is answered without a password: the store signs
+// the same person straight back in, which reads as the button being broken, and
+// on a shared machine hands the next person the last one's account.
+//
+// The answer names a URL rather than redirecting, because this is called with
+// fetch from a page that then has to navigate: a redirect here would be
+// followed inside the request and end up fetching the provider's logout page
+// into a variable, leaving the browser exactly where it was.
 func (h *SSOHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var ended store.EndedSession
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil && cookie.Value != "" {
-		if err := h.sessions.Delete(r.Context(), auth.HashKey(cookie.Value)); err != nil {
+		var err error
+		if ended, err = h.sessions.Delete(r.Context(), auth.HashKey(cookie.Value)); err != nil {
 			h.fail(w, "log out", err)
 			return
 		}
 	}
 	http.SetCookie(w, h.expiredCookie(auth.SessionCookie))
 	http.SetCookie(w, h.expiredCookie(auth.CSRFCookie))
-	w.WriteHeader(http.StatusNoContent)
+
+	// Where to land when there is no provider to visit: a SAML login, a
+	// provider that advertises no logout endpoint, or a logout by somebody who
+	// was not signed in. The marker is what stops the page treating the first
+	// 401 as an expired session and sending them back out to log in.
+	next := signedOutPath
+	if h.oidc != nil {
+		if url := h.oidc.EndSessionURL(ended.IDToken, h.postLogoutURL()); url != "" {
+			next = url
+		}
+	}
+
+	// Logged at the same level as its opposite number. Before this, a logout
+	// left no trace at all, which made "I pressed log out and stayed logged in"
+	// impossible to tell from "I never pressed it" without a network trace.
+	h.logger.Info("logout", "subject", subjectOrAnonymous(ended.Subject), "provider_logout", next != signedOutPath)
+	writeJSON(w, http.StatusOK, map[string]string{"logout_url": next})
+}
+
+// signedOutPath is where a logout lands when the provider is not involved. The
+// marker is read by the page, not by this server.
+const signedOutPath = "/?signed_out=1"
+
+// postLogoutURL is where the provider should return the browser afterwards:
+// the store's own front page, marked so the page knows it arrived by logging
+// out rather than by a session going stale.
+//
+// Derived from the redirect URL, which a deployment already has to spell out
+// because the provider must be told the same value. An operator whose logout
+// should land somewhere else says so with EVIDENCE_OIDC_POST_LOGOUT_URL.
+//
+// The empty string when there is nothing to derive it from; the provider then
+// returns the browser wherever it was configured to.
+func (h *SSOHandler) postLogoutURL() string {
+	if h.oidcCfg.PostLogoutURL != "" {
+		return h.oidcCfg.PostLogoutURL
+	}
+	u, err := url.Parse(h.oidcCfg.RedirectURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + signedOutPath
+}
+
+// subjectOrAnonymous names whoever was signed in, for the log line only.
+// Logging out a browser that was not signed in is a no-op worth recording as
+// one rather than dropping silently.
+func subjectOrAnonymous(subject string) string {
+	if subject == "" {
+		return "(anonymous)"
+	}
+	return subject
 }
 
 func (h *SSOHandler) cookie(name, value string, ttl time.Duration) *http.Cookie {

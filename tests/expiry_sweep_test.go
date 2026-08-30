@@ -39,9 +39,9 @@ func TestSweeperClearsBothTablesAndSparesTheLiveOnes(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	_, err = sessions.Create(ctx, principal.ID, auth.HashKey("expired-session"), time.Now().Add(-time.Hour), "test")
+	_, err = sessions.Create(ctx, principal.ID, auth.HashKey("expired-session"), time.Now().Add(-time.Hour), "test", "")
 	require.NoError(t, err)
-	_, err = sessions.Create(ctx, principal.ID, auth.HashKey("live-session"), time.Now().Add(time.Hour), "test")
+	_, err = sessions.Create(ctx, principal.ID, auth.HashKey("live-session"), time.Now().Add(time.Hour), "test", "")
 	require.NoError(t, err)
 
 	require.NoError(t, requests.Remember(ctx, "expired-saml-request", time.Now().Add(-time.Minute)))

@@ -342,6 +342,26 @@ func TestALocallyGrantedRoleSurvivesALogin(t *testing.T) {
 		"the login should reconcile its own grants and leave the administrator's alone")
 }
 
+// logOut presses the logout button and returns where the answer says to go
+// next: the provider's logout for a provider that has one, and the signed-out
+// landing page otherwise.
+func logOut(t *testing.T, base string, client *http.Client) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, base+"/auth/logout", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body struct {
+		LogoutURL string `json:"logout_url"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NotEmpty(t, body.LogoutURL, "a logout has to say where the browser goes next")
+	return body.LogoutURL
+}
+
 // ---------------------------------------------------------------------------
 // Tests: sessions are revocable, which is why they are rows
 // ---------------------------------------------------------------------------
@@ -356,12 +376,7 @@ func TestLogoutEndsTheSessionImmediately(t *testing.T) {
 	me := meOf(t, base, client)
 	require.True(t, me.Authenticated)
 
-	req, err := http.NewRequest(http.MethodPost, base+"/auth/logout", nil)
-	require.NoError(t, err)
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-	resp.Body.Close()
+	logOut(t, base, client)
 
 	// The cookie is gone from the browser and the row is gone from the table,
 	// so the next request is simply an anonymous one — which, with credentials
@@ -373,6 +388,49 @@ func TestLogoutEndsTheSessionImmediately(t *testing.T) {
 		`SELECT count(*) FROM sessions WHERE principal_id = (SELECT id FROM principals WHERE subject = $1)`,
 		me.Subject).Scan(&remaining))
 	assert.Zero(t, remaining, "logging out should end the session, not just forget it")
+}
+
+// Ending the local session is only half a logout. The provider keeps its own,
+// so a store that stops here signs the same person straight back in the moment
+// they click Log in — no password asked — and on a shared machine hands the
+// next person the last one's account.
+func TestLogoutSendsTheBrowserOnToTheProvider(t *testing.T) {
+	idp := newMockIdP(t)
+	idp.groups = []string{"eng-all"}
+	dropPrincipal(t, "%idp-subject-001")
+
+	base, client := ssoServer(t, idp, map[string]string{"eng-all": "contributor"})
+	logIn(t, base, client).Body.Close()
+	require.True(t, meOf(t, base, client).Authenticated)
+
+	next, err := url.Parse(logOut(t, base, client))
+	require.NoError(t, err)
+
+	assert.Equal(t, idp.server.URL+"/logout", next.Scheme+"://"+next.Host+next.Path,
+		"logging out should point the browser at the provider's own logout")
+	assert.NotEmpty(t, next.Query().Get("id_token_hint"),
+		"the provider needs the token to know which session to end without asking the human")
+	assert.Equal(t, mockClientID, next.Query().Get("client_id"))
+	assert.Contains(t, next.Query().Get("post_logout_redirect_uri"), "signed_out=1",
+		"the browser has to come back marked as signed out, or the page logs it straight back in")
+}
+
+// A provider that advertises no logout endpoint is allowed, and the store has
+// to stay usable in front of one: the local session still ends, and the browser
+// is still told where to land.
+func TestLogoutWithoutAProviderEndpointStillEndsTheSession(t *testing.T) {
+	idp := newMockIdP(t)
+	idp.noEndSession = true
+	idp.groups = []string{"eng-all"}
+	dropPrincipal(t, "%idp-subject-001")
+
+	base, client := ssoServer(t, idp, map[string]string{"eng-all": "contributor"})
+	logIn(t, base, client).Body.Close()
+	require.True(t, meOf(t, base, client).Authenticated)
+
+	assert.Equal(t, "/?signed_out=1", logOut(t, base, client))
+	assert.Equal(t, http.StatusUnauthorized, statusOf(t, base, client, "/api/v1/me"),
+		"the session here should end whether or not the provider has one to end")
 }
 
 // The reason sessions are a table and not a signed cookie: disabling somebody

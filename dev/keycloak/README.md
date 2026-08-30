@@ -59,6 +59,18 @@ must do to the thousands of people in it who have no business here.
 Roles are worked out at login and written to `role_bindings`, so a group change
 in Keycloak takes effect the next time that user signs in, not immediately.
 
+## Logging out
+
+**Log out** ends the session here *and* Keycloak's, so the next login asks for a
+password again. The realm registers `http://localhost:8000/*` as a permitted
+post-logout redirect, which Keycloak requires before it will send the browser
+back; a store on a different address needs that changed to match.
+
+Worth actually trying, because the failure it fixes is invisible: with only the
+local session ended, clicking **Log in** is answered silently by Keycloak's
+still-live session, and the store signs you back in so fast that the logout
+button looks broken.
+
 ## Pointing this at Microsoft Entra
 
 The realm is arranged to make the differences small. Registering the store as

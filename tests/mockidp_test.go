@@ -43,11 +43,24 @@ type mockIdP struct {
 	issuerOverride   string
 	audienceOverride string
 	omitIDToken      bool
+	// noEndSession drops the logout endpoint from discovery, which is a
+	// provider that supports no RP-initiated logout at all — allowed, and the
+	// store has to stay usable in front of one.
+	noEndSession bool
 
 	// codes maps an issued authorization code to the PKCE challenge it was
 	// issued against, so the token endpoint can check the verifier the way a
 	// real provider does.
 	codes map[string]string
+}
+
+// endSessionEndpoint is what discovery advertises for logging out, or the empty
+// string for a provider that offers none.
+func (m *mockIdP) endSessionEndpoint() string {
+	if m.noEndSession {
+		return ""
+	}
+	return m.server.URL + "/logout"
 }
 
 func newMockIdP(t *testing.T) *mockIdP {
@@ -75,6 +88,7 @@ func newMockIdP(t *testing.T) *mockIdP {
 			"response_types_supported":              []string{"code"},
 			"subject_types_supported":               []string{"public"},
 			"id_token_signing_alg_values_supported": []string{"RS256"},
+			"end_session_endpoint":                  idp.endSessionEndpoint(),
 		})
 	})
 

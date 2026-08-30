@@ -1,0 +1,16 @@
+-- What the browser needs to be logged out of the provider, not just out of here.
+--
+-- Ending the local session was only ever half of a logout: the identity
+-- provider keeps its own, so the next click on "Log in" is answered without a
+-- password and the person who thought they had signed off is signed back in as
+-- themselves. On a shared machine the next person is signed in as them.
+--
+-- RP-initiated logout fixes that, and it wants the ID token from the login it
+-- is ending -- id_token_hint is how the provider knows which session to end
+-- without asking the human to confirm. So the token is kept with the session
+-- and dies with it.
+--
+-- Empty for a session that predates this column and for every SAML login, which
+-- has its own single-logout profile and does not use this. Empty simply means
+-- there is no provider logout to send anybody to.
+ALTER TABLE sessions ADD COLUMN id_token TEXT NOT NULL DEFAULT '';

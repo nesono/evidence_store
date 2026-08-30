@@ -31,13 +31,17 @@ func NewSessionStore(pool *pgxpool.Pool) *SessionStore {
 
 // Create records a new session. The caller mints the token and hashes it, so
 // this package never holds the value a cookie carries.
-func (s *SessionStore) Create(ctx context.Context, principalID uuid.UUID, tokenHash string, expiresAt time.Time, userAgent string) (*model.Session, error) {
+//
+// idToken is the ID token the login arrived on, kept so that logging out can
+// end the provider's session as well as this one. Empty is fine and means there
+// is no provider logout to perform.
+func (s *SessionStore) Create(ctx context.Context, principalID uuid.UUID, tokenHash string, expiresAt time.Time, userAgent, idToken string) (*model.Session, error) {
 	var sess model.Session
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO sessions (principal_id, token_hash, expires_at, user_agent)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO sessions (principal_id, token_hash, expires_at, user_agent, id_token)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, principal_id, created_at, expires_at, last_seen_at, user_agent
-	`, principalID, tokenHash, expiresAt, userAgent).Scan(
+	`, principalID, tokenHash, expiresAt, userAgent, idToken).Scan(
 		&sess.ID, &sess.PrincipalID, &sess.CreatedAt, &sess.ExpiresAt, &sess.LastSeenAt, &sess.UserAgent,
 	)
 	if err != nil {
@@ -84,13 +88,41 @@ func (s *SessionStore) FindPrincipalBySessionToken(ctx context.Context, tokenHas
 	return &p, &sess, nil
 }
 
-// Delete ends one session — the logout button. Deleting a session that is
-// already gone is not an error; the caller wanted it gone either way.
-func (s *SessionStore) Delete(ctx context.Context, tokenHash string) error {
-	if _, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash); err != nil {
-		return fmt.Errorf("delete session: %w", err)
+// EndedSession is what a logout took away: enough to end the provider's session
+// too, and enough to say in the log whose session it was.
+type EndedSession struct {
+	// IDToken is the token that login arrived on, for id_token_hint. Empty for
+	// a SAML login or a session created before the column existed.
+	IDToken string
+	Subject string
+}
+
+// Delete ends one session — the logout button — and reports what it ended, so
+// the caller can go on to end the provider's session and name whose it was.
+// Deleting a session that is already gone is not an error; the caller wanted it
+// gone either way, and the zero value means there is nothing further to do.
+//
+// One statement rather than a read followed by a delete: two would leave room
+// for a second logout of the same session to find it still there, and the
+// subject is wanted precisely because this route runs outside the
+// authentication middleware and so has no principal in hand.
+func (s *SessionStore) Delete(ctx context.Context, tokenHash string) (EndedSession, error) {
+	var ended EndedSession
+	err := s.pool.QueryRow(ctx, `
+		WITH gone AS (
+		    DELETE FROM sessions WHERE token_hash = $1
+		    RETURNING id_token, principal_id
+		)
+		SELECT gone.id_token, p.subject
+		FROM gone JOIN principals p ON p.id = gone.principal_id
+	`, tokenHash).Scan(&ended.IDToken, &ended.Subject)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return EndedSession{}, nil
 	}
-	return nil
+	if err != nil {
+		return EndedSession{}, fmt.Errorf("delete session: %w", err)
+	}
+	return ended, nil
 }
 
 // DeleteForPrincipal ends every session a principal has. This is what makes
