@@ -192,7 +192,36 @@ func (r RateLimit) Enabled() bool {
 	return r.ReadRPS > 0 || r.WriteRPS > 0
 }
 
+// Load reads the whole configuration from the environment.
+//
+// One loader per section, each building its own struct and checking its own
+// values, so that a validation sits beside the thing it constrains rather than
+// a hundred lines below it. This function is then a table of contents: what the
+// server is configured by, in the order it is assembled.
 func Load() (*Config, error) {
+	cfg, err := loadServer()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Blob, err = loadBlob(); err != nil {
+		return nil, err
+	}
+	if cfg.Weather, err = loadWeather(); err != nil {
+		return nil, err
+	}
+	if cfg.APIKeys, err = loadAPIKeys(); err != nil {
+		return nil, err
+	}
+	if cfg.Auth, err = loadAuth(); err != nil {
+		return nil, err
+	}
+	cfg.RateLimit = loadRateLimit()
+	return cfg, nil
+}
+
+// loadServer reads what the process itself needs: where the database is, what
+// to listen on, and the bounds on a single request.
+func loadServer() (*Config, error) {
 	cfg := &Config{
 		DatabaseURL:     envOrDefault("EVIDENCE_DATABASE_URL", "postgres://evidence:evidence@localhost:5432/evidence_store?sslmode=disable"),
 		ListenAddr:      envOrDefault("EVIDENCE_LISTEN_ADDR", ":8000"),
@@ -209,7 +238,21 @@ func Load() (*Config, error) {
 			envOrDefaultInt("EVIDENCE_ANALYTICS_QUERY_TIMEOUT_SECONDS", 15))) * time.Second,
 	}
 
-	cfg.Blob = Blob{
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("EVIDENCE_DATABASE_URL is required")
+	}
+	if cfg.AnalyticsCacheTTL < 0 {
+		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS must not be negative")
+	}
+	if cfg.QueryTimeout < 0 {
+		return nil, fmt.Errorf("EVIDENCE_QUERY_TIMEOUT_SECONDS must not be negative")
+	}
+	return cfg, nil
+}
+
+// loadBlob reads where the images in a test log are kept.
+func loadBlob() (Blob, error) {
+	b := Blob{
 		Options: blob.Options{
 			Backend: envOrDefault("EVIDENCE_BLOB_BACKEND", "fs"),
 			Path:    envOrDefault("EVIDENCE_BLOB_PATH", "blobs"),
@@ -229,7 +272,18 @@ func Load() (*Config, error) {
 			envOrDefaultInt("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS", 24)) * time.Hour,
 	}
 
-	cfg.Weather = Weather{
+	if b.MaxBytes <= 0 {
+		return Blob{}, fmt.Errorf("EVIDENCE_MAX_BLOB_BYTES must be positive")
+	}
+	if b.OrphanGrace < 0 {
+		return Blob{}, fmt.Errorf("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS must not be negative")
+	}
+	return b, nil
+}
+
+// loadWeather reads the lookup behind the Weather field on a manual record.
+func loadWeather() (Weather, error) {
+	w := Weather{
 		// Open-Meteo needs no account and no key. That matters more than the
 		// choice of service: a feature that only works once someone has signed
 		// up for something is a feature most deployments never turn on.
@@ -243,68 +297,67 @@ func Load() (*Config, error) {
 			envOrDefaultInt("EVIDENCE_WEATHER_TIMEOUT_SECONDS", 10)) * time.Second,
 	}
 
-	if cfg.Weather.Timeout <= 0 && cfg.Weather.Endpoint != "" {
-		return nil, fmt.Errorf("EVIDENCE_WEATHER_TIMEOUT_SECONDS must be positive")
+	if w.Timeout <= 0 && w.Endpoint != "" {
+		return Weather{}, fmt.Errorf("EVIDENCE_WEATHER_TIMEOUT_SECONDS must be positive")
+	}
+	return w, nil
+}
+
+// loadAPIKeys reads the static key list, which is empty in a deployment that
+// authenticates against the principals table instead.
+func loadAPIKeys() ([]APIKey, error) {
+	raw := os.Getenv("EVIDENCE_API_KEYS")
+	if raw == "" {
+		return nil, nil
+	}
+	keys, err := ParseAPIKeys(raw)
+	if err != nil {
+		return nil, fmt.Errorf("EVIDENCE_API_KEYS: %w", err)
+	}
+	return keys, nil
+}
+
+// loadAuth reads who may call, and how they prove it.
+func loadAuth() (Auth, error) {
+	roleMap, err := loadRoleMap()
+	if err != nil {
+		return Auth{}, err
 	}
 
-	if cfg.Blob.MaxBytes <= 0 {
-		return nil, fmt.Errorf("EVIDENCE_MAX_BLOB_BYTES must be positive")
+	auth := Auth{
+		DB:             os.Getenv("EVIDENCE_AUTH_DB") == "true",
+		BootstrapAdmin: strings.TrimSpace(os.Getenv("EVIDENCE_BOOTSTRAP_ADMIN")),
+		OIDC:           loadOIDC(roleMap),
+		SAML:           loadSAML(),
+		RoleMap:        roleMap,
+		Session: Session{
+			TTL: time.Duration(envOrDefaultInt("EVIDENCE_SESSION_TTL_HOURS", 12)) * time.Hour,
+			// Secure unless explicitly turned off, so that forgetting the
+			// variable fails towards the safe posture rather than away from it.
+			CookieSecure: os.Getenv("EVIDENCE_COOKIE_SECURE") != "false",
+		},
 	}
 
-	if cfg.Blob.OrphanGrace < 0 {
-		return nil, fmt.Errorf("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS must not be negative")
+	if err := validateAuth(auth); err != nil {
+		return Auth{}, err
 	}
+	return auth, nil
+}
 
-	if cfg.AnalyticsCacheTTL < 0 {
-		return nil, fmt.Errorf("EVIDENCE_ANALYTICS_CACHE_TTL_SECONDS must not be negative")
-	}
-
-	if cfg.QueryTimeout < 0 {
-		return nil, fmt.Errorf("EVIDENCE_QUERY_TIMEOUT_SECONDS must not be negative")
-	}
-
-	if cfg.DatabaseURL == "" {
-		return nil, fmt.Errorf("EVIDENCE_DATABASE_URL is required")
-	}
-
-	if raw := os.Getenv("EVIDENCE_API_KEYS"); raw != "" {
-		keys, err := ParseAPIKeys(raw)
-		if err != nil {
-			return nil, fmt.Errorf("EVIDENCE_API_KEYS: %w", err)
-		}
-		cfg.APIKeys = keys
-	}
-
-	oidc := OIDC{
+func loadOIDC(roleMap map[string]string) OIDC {
+	return OIDC{
 		Issuer:       strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_ISSUER")),
 		ClientID:     strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_CLIENT_ID")),
 		ClientSecret: os.Getenv("EVIDENCE_OIDC_CLIENT_SECRET"),
 		RedirectURL:  strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_REDIRECT_URL")),
 		Scopes:       splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
 		GroupsClaim:  envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
+		RoleMap:      roleMap,
 	}
+}
 
-	session := Session{
-		TTL: time.Duration(envOrDefaultInt("EVIDENCE_SESSION_TTL_HOURS", 12)) * time.Hour,
-		// Secure unless explicitly turned off, so that forgetting the variable
-		// fails towards the safe posture rather than away from it.
-		CookieSecure: os.Getenv("EVIDENCE_COOKIE_SECURE") != "false",
-	}
-
-	// One mapping for both front ends. EVIDENCE_OIDC_ROLE_MAP is still read,
-	// because it is what the OIDC release documented and an operator who set it
-	// should not have their groups quietly stop granting anything.
-	roleMapVar, raw := "EVIDENCE_GROUP_ROLE_MAP", os.Getenv("EVIDENCE_GROUP_ROLE_MAP")
-	if raw == "" {
-		roleMapVar, raw = "EVIDENCE_OIDC_ROLE_MAP", os.Getenv("EVIDENCE_OIDC_ROLE_MAP")
-	}
-	roleMap, err := ParseRoleMap(raw)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", roleMapVar, err)
-	}
-	oidc.RoleMap = roleMap
-
-	saml := SAML{
+func loadSAML() SAML {
+	return SAML{
 		IDPMetadataURL:  strings.TrimSpace(os.Getenv("EVIDENCE_SAML_IDP_METADATA_URL")),
 		IDPMetadataFile: strings.TrimSpace(os.Getenv("EVIDENCE_SAML_IDP_METADATA_FILE")),
 		RootURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("EVIDENCE_SAML_ROOT_URL")), "/"),
@@ -317,82 +370,101 @@ func Load() (*Config, error) {
 		NameAttribute:   envOrDefault("EVIDENCE_SAML_NAME_ATTRIBUTE", "displayName"),
 		GroupsAttribute: envOrDefault("EVIDENCE_SAML_GROUPS_ATTRIBUTE", "groups"),
 	}
+}
 
-	cfg.Auth = Auth{
-		DB:             os.Getenv("EVIDENCE_AUTH_DB") == "true",
-		BootstrapAdmin: strings.TrimSpace(os.Getenv("EVIDENCE_BOOTSTRAP_ADMIN")),
-		OIDC:           oidc,
-		SAML:           saml,
-		RoleMap:        roleMap,
-		Session:        session,
-	}
-
-	if saml.Enabled() {
-		if saml.IDPMetadataURL != "" && saml.IDPMetadataFile != "" {
-			return nil, fmt.Errorf("set EVIDENCE_SAML_IDP_METADATA_URL or EVIDENCE_SAML_IDP_METADATA_FILE, not both")
+// validateAuth checks the combinations, which is where authentication differs
+// from every other section: the parts constrain each other. Both login front
+// ends need somewhere for a session to resolve to, and that is the principals
+// table EVIDENCE_AUTH_DB turns on.
+func validateAuth(auth Auth) error {
+	if auth.SAML.Enabled() {
+		if auth.SAML.IDPMetadataURL != "" && auth.SAML.IDPMetadataFile != "" {
+			return fmt.Errorf("set EVIDENCE_SAML_IDP_METADATA_URL or EVIDENCE_SAML_IDP_METADATA_FILE, not both")
 		}
 		for name, value := range map[string]string{
-			"EVIDENCE_SAML_ROOT_URL":  saml.RootURL,
-			"EVIDENCE_SAML_CERT_FILE": saml.CertFile,
-			"EVIDENCE_SAML_KEY_FILE":  saml.KeyFile,
+			"EVIDENCE_SAML_ROOT_URL":  auth.SAML.RootURL,
+			"EVIDENCE_SAML_CERT_FILE": auth.SAML.CertFile,
+			"EVIDENCE_SAML_KEY_FILE":  auth.SAML.KeyFile,
 		} {
 			if value == "" {
-				return nil, fmt.Errorf("%s is required when SAML is configured", name)
+				return fmt.Errorf("%s is required when SAML is configured", name)
 			}
 		}
 		// Same reason as OIDC: a session resolves to a principal, and without
 		// the table there is nothing for a login to become.
-		if !cfg.Auth.DB {
-			return nil, fmt.Errorf("SAML requires EVIDENCE_AUTH_DB=true")
+		if !auth.DB {
+			return fmt.Errorf("SAML requires EVIDENCE_AUTH_DB=true")
 		}
-		if session.TTL <= 0 {
-			return nil, fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
+		if auth.Session.TTL <= 0 {
+			return fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
 		}
 	}
 
-	if oidc.Enabled() {
+	if auth.OIDC.Enabled() {
 		// Half-configured SSO is worse than none: the login button exists and
 		// every attempt to use it fails somewhere the operator cannot see.
 		for name, value := range map[string]string{
-			"EVIDENCE_OIDC_CLIENT_ID":    oidc.ClientID,
-			"EVIDENCE_OIDC_REDIRECT_URL": oidc.RedirectURL,
+			"EVIDENCE_OIDC_CLIENT_ID":    auth.OIDC.ClientID,
+			"EVIDENCE_OIDC_REDIRECT_URL": auth.OIDC.RedirectURL,
 		} {
 			if value == "" {
-				return nil, fmt.Errorf("%s is required when EVIDENCE_OIDC_ISSUER is set", name)
+				return fmt.Errorf("%s is required when EVIDENCE_OIDC_ISSUER is set", name)
 			}
 		}
-		if session.TTL <= 0 {
-			return nil, fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
+		if auth.Session.TTL <= 0 {
+			return fmt.Errorf("EVIDENCE_SESSION_TTL_HOURS must be positive")
 		}
 		// Sessions resolve to principals, which is the table EVIDENCE_AUTH_DB
 		// turns on. Logging in without it would mint an identity nothing
 		// consults.
-		if !cfg.Auth.DB {
-			return nil, fmt.Errorf("EVIDENCE_OIDC_ISSUER requires EVIDENCE_AUTH_DB=true")
+		if !auth.DB {
+			return fmt.Errorf("EVIDENCE_OIDC_ISSUER requires EVIDENCE_AUTH_DB=true")
 		}
 	}
 
 	// Refuse rather than ignore. A subject named here and quietly dropped
 	// leaves an operator waiting for a key that is never going to be logged,
 	// on a store they have just locked themselves out of.
-	if cfg.Auth.BootstrapAdmin != "" && !cfg.Auth.DB {
-		return nil, fmt.Errorf("EVIDENCE_BOOTSTRAP_ADMIN requires EVIDENCE_AUTH_DB=true")
+	if auth.BootstrapAdmin != "" && !auth.DB {
+		return fmt.Errorf("EVIDENCE_BOOTSTRAP_ADMIN requires EVIDENCE_AUTH_DB=true")
 	}
 
-	cfg.RateLimit = RateLimit{
+	return nil
+}
+
+// loadRoleMap reads the group-to-role mapping shared by both login front ends.
+//
+// EVIDENCE_OIDC_ROLE_MAP is still read, because it is what the OIDC release
+// documented and an operator who set it should not have their groups quietly
+// stop granting anything.
+func loadRoleMap() (map[string]string, error) {
+	name, raw := "EVIDENCE_GROUP_ROLE_MAP", os.Getenv("EVIDENCE_GROUP_ROLE_MAP")
+	if raw == "" {
+		name, raw = "EVIDENCE_OIDC_ROLE_MAP", os.Getenv("EVIDENCE_OIDC_ROLE_MAP")
+	}
+	roleMap, err := ParseRoleMap(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return roleMap, nil
+}
+
+// loadRateLimit reads the per-caller buckets. Zero RPS disables a bucket, which
+// is the default, so this cannot fail.
+func loadRateLimit() RateLimit {
+	r := RateLimit{
 		ReadRPS:    envOrDefaultFloat("EVIDENCE_RATE_LIMIT_READ_RPS", 0),
 		WriteRPS:   envOrDefaultFloat("EVIDENCE_RATE_LIMIT_WRITE_RPS", 0),
 		ReadBurst:  envOrDefaultInt("EVIDENCE_RATE_LIMIT_READ_BURST", 0),
 		WriteBurst: envOrDefaultInt("EVIDENCE_RATE_LIMIT_WRITE_BURST", 0),
 	}
-	if cfg.RateLimit.ReadRPS > 0 && cfg.RateLimit.ReadBurst == 0 {
-		cfg.RateLimit.ReadBurst = max(int(cfg.RateLimit.ReadRPS*2), 1)
+	if r.ReadRPS > 0 && r.ReadBurst == 0 {
+		r.ReadBurst = max(int(r.ReadRPS*2), 1)
 	}
-	if cfg.RateLimit.WriteRPS > 0 && cfg.RateLimit.WriteBurst == 0 {
-		cfg.RateLimit.WriteBurst = max(int(cfg.RateLimit.WriteRPS*2), 1)
+	if r.WriteRPS > 0 && r.WriteBurst == 0 {
+		r.WriteBurst = max(int(r.WriteRPS*2), 1)
 	}
-
-	return cfg, nil
+	return r
 }
 
 // ParseAPIKeys parses a comma-separated list of "role:key" entries.
