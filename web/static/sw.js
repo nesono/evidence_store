@@ -40,6 +40,7 @@ const SHELL = [
   "/markdown.js",
   "/offline.js",
   "/outbox.js",
+  "/outboxview.js",
   "/sync.js",
   "/templates.js",
   "/weather.js",
