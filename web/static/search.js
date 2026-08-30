@@ -15,7 +15,7 @@ import { parseUserDateTime } from "./datetime.js";
 import { updateUtcPreview } from "./utcpreview.js";
 import { renderMarkdown } from "./markdown.js";
 import { hydrateImages, releaseImages } from "./images.js";
-import { evidenceTypeLabel } from "./evidencetype.js";
+import { EVIDENCE_TYPES, evidenceTypeLabel } from "./evidencetype.js";
 import { formatCoordinates, parseCoordinates } from "./location.js";
 import { OFFLINE, connectionState } from "./offline.js";
 
@@ -74,8 +74,14 @@ function normalizeWindowSize(n) {
 
 // --- URL State ---
 
-export function readStateFromURL() {
-  const params = new URLSearchParams(window.location.search);
+// parseSearchState reads a query string into the state a search runs from.
+//
+// Pure, and separated from readStateFromURL below for that reason: everything
+// awkward about an old link lives here — a `ref` folded out of `branch` or
+// `rcs_ref`, an evidence type the dropdown no longer offers, a window size that
+// is not one of the sizes — and none of it is a fact about `window`.
+export function parseSearchState(search, { savedWindowSize = DEFAULT_WINDOW_SIZE } = {}) {
+  const params = new URLSearchParams(search);
   const filters = {};
   for (const f of [...TEXT_FIELDS, ...DATETIME_FIELDS]) {
     if (params.has(f)) filters[f] = params.get(f);
@@ -103,23 +109,28 @@ export function readStateFromURL() {
   }
 
   const offset = parseInt(params.get("offset"), 10);
-  windowOffset = Number.isFinite(offset) && offset > 0 ? offset : 0;
-
   const limit = parseInt(params.get("limit"), 10);
-  windowSize = Number.isFinite(limit)
-    ? normalizeWindowSize(limit)
-    : normalizeWindowSize(loadPref(WINDOW_SIZE_KEY, DEFAULT_WINDOW_SIZE));
-
-  sortColumn = params.get("sort") || "";
-  sortDesc = params.get("order") === "desc";
 
   // A `cursor=` from an older link is deliberately ignored. It is an opaque
   // position marker: it cannot say which window it refers to, so the view would
   // have no range to show and no way back. Those links open at the first window.
-  return { filters, detail: params.get("detail") };
+  return {
+    filters,
+    detail: params.get("detail"),
+    windowOffset: Number.isFinite(offset) && offset > 0 ? offset : 0,
+    windowSize: Number.isFinite(limit)
+      ? normalizeWindowSize(limit)
+      : normalizeWindowSize(savedWindowSize),
+    sortColumn: params.get("sort") || "",
+    sortDesc: params.get("order") === "desc",
+  };
 }
 
-function writeStateToURL(filters, detail) {
+// searchStateToQuery writes that state back out — the other half of the round
+// trip, and pure for the same reason.
+export function searchStateToQuery(filters, {
+  windowOffset = 0, windowSize, sortColumn = "", sortDesc = false, detail = null,
+} = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) {
     if (v !== "" && v !== null && v !== undefined) {
@@ -133,7 +144,24 @@ function writeStateToURL(filters, detail) {
     params.set("order", sortDesc ? "desc" : "asc");
   }
   if (detail) params.set("detail", detail);
-  history.pushState(null, "", `?${params}`);
+  return `?${params}`;
+}
+
+export function readStateFromURL() {
+  const state = parseSearchState(window.location.search, {
+    savedWindowSize: loadPref(WINDOW_SIZE_KEY, DEFAULT_WINDOW_SIZE),
+  });
+  windowOffset = state.windowOffset;
+  windowSize = state.windowSize;
+  sortColumn = state.sortColumn;
+  sortDesc = state.sortDesc;
+  return { filters: state.filters, detail: state.detail };
+}
+
+function writeStateToURL(filters, detail) {
+  history.pushState(null, "", searchStateToQuery(filters, {
+    windowOffset, windowSize, sortColumn, sortDesc, detail,
+  }));
 }
 
 function populateFormFromFilters(filters) {
@@ -185,7 +213,7 @@ function readFormFilters() {
 
 // --- Filter panel ---
 
-function activeAdvancedCount(filters) {
+export function activeAdvancedCount(filters) {
   let n = 0;
   for (const f of ADVANCED_FIELDS) {
     if (f === "include_inherited") {

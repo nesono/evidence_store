@@ -143,6 +143,22 @@ test("clearing the filters empties the box and searches again", async t => {
   noProblems(t);
 });
 
+test("a deep link carrying a filter opens on that search", async t => {
+  // Not covered until an actual bug went through: search.js read EVIDENCE_TYPES
+  // without importing it, so any link carrying ?evidence_type= threw during
+  // startup and showed nothing. The page still drew itself, which is why none
+  // of the checks above noticed.
+  await page.goto(`${BASE}/?evidence_type=manual_test&limit=25`);
+  await page.waitFor(`document.querySelectorAll('.nav-tab').length === 4`,
+    { what: "the page to start up" });
+  await page.waitFor(`document.querySelectorAll('#results-body tr[data-id]').length > 0`,
+    { what: "the deep link's results" });
+
+  const applied = await page.eval(`document.querySelector('#filter-form [name="evidence_type"]')?.value`);
+  assert.equal(applied, "manual_test", "the link's filter should be showing in the form");
+  noProblems(t);
+});
+
 // --- Add Result ---
 
 // Everything the form fills in on the tester's behalf, in one record: the
