@@ -1,0 +1,133 @@
+{
+  "realm": "evidence",
+  "enabled": true,
+  "displayName": "Evidence Store (development)",
+  "ssoSessionIdleTimeout": 1800,
+  "accessTokenLifespan": 300,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "groups": [
+    {
+      "name": "evidence-admins"
+    },
+    {
+      "name": "evidence-engineers"
+    },
+    {
+      "name": "evidence-viewers"
+    },
+    {
+      "name": "everyone-else"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "evidence-store",
+      "name": "Evidence Store",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "evidence-store-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/evidence-admins"
+      ]
+    },
+    {
+      "username": "bob",
+      "email": "bob@example.com",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Contributor",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/evidence-engineers"
+      ]
+    },
+    {
+      "username": "carol",
+      "email": "carol@example.com",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Viewer",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "carol",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/evidence-viewers"
+      ]
+    },
+    {
+      "username": "dan",
+      "email": "dan@example.com",
+      "emailVerified": true,
+      "firstName": "Dan",
+      "lastName": "Nobody",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dan",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/everyone-else"
+      ]
+    }
+  ]
+}

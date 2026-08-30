@@ -267,6 +267,10 @@ Register the redirect URL with the provider, and make sure the ID token carries
 a groups claim — in Keycloak that is a *group membership* mapper, and most
 providers need it switched on explicitly.
 
+To try this without a company directory behind it, there is a Keycloak in
+`docker-compose.sso.yml` seeded with users whose groups map to each role — and
+one whose group maps to nothing. See [dev/keycloak/README.md](dev/keycloak/README.md).
+
 The flow is Authorization Code with PKCE. `GET /auth/login` sends the browser
 out, `GET /auth/callback` verifies the ID token and starts a session, and
 `POST /auth/logout` ends it. The session is a **row**, not a signed cookie, so
