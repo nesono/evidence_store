@@ -124,6 +124,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 			Sessions:    sessionStore,
 			SAMLPending: store.NewSAMLRequestStore(pool),
 			RoleMap:     cfg.Auth.RoleMap,
+			OIDCConfig:  cfg.Auth.OIDC,
 			Session:     cfg.Auth.Session,
 			Logger:      slog.Default(),
 		})

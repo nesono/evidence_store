@@ -37,3 +37,48 @@ test("a record with no verdict still renders as something", () => {
   assert.match(resultBadge(""), /badge-unknown/);
   assert.match(resultBadge(undefined), /\?/);
 });
+
+// --- Logging out ---
+
+// The bug this guards: with authentication configured, an anonymous request is
+// a 401, and every view opens with one. Treating that 401 as an expired session
+// sent the browser back to the identity provider, which still had its own
+// session and signed the person straight back in — so the logout button
+// appeared to do nothing at all.
+test("a page reached by logging out knows it", async () => {
+  assert.equal(await signedOutWith("?signed_out=1"), true);
+});
+
+test("an ordinary page is not mistaken for a logout", async () => {
+  // A session that simply expired should still send somebody to log in, which
+  // is the behaviour the signed-out marker has to stay out of the way of.
+  for (const search of ["", "?repo=acme/widgets", "?signed_outish=1"]) {
+    assert.equal(await signedOutWith(search), false, `${search || "(no query)"} is not a logout`);
+  }
+});
+
+test("asking outside a browser is answered, not thrown", async () => {
+  // These tests import the module with no window at all; so does anything else
+  // that reuses it off the page. Throwing here would take the whole module out.
+  assert.equal(await signedOutWith(null), false);
+});
+
+// signedOutWith imports a fresh copy of common.js with window.location.search
+// set and asks it the question, since the answer is memoised per module
+// instance and read on first use — so it has to be asked while the window it
+// describes is still in place. A null search means no window at all.
+async function signedOutWith(search) {
+  const previous = globalThis.window;
+  if (search === null) {
+    delete globalThis.window;
+  } else {
+    globalThis.window = { location: { search } };
+  }
+  try {
+    const mod = await import(`../static/common.js?signed-out-case=${encodeURIComponent(String(search))}`);
+    return mod.signedOutOnPurpose();
+  } finally {
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  }
+}

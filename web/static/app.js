@@ -1,5 +1,6 @@
 import {
   API_BASE, getStoredAPIKey, goToLogin, logout, promptForAPIKey, setAuthMode,
+  signedOutOnPurpose,
 } from "./common.js";
 import { showAnalytics } from "./analytics.js";
 import { mount as mountAccess, showAccess } from "./access.js";
@@ -73,6 +74,18 @@ async function showServerVersion() {
     // Offline, or the server is not answering. The header already says so.
   }
 }
+// --- Signed out ---
+
+// Reached by logging out. The table is the page's main surface, so it is where
+// the answer belongs: an empty one with no explanation reads as a store with
+// nothing in it.
+function showSignedOut() {
+  const tbody = document.getElementById("results-body");
+  if (!tbody) return;
+  tbody.innerHTML =
+    `<tr><td colspan="9" class="empty-state">Signed out. Log in to search the archive.</td></tr>`;
+}
+
 // --- Auth UI ---
 
 document.getElementById("auth-logout")?.addEventListener("click", async (e) => {
@@ -182,7 +195,15 @@ async function loadIdentity() {
   // filter set is a legitimate query — "everything" — not a prompt to fill the
   // form in. Only showing results once a filter is set used to leave any link
   // without one, including a shared deep link, rendering an empty table.
-  await doSearch(filters);
+  //
+  // Except straight after logging out, where the search would be a 401 and the
+  // table would report it as an error. Somebody who just logged out has not hit
+  // a fault; say what happened instead.
+  if (signedOutOnPurpose() && !me.authenticated) {
+    showSignedOut();
+  } else {
+    await doSearch(filters);
+  }
 
   if (detail) {
     try {

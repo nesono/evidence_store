@@ -1,0 +1,80 @@
+# A local identity provider, for trying the SSO path without a company one.
+#
+# An overlay rather than a service in the main file, because it changes how the
+# app runs and not just what runs beside it: with this on, the store
+# authenticates against Keycloak and stops accepting the API keys the ordinary
+# development stack uses.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
+#
+# One manual step first — see dev/keycloak/README.md. The browser and the app
+# container have to agree on Keycloak's hostname, so `keycloak` must resolve on
+# the host too:
+#
+#   echo '127.0.0.1 keycloak' | sudo tee -a /etc/hosts
+#
+# If something already holds 8080, move Keycloak with KEYCLOAK_PORT=8081 and so
+# on. It is one variable because the number has to be the same on both sides:
+# the browser reaches keycloak:PORT through the published port, and the app
+# reaches keycloak:PORT over the compose network, and the issuer names it.
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Development credentials, and they look it. This compose file is for a
+      # laptop and says so in every direction.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # What Keycloak puts in the issuer and in every endpoint it advertises.
+      # It has to be a name the app container and the browser both resolve to
+      # the same place: go-oidc checks the issuer in the discovery document
+      # against the one configured, so "localhost for the browser, keycloak for
+      # the container" is not an option.
+      KC_HOSTNAME: http://keycloak:${KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: false
+      KC_HTTP_ENABLED: "true"
+      # Listening on the same number it advertises, so one variable moves both.
+      KC_HTTP_PORT: ${KEYCLOAK_PORT:-8080}
+    volumes:
+      - ./dev/keycloak/realm-evidence.json:/opt/keycloak/data/import/realm-evidence.json:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:${KEYCLOAK_PORT:-8080}"
+    healthcheck:
+      # The discovery document, not /health: start-dev leaves the management
+      # port closed unless health is switched on, and this is a better signal
+      # anyway — it is the exact URL the store fetches at startup, so a healthy
+      # container is one the app can actually discover.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/${KEYCLOAK_PORT:-8080} &&
+          printf 'GET /realms/evidence/.well-known/openid-configuration HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q authorization_endpoint <&3
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  app:
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      # Sessions resolve to rows in `principals`, so the table has to be live.
+      EVIDENCE_AUTH_DB: "true"
+      EVIDENCE_OIDC_ISSUER: http://keycloak:${KEYCLOAK_PORT:-8080}/realms/evidence
+      EVIDENCE_OIDC_CLIENT_ID: evidence-store
+      EVIDENCE_OIDC_CLIENT_SECRET: evidence-store-dev-secret
+      EVIDENCE_OIDC_REDIRECT_URL: http://localhost:8000/auth/callback
+      # Keycloak's group membership mapper is called `groups`. Entra sends the
+      # same information as `roles`, which is the one line that changes when you
+      # point this at a real tenant.
+      EVIDENCE_OIDC_GROUPS_CLAIM: groups
+      # A group with no entry here grants nothing, which is the point: pointing
+      # the store at a directory must not hand everyone in it a write.
+      EVIDENCE_GROUP_ROLE_MAP: evidence-admins:admin,evidence-engineers:contributor,evidence-viewers:viewer
+      # The session cookie is Secure by default and this stack is plain HTTP, so
+      # without this the browser accepts the redirect and drops the cookie.
+      EVIDENCE_COOKIE_SECURE: "false"

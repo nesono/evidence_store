@@ -8,6 +8,30 @@ export const API_BASE = "/api/v1";
 
 const API_KEY_STORAGE = "evidence_api_key";
 
+// Where a logout lands when there is no identity provider to visit on the way,
+// and the marker the landing page is recognised by.
+export const SIGNED_OUT_PATH = "/?signed_out=1";
+
+// signedOutOnPurpose reports whether this page was reached by logging out.
+//
+// It governs whether a 401 means "your session expired, go and log in" or "yes,
+// that is exactly what logging out looks like", and lets a view say so rather
+// than show an empty table it failed to fill.
+//
+// Read on demand rather than at load, and guarded: this module is imported by
+// the unit tests under node, where there is no window to ask.
+let signedOut = null;
+export function signedOutOnPurpose() {
+  if (signedOut === null) {
+    try {
+      signedOut = new URLSearchParams(window.location.search).has("signed_out");
+    } catch {
+      signedOut = false;
+    }
+  }
+  return signedOut;
+}
+
 export function getStoredAPIKey() {
   return localStorage.getItem(API_KEY_STORAGE) || "";
 }
@@ -164,7 +188,13 @@ export async function apiFetch(url, options = {}) {
   // Logged out, or the session expired while the tab was open. Sending
   // somebody to the identity provider is a better answer than asking a human
   // for an API key they probably do not have.
-  if (ssoEnabled && !key) {
+  //
+  // Unless they have just logged out on purpose. Every view here opens with a
+  // request, and with authentication configured an anonymous one is a 401, so
+  // without this the page bounces back to the provider — which still has its
+  // own session and signs them straight back in. Logging out would be
+  // impossible: the button would appear to do nothing at all.
+  if (ssoEnabled && !key && !signedOutOnPurpose()) {
     goToLogin();
     return resp;
   }
@@ -180,14 +210,28 @@ export async function apiFetch(url, options = {}) {
 // something: the row goes, so the cookie stops resolving even if a copy of it
 // survives somewhere.
 export async function logout() {
+  let next = SIGNED_OUT_PATH;
   if (usingSession) {
-    await fetch("/auth/logout", {
+    const resp = await fetch("/auth/logout", {
       method: "POST",
       headers: { "X-CSRF-Token": csrfToken() },
     });
+    // Where to go next is the server's to say: it knows whether the identity
+    // provider has a session of its own to end. Ending only ours would leave
+    // the provider still signed in, so the next login is answered without a
+    // password and the person who just logged out is silently logged back in.
+    if (resp.ok) {
+      try {
+        const body = await resp.json();
+        if (body && body.logout_url) next = body.logout_url;
+      } catch {
+        // An older server answered 204 with no body. Landing signed out here
+        // is still better than landing on a page that logs us back in.
+      }
+    }
   }
   setStoredAPIKey("");
-  window.location.href = "/";
+  window.location.href = next;
 }
 
 // --- Formatting ---

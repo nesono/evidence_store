@@ -78,6 +78,7 @@ open `http://localhost:8000`.
 | `EVIDENCE_OIDC_CLIENT_ID` | *(empty)* | Client id registered with the provider |
 | `EVIDENCE_OIDC_CLIENT_SECRET` | *(empty)* | Client secret, for a confidential client |
 | `EVIDENCE_OIDC_REDIRECT_URL` | *(empty)* | Where the provider sends the browser back, e.g. `https://evidence.example.com/auth/callback` |
+| `EVIDENCE_OIDC_POST_LOGOUT_URL` | *(the store's root)* | Where the provider returns the browser after logging out; derived from the redirect URL unless set |
 | `EVIDENCE_OIDC_SCOPES` | `openid,profile,email` | Scopes to request |
 | `EVIDENCE_OIDC_GROUPS_CLAIM` | `groups` | Claim carrying group membership (Entra calls it `roles`) |
 | `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. `EVIDENCE_OIDC_ROLE_MAP` is still read as a fallback |
@@ -267,12 +268,27 @@ Register the redirect URL with the provider, and make sure the ID token carries
 a groups claim — in Keycloak that is a *group membership* mapper, and most
 providers need it switched on explicitly.
 
+To try this without a company directory behind it, there is a Keycloak in
+`docker-compose.sso.yml` seeded with users whose groups map to each role — and
+one whose group maps to nothing. See [dev/keycloak/README.md](dev/keycloak/README.md).
+
 The flow is Authorization Code with PKCE. `GET /auth/login` sends the browser
 out, `GET /auth/callback` verifies the ID token and starts a session, and
 `POST /auth/logout` ends it. The session is a **row**, not a signed cookie, so
 revoking somebody stops the browser they left open rather than waiting for a
 token to expire. `GET /auth/config` reports whether a login flow exists, which
 is how the UI knows to offer one.
+
+**Logging out ends the provider's session too.** Ending only the local one is
+not a logout: the provider still considers the person signed in, so the next
+login is answered without a password and they are silently signed back in —
+and on a shared machine the next person inherits the account. So `/auth/logout`
+deletes the session row and answers with a `logout_url` for the browser to
+follow, which is the provider's `end_session_endpoint` carrying the
+`id_token_hint` from that login. Register `EVIDENCE_OIDC_POST_LOGOUT_URL` with
+the provider alongside the redirect URL; most refuse a post-logout redirect they
+were not told about. A provider advertising no logout endpoint is fine — the
+session here still ends.
 
 **Roles come from groups.** A group with no entry in `EVIDENCE_GROUP_ROLE_MAP`
 grants nothing, so pointing this store at a company directory does not hand
