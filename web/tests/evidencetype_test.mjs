@@ -8,9 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  DEFAULT_EVIDENCE_TYPE, EVIDENCE_TYPES, evidenceTypeLabel, evidenceTypeOr,
-} from "../static/evidencetype.js";
+import { EVIDENCE_TYPES, EVIDENCE_TYPE_LABELS, evidenceTypeLabel } from "../static/evidencetype.js";
 
 test("the set is the three the store accepts", () => {
   // The API rejects anything else and a CHECK constraint keeps the column from
@@ -18,12 +16,13 @@ test("the set is the three the store accepts", () => {
   assert.deepEqual(EVIDENCE_TYPES, ["ci", "manual_test", "demonstration"]);
 });
 
-test("every type has a label, and the default is one of them", () => {
+test("every type has a label of its own", () => {
   for (const type of EVIDENCE_TYPES) {
     assert.ok(evidenceTypeLabel(type), `${type} has no label`);
     assert.notEqual(evidenceTypeLabel(type), type, `${type} shows its slug rather than a label`);
   }
-  assert.ok(EVIDENCE_TYPES.includes(DEFAULT_EVIDENCE_TYPE));
+  assert.deepEqual(Object.keys(EVIDENCE_TYPE_LABELS).sort(), [...EVIDENCE_TYPES].sort(),
+    "a label for a type that does not exist, or a type with no label, is a set that has drifted");
 });
 
 test("a type from before the taxonomy shows itself rather than a blank", () => {
@@ -33,15 +32,4 @@ test("a type from before the taxonomy shows itself rather than a blank", () => {
   assert.equal(evidenceTypeLabel(""), "");
   assert.equal(evidenceTypeLabel(undefined), "");
   assert.equal(evidenceTypeLabel(null), "");
-});
-
-test("a select is only ever given a value it has", () => {
-  // Templates were saved when the field was free text, so one can still hold
-  // `bazel`. A value the control does not have leaves it blank and the form
-  // unsubmittable.
-  assert.equal(evidenceTypeOr("ci"), "ci");
-  assert.equal(evidenceTypeOr("bazel"), DEFAULT_EVIDENCE_TYPE);
-  assert.equal(evidenceTypeOr(""), DEFAULT_EVIDENCE_TYPE);
-  assert.equal(evidenceTypeOr(undefined), DEFAULT_EVIDENCE_TYPE);
-  assert.equal(evidenceTypeOr("bazel", "ci"), "ci", "the caller may choose the fallback");
 });

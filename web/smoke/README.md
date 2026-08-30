@@ -19,7 +19,7 @@ Splitting `app.js` into nine modules (#124) produced four real breaks, and
 
 | Break | How it showed up |
 |---|---|
-| `templates.js` missing its `EVIDENCE_TYPES` import | a `ReferenceError` on opening the template editor |
+| a module missing an import it used | a `ReferenceError` on the control that reached the missing name |
 | `search.js` missing `updateUtcPreview` | a `ReferenceError` on clearing filters |
 | A stray `}` in `app.js` | the whole page dead, `node --check` silent |
 | `loadIdentity` moved into the wrong module | startup died at `/me`, every tab inert |
@@ -27,8 +27,8 @@ Splitting `app.js` into nine modules (#124) produced four real breaks, and
 None of them is a logic error a unit test would have found. They are the kind of
 mistake that only appears when the page actually runs, which is what this does.
 
-Removing an import from `templates.js` still fails the template check, which is
-the version of this test that is worth keeping.
+Removing `EVIDENCE_TYPES` from `search.js`'s imports still fails the deep-link
+check, which is the version of this test that is worth keeping.
 
 ## What it covers
 
@@ -38,7 +38,6 @@ the version of this test that is worth keeping.
 - Add Result: the current time and its UTC preview, a custom metadata row,
   markdown in the log preview, weather written by hand — and the record arriving
   in the store with all of it attached
-- templates: saving the form as one and putting it back
 - the outbox: filing with no connection, correcting what is waiting, and the
   queue sending itself when the connection returns
 
@@ -60,8 +59,8 @@ docker exec evidence_store-db-1 psql -U evidence -d evidence_store \
   -c "DELETE FROM evidence WHERE repo = 'smoke/browser-check';"
 ```
 
-It also clears the browser profile it creates, service workers, the outbox
-database and saved templates — in its own throwaway profile, never in yours.
+It also clears the browser profile it creates, service workers and the outbox
+database — in its own throwaway profile, never in yours.
 
 ## Settings
 

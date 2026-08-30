@@ -239,44 +239,6 @@ test("the form files a record with everything it fills in", async t => {
   noProblems(t);
 });
 
-// --- Templates ---
-
-test("a template saves what the form holds and puts it back", async t => {
-  await page.eval(`(() => {
-    document.querySelector('[data-tab="add"]').click();
-    const f = document.getElementById('add-form');
-    f.repo.value = ${JSON.stringify(REPO)};
-    f.branch.value = 'main';
-    f.procedure_ref.value = 'manual/from-a-template';
-    f.source.value = 'smoke-test';
-  })()`);
-
-  await page.eval(`(async () => {
-    document.getElementById('template-save-current').click();
-    await new Promise(r => setTimeout(r, 300));
-    document.querySelector('#template-dialog-content input').value = 'Smoke bench';
-    [...document.querySelectorAll('#template-dialog-content button')]
-      .find(b => /save/i.test(b.textContent)).click();
-  })()`);
-  await page.waitFor(
-    `[...document.getElementById('template-select').options].some(o => o.textContent === 'Smoke bench')`,
-    { what: "the template to appear in the dropdown" });
-
-  const reapplied = await page.eval(`(async () => {
-    const f = document.getElementById('add-form');
-    f.repo.value = ''; f.procedure_ref.value = '';
-    const sel = document.getElementById('template-select');
-    sel.value = [...sel.options].find(o => o.textContent === 'Smoke bench').value;
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise(r => setTimeout(r, 200));
-    return { repo: f.repo.value, procedure: f.procedure_ref.value };
-  })()`);
-
-  assert.equal(reapplied.repo, REPO, "applying a template refills the form");
-  assert.equal(reapplied.procedure, "manual/from-a-template");
-  noProblems(t);
-});
-
 // --- The outbox ---
 //
 // The feature the offline work exists for, and the one with the most moving

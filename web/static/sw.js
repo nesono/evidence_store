@@ -46,7 +46,6 @@ const SHELL = [
   "/search.js",
   "/sync.js",
   "/utcpreview.js",
-  "/templates.js",
   "/weather.js",
   "/manifest.webmanifest",
   "/icon.svg",

@@ -12,18 +12,14 @@ export const EVIDENCE_TYPE_LABELS = {
   manual_test: "Manual Test",
   demonstration: "Demonstration",
 };
-export const DEFAULT_EVIDENCE_TYPE = "manual_test";
+
+// Which one a new record starts on is the markup's business: the Add Result
+// form marks it `selected`, so a constant here would be a second answer to a
+// question that already has one.
 
 // A record from a store that has not run migration 000006 yet, or one written
 // around the API, still has to render as something — so an unknown value shows
 // itself rather than becoming blank.
 export function evidenceTypeLabel(value) {
   return EVIDENCE_TYPE_LABELS[value] || value || "";
-}
-
-// Templates were saved when the field was a free-text box, so one can still be
-// holding `bazel`. A value the select does not have leaves the control blank
-// and the form unsubmittable, so anything unrecognised falls back.
-export function evidenceTypeOr(value, fallback = DEFAULT_EVIDENCE_TYPE) {
-  return EVIDENCE_TYPES.includes(value) ? value : fallback;
 }

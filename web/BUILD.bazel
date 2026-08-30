@@ -37,7 +37,6 @@ go_library(
         "static/sw.js",
         "static/sync.js",
         "static/utcpreview.js",
-        "static/templates.js",
         "static/weather.js",
     ],
     importpath = "github.com/nesono/evidence-store/web",

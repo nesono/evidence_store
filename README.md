@@ -789,10 +789,6 @@ defaults to Manual Test.
   attaching an image: `Cmd-Z`/`Ctrl-Z` steps back through what you typed *and*
   through the reference an upload wrote into the log. Buttons that fill a field
   in for you — **Now**, **Locate**, **Look up** — can be undone too.
-- **Template** — save the current Repo/Branch/Commit/Procedure/Evidence
-  type/Source/Tags as a named preset (stored in `localStorage`) and reapply it
-  from the dropdown, for a bench that runs the same handful of manual
-  procedures over and over.
 
 ### Which build is running
 

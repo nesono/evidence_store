@@ -162,7 +162,6 @@ export async function connect(url) {
           const req = indexedDB.deleteDatabase('evidence-outbox');
           req.onsuccess = done; req.onerror = done; req.onblocked = done;
         });
-        localStorage.removeItem('evidence_templates');
         return true;
       })()`);
     },
