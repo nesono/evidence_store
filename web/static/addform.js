@@ -20,7 +20,6 @@ import { OFFLINE, connectionState } from "./offline.js";
 import { newEntry } from "./outbox.js";
 import { setValue } from "./editing.js";
 import { updateUtcPreview } from "./utcpreview.js";
-import { applyTemplate } from "./templates.js";
 import { refreshDatalists } from "./datalists.js";
 import { durabilityLevel, dropQueued, openOutbox, queueRecord } from "./outboxview.js";
 
@@ -197,12 +196,7 @@ function resetFormForNext(form) {
   form.notes.value = "";
   form.observations.value = "";
   updateTestLogPreview();
-  const currentTpl = document.getElementById("template-select").value;
-  if (currentTpl) {
-    applyTemplate(currentTpl);
-  } else {
-    document.getElementById("custom-fields-list").innerHTML = "";
-  }
+  document.getElementById("custom-fields-list").innerHTML = "";
 }
 // The queued record currently loaded back into the form, if any. Its token is
 // reused on submit, so correcting a record replaces it rather than filing a

@@ -11,7 +11,6 @@ import {
 import {
   applyURLState, doSearch, fetchEvidenceById, mountSearch, readStateFromURL, renderDetail,
 } from "./search.js";
-import { mountTemplates } from "./templates.js";
 import { beginCorrection, mountAddForm, pinSourceToCaller } from "./addform.js";
 import { mountOutbox, runSync } from "./outboxview.js";
 
@@ -172,7 +171,6 @@ async function loadIdentity() {
     onEdit: beginCorrection,
   });
   runSync();
-  mountTemplates();
   mountSearch();
   mountAddForm({ subject: () => currentSubject });
 

@@ -45,7 +45,7 @@ arrival; and there is no idempotency, which a flaky link will find immediately.
 ### What goes offline, and what cannot
 
 Offline: the page itself, the whole Add Result form, image attach, the device's
-location fix, the local template list, the weather field written down by hand,
+location fix, the weather field written down by hand,
 and the queue.
 
 Not offline, and honest about it: the **weather lookup** (a server call by
