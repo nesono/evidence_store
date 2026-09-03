@@ -29,6 +29,35 @@ type Principal struct {
 	ExternalID string `json:"external_id,omitempty"`
 }
 
+// SCIMUser is a principal as a provisioning client sees it.
+//
+// A separate shape from Principal rather than more fields on it, because the
+// two are answering different questions. Principal is what authentication and
+// the Access tab need; this is one resource in a protocol with its own names
+// for things, its own idea of identity, and a client that will send back what
+// it was given.
+type SCIMUser struct {
+	ID uuid.UUID
+	// SCIMID is the id this store hands the provisioner, and the one every
+	// later request addresses this person by.
+	SCIMID string
+	// ExternalID is the provisioner's own name for them. Stored and echoed
+	// back, never matched on here: Entra maps it from mailNickname by default
+	// and a tenant may map it to anything at all.
+	ExternalID string
+	// UserName is SCIM's login name, unique across the store. Usually a UPN,
+	// which is often not the address in Subject.
+	UserName    string
+	Subject     string
+	DisplayName string
+	// Active false is how a directory says somebody has left. It is the whole
+	// reason for provisioning: the account here is shut immediately rather than
+	// at the next login that never comes.
+	Active    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // Disabled reports whether the principal has been revoked. A disabled
 // principal is kept rather than deleted so that evidence already attributed to
 // it still names something.
