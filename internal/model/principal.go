@@ -58,6 +58,28 @@ type SCIMUser struct {
 	UpdatedAt time.Time
 }
 
+// SCIMGroup is a directory group as a provisioning client sees it.
+//
+// Kept as a row rather than collapsed into the roles it implies because SCIM
+// requires it to be readable back: a provisioner asks for a group by name and
+// expects its own membership list returned. A group mapping to no role still
+// has to exist, or the client concludes its write was lost and repeats it.
+type SCIMGroup struct {
+	ID          uuid.UUID
+	SCIMID      string
+	ExternalID  string
+	DisplayName string
+	Members     []SCIMGroupMember
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// SCIMGroupMember names one member the way the protocol refers to them.
+type SCIMGroupMember struct {
+	SCIMID  string
+	Display string
+}
+
 // Disabled reports whether the principal has been revoked. A disabled
 // principal is kept rather than deleted so that evidence already attributed to
 // it still names something.
@@ -104,6 +126,10 @@ const ScopeStoreWide = "*"
 const (
 	GrantSourceLocal = "local"
 	GrantSourceIdP   = "idp"
+	// GrantSourceSCIM is a role a directory implied through group membership,
+	// reconciled when it syncs. Distinct from IdP so that a login and a sync do
+	// not delete each other's grants; what somebody may do is the union.
+	GrantSourceSCIM = "scim"
 )
 
 // Session is a logged-in browser. It is a row rather than a signed cookie so

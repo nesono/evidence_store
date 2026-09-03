@@ -204,7 +204,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	// Access tab needs to do these things by hand. Phase 4 of #146 gives
 	// provisioning its own permission and role, so that the token a directory
 	// holds cannot also administer the store.
-	scimAPI := api.NewSCIMHandler(store.NewSCIMStore(pool), slog.Default())
+	// The same group-to-role answer the login path uses, so that a group means
+	// the same thing however this store hears about it.
+	rolesFor := func(groups []string) []string {
+		return auth.RolesForGroups(cfg.Auth.RoleMap, groups)
+	}
+	scimAPI := api.NewSCIMHandler(store.NewSCIMStore(pool), rolesFor, slog.Default())
 	r.Route("/scim/v2", func(r chi.Router) {
 		r.Use(auth.Authenticate(authenticator))
 		r.Use(auth.Require(auth.PermPrincipalAdmin))
@@ -215,6 +220,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 		r.Put("/Users/{id}", scimAPI.ReplaceUser)
 		r.Patch("/Users/{id}", scimAPI.PatchUser)
 		r.Delete("/Users/{id}", scimAPI.DeleteUser)
+
+		// Groups are where a role comes from. A group with no entry in
+		// EVIDENCE_GROUP_ROLE_MAP grants nothing, which is what keeps pointing
+		// this store at a company directory from handing every employee an
+		// account that can write.
+		r.Get("/Groups", scimAPI.ListGroups)
+		r.Post("/Groups", scimAPI.CreateGroup)
+		r.Get("/Groups/{id}", scimAPI.GetGroup)
+		r.Put("/Groups/{id}", scimAPI.ReplaceGroup)
+		r.Patch("/Groups/{id}", scimAPI.PatchGroup)
+		r.Delete("/Groups/{id}", scimAPI.DeleteGroup)
 	})
 
 	r.Handle("/*", web.StaticHandler())
