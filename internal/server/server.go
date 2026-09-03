@@ -194,6 +194,29 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 		})
 	})
 
+	// SCIM 2.0, for a directory that provisions people here rather than waiting
+	// for them to log in. Outside /api/v1 deliberately: it is somebody else's
+	// protocol, with its own resource shapes and its own error envelope, and
+	// bending it into this store's REST conventions would produce answers a
+	// conforming client cannot read.
+	//
+	// Guarded by principal:admin for now, which is the same authority the
+	// Access tab needs to do these things by hand. Phase 4 of #146 gives
+	// provisioning its own permission and role, so that the token a directory
+	// holds cannot also administer the store.
+	scimAPI := api.NewSCIMHandler(store.NewSCIMStore(pool), slog.Default())
+	r.Route("/scim/v2", func(r chi.Router) {
+		r.Use(auth.Authenticate(authenticator))
+		r.Use(auth.Require(auth.PermPrincipalAdmin))
+
+		r.Get("/Users", scimAPI.ListUsers)
+		r.Post("/Users", scimAPI.CreateUser)
+		r.Get("/Users/{id}", scimAPI.GetUser)
+		r.Put("/Users/{id}", scimAPI.ReplaceUser)
+		r.Patch("/Users/{id}", scimAPI.PatchUser)
+		r.Delete("/Users/{id}", scimAPI.DeleteUser)
+	})
+
 	r.Handle("/*", web.StaticHandler())
 
 	return &Server{
