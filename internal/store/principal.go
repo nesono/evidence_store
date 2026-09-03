@@ -187,8 +187,13 @@ var ErrSubjectTaken = errors.New("subject already belongs to another principal")
 // have been mapped to roles.
 type IdPLogin struct {
 	// ExternalID is the provider's own name for this person, "<issuer>|<sub>",
-	// and the only thing the upsert matches on.
+	// and the first thing the upsert matches on.
 	ExternalID string
+	// LoginNames are the other names this person might already be known by:
+	// their email address and whatever the provider calls their login name.
+	// Consulted only when ExternalID matches nothing, to find the row a
+	// provisioner created for them before they had ever logged in.
+	LoginNames []string
 	// Subject is the readable name they file evidence under. It is corrected on
 	// every login, so someone who changes their email address stays one
 	// principal instead of becoming two.
@@ -212,17 +217,28 @@ func (s *PrincipalStore) UpsertFromIdP(ctx context.Context, in IdPLogin) (*model
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
 
+	// A row a provisioner created for this person, before they had ever logged
+	// in, is theirs to claim. Doing it before the insert is what stops the
+	// login creating a second principal for somebody the directory has already
+	// told us about — one holding their evidence, the other the only one SCIM
+	// can deactivate.
+	id, claimed, err := claimProvisionedPrincipal(ctx, tx, in)
+	if err != nil {
+		return nil, err
+	}
+
 	// Matching on external_id and updating the subject is what lets a rename at
 	// the provider follow the person here, instead of splitting their history
 	// across two principals.
-	var id uuid.UUID
-	err = tx.QueryRow(ctx, `
-		INSERT INTO principals (subject, kind, display_name, external_id)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (external_id) WHERE external_id IS NOT NULL
-		DO UPDATE SET subject = EXCLUDED.subject, display_name = EXCLUDED.display_name
-		RETURNING id
-	`, in.Subject, model.PrincipalKindUser, in.DisplayName, in.ExternalID).Scan(&id)
+	if !claimed {
+		err = tx.QueryRow(ctx, `
+			INSERT INTO principals (subject, kind, display_name, external_id)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (external_id) WHERE external_id IS NOT NULL
+			DO UPDATE SET subject = EXCLUDED.subject, display_name = EXCLUDED.display_name
+			RETURNING id
+		`, in.Subject, model.PrincipalKindUser, in.DisplayName, in.ExternalID).Scan(&id)
+	}
 	if err != nil {
 		// The other unique column. Someone already answers to this name and is
 		// not this person; a login is the wrong place to resolve that.
@@ -240,6 +256,58 @@ func (s *PrincipalStore) UpsertFromIdP(ctx context.Context, in IdPLogin) (*model
 		return nil, fmt.Errorf("commit upsert principal: %w", err)
 	}
 	return s.FindByID(ctx, id)
+}
+
+// claimProvisionedPrincipal binds a login to the row a provisioner created for
+// that person, and reports whether it found one.
+//
+// The two ends cannot be matched on the obvious key. A login is identified by
+// "<issuer>|<sub>", and Entra's sub is pairwise: unique to one application and
+// invented the first time somebody signs into it. SCIM has therefore never seen
+// it and cannot send it. The externalId SCIM does carry is mapped from
+// mailNickname by default and is configurable per tenant, so it cannot be
+// relied on to be the same string either.
+//
+// So the provisioned row starts with no external_id, and the first login that
+// recognises itself in one takes it: the subject the token files evidence
+// under, or either of the names the person logs in by, since a UPN and an email
+// address are often not the same and a directory may know only one of them.
+//
+// What makes this safe is how narrow it is. Only a row a provisioner created
+// (scim_id) and that no login has claimed (external_id IS NULL) can be taken,
+// so it happens exactly once per person. Everything afterwards matches on
+// external_id like any other login, which is what keeps the ordinary cases
+// intact: a rename still follows the sub, and somebody who inherits a departed
+// colleague's address cannot inherit their history with it.
+//
+// Deliberately not excluded: a row the provisioner has already disabled. Their
+// login is refused a moment later for being disabled, and refusing it here
+// instead would create a second, enabled principal for somebody the directory
+// has just told us to shut out.
+func claimProvisionedPrincipal(ctx context.Context, tx pgx.Tx, in IdPLogin) (uuid.UUID, bool, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		UPDATE principals
+		   SET external_id = $1, display_name = $2, subject = $3
+		 WHERE scim_id IS NOT NULL
+		   AND external_id IS NULL
+		   AND kind = $4
+		   AND (subject = $3 OR user_name = ANY($5::text[]))
+		RETURNING id
+	`, in.ExternalID, in.DisplayName, in.Subject, model.PrincipalKindUser, in.LoginNames).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		// Two provisioned rows answering to one person, or a subject that
+		// already belongs elsewhere. Either way this login is not the place to
+		// decide which of them the person is.
+		if strings.Contains(err.Error(), "principals_subject_key") {
+			return uuid.Nil, false, fmt.Errorf("%w: %s", ErrSubjectTaken, in.Subject)
+		}
+		return uuid.Nil, false, fmt.Errorf("claim provisioned principal: %w", err)
+	}
+	return id, true, nil
 }
 
 // reconcileIdPRoles makes the IdP-derived grants match the token exactly, and

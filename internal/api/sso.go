@@ -247,7 +247,10 @@ func (h *SSOHandler) completeLogin(w http.ResponseWriter, r *http.Request, claim
 		ExternalID:  claims.ExternalID(),
 		Subject:     claims.PrincipalSubject(),
 		DisplayName: claims.Name,
-		Roles:       auth.RolesForGroups(h.roleMap, claims.Groups),
+		// Only consulted if the external id matches nothing, to find the row a
+		// provisioner created for this person before their first login.
+		LoginNames: claims.LoginNames(),
+		Roles:      auth.RolesForGroups(h.roleMap, claims.Groups),
 	})
 	if errors.Is(err, store.ErrSubjectTaken) {
 		// An API key is already using this person's name. Guessing they are the
