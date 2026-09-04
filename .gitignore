@@ -2,3 +2,7 @@
 /adapters/bazel/bazel-*
 .evidence/
 /.claude/
+
+# Local compose settings — a port that is free on this machine is not a
+# property of the project.
+.env
