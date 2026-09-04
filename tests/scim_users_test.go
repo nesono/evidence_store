@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -16,7 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nesono/evidence-store/internal/auth"
+	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/model"
+	"github.com/nesono/evidence-store/internal/server"
 	"github.com/nesono/evidence-store/internal/store"
 )
 
@@ -34,11 +37,38 @@ type scimClient struct {
 	t    *testing.T
 }
 
+// scimRoleMap is what the directory's group names mean here. The same map the
+// login path reads, which is the point: a group means one thing however this
+// store hears about it.
+var scimRoleMap = map[string]string{
+	"eng-all":   "contributor",
+	"eng-leads": "admin",
+}
+
 func newSCIMClient(t *testing.T) *scimClient {
 	t.Helper()
 	key := issueKey(t, rbacSubject(t, "provisioner"), "admin")
-	ts := setupRBACServer(t, nil)
+	ts := setupSCIMServer(t)
 	return &scimClient{base: ts.URL, key: key, t: t}
+}
+
+// setupSCIMServer is setupRBACServer with a group-to-role map, since a
+// provisioner that maps no groups can only ever grant nothing.
+func setupSCIMServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	cfg := &config.Config{
+		DatabaseURL:     testDatabaseURL,
+		ListenAddr:      ":0",
+		DefaultPageSize: 100,
+		MaxPageSize:     1000,
+		MaxBatchSize:    1000,
+		LogLevel:        "ERROR",
+		Auth:            config.Auth{DB: true, RoleMap: scimRoleMap},
+		Blob:            testBlobConfig,
+	}
+	ts := httptest.NewServer(server.New(cfg, testPool, testBlobStore, server.SSO{}).Handler())
+	t.Cleanup(ts.Close)
+	return ts
 }
 
 func (c *scimClient) do(method, path, body string) (*http.Response, map[string]any) {

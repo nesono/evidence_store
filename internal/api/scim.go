@@ -26,18 +26,27 @@ import (
 // cannot read evidence, cannot grant roles beyond what group membership implies
 // (phase 3), and cannot delete anything.
 type SCIMHandler struct {
-	store  *store.SCIMStore
-	logger *slog.Logger
+	store *store.SCIMStore
+	// rolesFor turns the groups somebody is in into the roles they hold here.
+	// Supplied rather than decided below, so that one answer serves both this
+	// protocol and the login path.
+	rolesFor store.RolesForGroups
+	logger   *slog.Logger
 }
 
 // Sessions are not a dependency here: ending them is part of deactivating
 // somebody and happens in the same transaction, because an account is not shut
 // while a browser still holds a live session for it.
-func NewSCIMHandler(s *store.SCIMStore, logger *slog.Logger) *SCIMHandler {
+func NewSCIMHandler(s *store.SCIMStore, rolesFor store.RolesForGroups, logger *slog.Logger) *SCIMHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SCIMHandler{store: s, logger: logger}
+	if rolesFor == nil {
+		// A deployment with no role map grants nothing through groups, which is
+		// the safe reading of "nobody has said what these groups mean".
+		rolesFor = func([]string) []string { return nil }
+	}
+	return &SCIMHandler{store: s, rolesFor: rolesFor, logger: logger}
 }
 
 // SCIM schema URNs. Spelled out rather than abbreviated because a client
