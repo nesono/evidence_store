@@ -212,7 +212,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	scimAPI := api.NewSCIMHandler(store.NewSCIMStore(pool), rolesFor, slog.Default())
 	r.Route("/scim/v2", func(r chi.Router) {
 		r.Use(auth.Authenticate(authenticator))
-		r.Use(auth.Require(auth.PermPrincipalAdmin))
+		r.Use(auth.Require(auth.PermSCIMProvision))
+
+		// What a provisioner reads before it will provision anything: which
+		// optional parts of SCIM this store answers, what can be provisioned,
+		// and which attributes it actually keeps. Behind the same permission as
+		// the rest — a client that cannot provision has no use for them, and an
+		// unauthenticated description of a store's identity model is a gift to
+		// somebody deciding whether to bother attacking it.
+		r.Get("/ServiceProviderConfig", scimAPI.ServiceProviderConfig)
+		r.Get("/ResourceTypes", scimAPI.ResourceTypes)
+		r.Get("/Schemas", scimAPI.Schemas)
 
 		r.Get("/Users", scimAPI.ListUsers)
 		r.Post("/Users", scimAPI.CreateUser)

@@ -7,14 +7,19 @@
 
 import { API_BASE, apiFetch, esc, formatTime } from "./common.js";
 
-// The four roles in the order they widen, which is the order an administrator
-// reads them in. Kept in step with internal/auth/role.go by the API refusing
-// anything else; the descriptions are what stop an admin having to guess.
+// The roles in the order they widen, which is the order an administrator reads
+// them in. Kept in step with internal/auth/role.go by the API refusing anything
+// else; the descriptions are what stop an admin having to guess.
+//
+// provisioner sits outside that widening: it is not a larger version of the
+// role above it but a different job, and the only one here that grants no
+// reading at all.
 const ROLES = [
   ["viewer", "Read evidence, analytics and inheritance"],
   ["contributor", "Viewer, plus writing evidence and images"],
   ["ci", "Contributor, plus writing a source that is not its own name"],
   ["admin", "Contributor, plus inheritance, retention and this page"],
+  ["provisioner", "Only SCIM: create and deactivate people. Reads nothing"],
 ];
 
 let principals = [];
