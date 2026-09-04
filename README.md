@@ -31,7 +31,7 @@ dependency and run it after your tests, the same way CI or `dogfood.sh` does:
 
 ```starlark
 # MODULE.bazel — published to the Bazel Central Registry, so this is all it takes
-bazel_dep(name = "evidence_store_bazel", version = "0.0.2")
+bazel_dep(name = "evidence_store_bazel", version = "0.0.3")
 ```
 
 ```bash
@@ -444,8 +444,14 @@ pulling in the server's own dependencies.
 The module is published to the [Bazel Central Registry](https://registry.bazel.build/modules/evidence_store_bazel), so a plain `bazel_dep` in the consuming repo's `MODULE.bazel` is all it takes:
 
 ```starlark
-bazel_dep(name = "evidence_store_bazel", version = "0.0.2")
+bazel_dep(name = "evidence_store_bazel", version = "0.0.3")
 ```
+
+Adapter releases before 0.0.3 submit records with `evidence_type: "bazel"`,
+which the server has rejected since evidence types were restricted to `ci`,
+`manual_test`, and `demonstration` (the runner now goes in
+`metadata.collector`). Consumers of 0.0.2 or older see every upload fail
+validation; upgrade to 0.0.3 or newer.
 
 To track an unreleased commit instead of a published version — testing a fix
 before it's tagged, say — add a `git_override`:
