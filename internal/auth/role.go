@@ -1,8 +1,8 @@
 package auth
 
 // Role is a named, fixed bundle of permissions. Roles are defined in code, not
-// composed at runtime: the store has four of them against ten permissions, and
-// a role-CRUD API would be a larger surface than the thing it governs.
+// composed at runtime: the store has five of them against eleven permissions,
+// and a role-CRUD API would be a larger surface than the thing it governs.
 type Role string
 
 const (
@@ -10,6 +10,9 @@ const (
 	RoleContributor Role = "contributor"
 	RoleCI          Role = "ci"
 	RoleAdmin       Role = "admin"
+	// RoleProvisioner is the directory's own credential. It provisions people
+	// and does nothing else — no evidence, no analytics, not even a read.
+	RoleProvisioner Role = "provisioner"
 )
 
 // permSet is a flattened set of permissions. Callers get one built once at
@@ -57,10 +60,21 @@ var (
 	// backfill evidence under someone else's source should hold both roles
 	// explicitly, so writing history in another party's name is always a
 	// deliberate grant.
+	// Nothing but provisioning, and deliberately not built on viewer: a
+	// directory's token has no reason to read a test result, and this is the
+	// one credential in the store that lives for years in somebody else's
+	// configuration.
+	provisionerPerms = newPermSet(
+		PermSCIMProvision,
+	)
+	// admin holds provisioning too, so that an administrator can drive the SCIM
+	// endpoints by hand — and so that a deployment can start provisioning
+	// before it has minted a dedicated token.
 	adminPerms = contributorPerms.with(
 		PermInheritanceWrite,
 		PermPrincipalAdmin,
 		PermRetentionAdmin,
+		PermSCIMProvision,
 	)
 
 	rolePermissions = map[Role]permSet{
@@ -68,18 +82,23 @@ var (
 		RoleContributor: contributorPerms,
 		RoleCI:          ciPerms,
 		RoleAdmin:       adminPerms,
+		RoleProvisioner: provisionerPerms,
 	}
 )
 
-// RoleNames returns the four role names in the order they widen, which is the
-// order an administrator reads them in: a message listing what a caller could
-// have sent, and the checkboxes in the web UI.
+// RoleNames returns the role names in the order they widen, which is the order
+// an administrator reads them in: a message listing what a caller could have
+// sent, and the checkboxes in the web UI.
+//
+// provisioner comes last and outside that widening, because it is not a bigger
+// version of anything above it — it is a different job.
 func RoleNames() []string {
 	return []string{
 		string(RoleViewer),
 		string(RoleContributor),
 		string(RoleCI),
 		string(RoleAdmin),
+		string(RoleProvisioner),
 	}
 }
 

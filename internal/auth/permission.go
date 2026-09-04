@@ -26,4 +26,13 @@ const (
 	// below is the whole story rather than a partial one.
 	PermPrincipalAdmin Permission = "principal:admin"
 	PermRetentionAdmin Permission = "retention:admin"
+
+	// PermSCIMProvision allows a directory to create, update and deactivate
+	// people through SCIM.
+	//
+	// Its own permission rather than principal:admin, which provisioning used
+	// while it was being built. A token that sits in another company's
+	// configuration for years should be able to do one thing: it has no reason
+	// to read a single test result, and every reason not to be able to.
+	PermSCIMProvision Permission = "scim:provision"
 )
