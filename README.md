@@ -81,7 +81,7 @@ open `http://localhost:8000`.
 | `EVIDENCE_OIDC_POST_LOGOUT_URL` | *(the store's root)* | Where the provider returns the browser after logging out; derived from the redirect URL unless set |
 | `EVIDENCE_OIDC_SCOPES` | `openid,profile,email` | Scopes to request |
 | `EVIDENCE_OIDC_GROUPS_CLAIM` | `groups` | Claim carrying group membership (Entra calls it `roles`) |
-| `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. `EVIDENCE_OIDC_ROLE_MAP` is still read as a fallback |
+| `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. Also read by [SCIM provisioning](#provisioning-with-scim-20), so a group means one thing however the store hears about it. `EVIDENCE_OIDC_ROLE_MAP` is still read as a fallback |
 | `EVIDENCE_SAML_IDP_METADATA_URL` | *(empty — SAML off)* | Identity provider metadata to fetch at startup (see [SAML](#saml)) |
 | `EVIDENCE_SAML_IDP_METADATA_FILE` | *(empty)* | The same metadata from a file, for a deployment that will not reach out |
 | `EVIDENCE_SAML_ROOT_URL` | *(empty)* | This store's public address, e.g. `https://evidence.example.com` |
@@ -146,7 +146,8 @@ more **roles**, and every route states the **permission** it needs:
 | `viewer` | `evidence:read`, `analytics:read`, `blob:read`, `inheritance:read` |
 | `contributor` | `viewer` + `evidence:write`, `blob:write` |
 | `ci` | `contributor` + `source:any` (may write a `source` that is not its own name) |
-| `admin` | `contributor` + `inheritance:write`, `principal:admin`, `retention:admin` |
+| `admin` | `contributor` + `inheritance:write`, `principal:admin`, `retention:admin`, `scim:provision` |
+| `provisioner` | `scim:provision` only — a directory's own token, which reads nothing at all |
 
 `POST /inheritance` requires `inheritance:write`, which only `admin` holds —
 declaring that one commit inherits another's evidence is the elevated operation
@@ -385,6 +386,126 @@ too. Backfilling evidence in somebody else's name means holding both roles, so
 that writing history under another party's identity is always a deliberate
 grant. Configured `EVIDENCE_API_KEYS` are unaffected: every `rw` key is `ci`, so
 the pipelines using one keep writing exactly the `source` they wrote before.
+
+### Provisioning with SCIM 2.0
+
+Single sign-on gets people in. It does not get them out.
+
+A principal is created the first time somebody logs in, and their roles are
+reconciled from the group claims in that login's token. Both halves wait on a
+login happening — so somebody who leaves the company keeps their account here,
+and any browser session they left open, because the login that would have been
+refused never comes. A group change is revocation only if they sign in again.
+And nobody exists before their first login, so a joiner cannot be granted
+anything, or even seen, before their first day.
+
+[SCIM 2.0](https://datatracker.ietf.org/doc/html/rfc7644) is how a directory
+says all of this without waiting for the person: it calls this store on a
+schedule to create, update, deactivate and delete users and groups. It
+complements the OIDC login and replaces none of it.
+
+```bash
+export EVIDENCE_AUTH_DB=true    # provisioned people are rows in `principals`
+export EVIDENCE_GROUP_ROLE_MAP="eng-all:contributor,eng-leads:admin"
+```
+
+There is no switch to turn it on. The endpoints are always mounted and always
+require `scim:provision`, so a deployment that has issued no token holding it
+has no provisioning.
+
+**Mint the directory a token.** In the **Access** tab, create a key with the
+`provisioner` role and nothing else, and give it to the directory as its secret
+token. That role grants `scim:provision` and no reading of any kind — this is
+the one credential in the store that lives for years inside another company's
+configuration, and if it leaks the damage should be account creation, not a
+customer's test results. `admin` also holds the permission, so an administrator
+can drive the endpoints by hand.
+
+| Endpoint | What it is for |
+|---|---|
+| `GET /scim/v2/ServiceProviderConfig` | Which optional parts of SCIM this store answers |
+| `GET /scim/v2/ResourceTypes`, `/Schemas` | What can be provisioned, and which attributes are kept |
+| `GET/POST /scim/v2/Users`, `GET/PUT/PATCH/DELETE /scim/v2/Users/{id}` | People |
+| `GET/POST /scim/v2/Groups`, `GET/PUT/PATCH/DELETE /scim/v2/Groups/{id}` | Groups, and so roles |
+
+Filtering is `userName eq`, `externalId eq` and `displayName eq` — the forms a
+directory actually sends. Anything else is refused rather than answered with the
+whole store, which to a client would look like every user matching every query.
+Paging is `startIndex` and `count`, capped at 500.
+
+**Deactivating somebody ends their sessions.** `PATCH` with `active: false`, and
+`DELETE`, both disable the account *and* delete every session it has open, in
+one transaction. Disabling alone would leave the browser they walked away from
+working until it expired on its own, which is the failure provisioning exists to
+close.
+
+`DELETE` never removes the row. Evidence names its source, so a deleted
+principal would leave records attributed to nothing, and an administrator could
+no longer tell somebody who was revoked from somebody who never existed.
+
+**Roles come from groups**, through the same `EVIDENCE_GROUP_ROLE_MAP` the login
+path uses — one question, answered once. A group with no entry grants nothing,
+so pointing this store at a company directory does not hand every employee an
+account that can write. Removing somebody from a group takes the role away,
+which is the only way a role comes back from somebody who keeps their account.
+
+Grants are recorded with `source = 'scim'`, alongside `local` (an administrator
+granted it by hand) and `idp` (a login derived it from its own token). What
+somebody may do is the **union** of the three, and each is reconciled only
+against its own source — otherwise a login and a sync would delete each other's
+grants on alternate runs.
+
+The store will refuse to deactivate the last enabled administrator, answering
+`403` rather than leaving the deployment with no way in but `psql`.
+
+#### One person, one principal
+
+A provisioned user and that same human's later login have to land on **one**
+principal. If they do not, everybody becomes two rows: one holding their
+evidence, and one that is the only thing the directory can deactivate — so
+deprovisioning would appear to work while the account that matters stayed live.
+
+They cannot be matched on the obvious key. A login is identified by
+`<issuer>|<sub>`, and Entra's `sub` is *pairwise*: unique to one application and
+invented the first time somebody signs into it, so SCIM has never seen it and
+cannot send it. The `externalId` SCIM does carry is mapped from `mailNickname`
+by default and is configurable per tenant.
+
+So a provisioned row starts **unclaimed**, and the first login that recognises
+itself in one takes it, writing its own external id there; from then on it is an
+ordinary login matched on that id. It works the other way round too: provisioning
+somebody who has already logged in adopts the principal they already have,
+which is what lets a deployment that had single sign-on first start managing the
+people who got there before the directory did.
+
+**This means your `externalId` mapping does not have to match anything here.**
+Both directions key off the address and login name instead, which is also why
+the `emails` array matters: the primary address becomes the subject their
+evidence is filed under, and the one a later login is recognised by.
+
+#### Pointing Entra at it
+
+Register the store as an enterprise application, then under **Provisioning**:
+
+| Setting | Value |
+|---|---|
+| Tenant URL | `https://evidence.example.com/scim/v2` |
+| Secret Token | the `provisioner` key from the Access tab |
+
+**Test Connection** exercises the discovery endpoints and a probe query, so it
+fails immediately and legibly if the token or URL is wrong.
+
+The default attribute mappings need one change: under *Provision Azure AD
+Users*, make sure `mail` or `userPrincipalName` flows to `emails[type eq
+"work"].value`, since that address is what a later login is matched on. The
+`externalId` mapping can be left at whatever your tenant uses.
+
+Group provisioning is worth enabling: it is what makes membership decide roles
+here rather than requiring an administrator to grant them by hand. Map the
+groups you named in `EVIDENCE_GROUP_ROLE_MAP`.
+
+Entra syncs roughly every 40 minutes, so a departure takes effect on the next
+cycle rather than instantly. Their open session dies the moment it does.
 
 ### Rate limiting
 

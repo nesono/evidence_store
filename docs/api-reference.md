@@ -651,3 +651,99 @@ Runs are namespaced by repo, so a commit hash or invocation id reused across rep
 | `include_errors` | `false` | Count `ERROR` alongside `FAIL` |
 
 Queries matching more than 200,000 failing rows, 2,000 distinct failing tests, or 20,000 failing runs return `422`.
+
+## Provisioning (SCIM 2.0)
+
+Outside `/api/v1`, because SCIM is somebody else's protocol: its own resource
+shapes, its own error envelope, its own opinion about status codes. Bending it
+into this store's REST conventions would give a conforming client answers it
+cannot read.
+
+Every route requires `scim:provision`, held by the `provisioner` role and by
+`admin`. See [Provisioning with SCIM 2.0](../README.md#provisioning-with-scim-20)
+for how to set a directory up against it.
+
+### Discovery
+
+| Method | Path | Answers |
+|---|---|---|
+| GET | `/scim/v2/ServiceProviderConfig` | `patch` and `filter` supported; `bulk`, `sort`, `etag`, `changePassword` not |
+| GET | `/scim/v2/ResourceTypes` | `User` at `/Users`, `Group` at `/Groups` |
+| GET | `/scim/v2/Schemas` | Only the attributes this store keeps — advertising one it drops would have a directory believe it had synchronised something that went nowhere |
+
+### Users
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/scim/v2/Users` | `?filter=userName eq "x"` or `externalId eq "x"`; `startIndex` (1-based) and `count`, capped at 500 |
+| POST | `/scim/v2/Users` | Creates, or **adopts** a principal that already exists for that address |
+| GET | `/scim/v2/Users/{id}` | |
+| PUT | `/scim/v2/Users/{id}` | Whole resource; the subject is left alone, since evidence already filed names its author by it |
+| PATCH | `/scim/v2/Users/{id}` | `active: false` deactivates — see below |
+| DELETE | `/scim/v2/Users/{id}` | Disables. Never removes the row |
+
+The primary address in `emails` becomes the subject the person files evidence
+under, and the one a later login is recognised by. `userName` is the fallback
+when no address is sent.
+
+A created user starts **unclaimed**: no `external_id`, because the directory
+cannot supply one. The first login that recognises itself in that row takes it.
+
+#### Deactivating
+
+Both spellings are understood, because different clients send different ones and
+recognising only one would mean silently deprovisioning nobody:
+
+```json
+{"Operations": [{"op": "replace", "path": "active", "value": false}]}
+{"Operations": [{"op": "replace", "value": {"active": false}}]}
+```
+
+The string `"False"` is accepted for the value too.
+
+Deactivating disables the account **and deletes every session it has open**, in
+one transaction. `403` with `scimType: mutability` if the person is the last
+enabled administrator.
+
+### Groups
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/scim/v2/Groups` | `?filter=displayName eq "x"` |
+| POST | `/scim/v2/Groups` | `409` `uniqueness` if the name is taken |
+| GET | `/scim/v2/Groups/{id}` | |
+| PUT | `/scim/v2/Groups/{id}` | States the whole membership; anyone not named is dropped and loses what it granted |
+| PATCH | `/scim/v2/Groups/{id}` | `add`/`remove` on `members`, including `members[value eq "x"]`; `replace` on `displayName` |
+| DELETE | `/scim/v2/Groups/{id}` | A real delete, and the roles it granted go with it |
+
+A group's `displayName` is looked up in `EVIDENCE_GROUP_ROLE_MAP`. An unmapped
+group grants nothing — it still exists and still lists its members, because a
+client that cannot read its own write back concludes the write was lost.
+
+Renaming a group changes what it grants to **everybody in it**, since the name
+is what the map is keyed by. Every membership change recomputes roles in the
+same transaction, so a write cannot land without them.
+
+A member this store has never heard of is skipped rather than refused: a
+directory syncing a group before the people in it is ordinary, and failing would
+stall the sync on its first group.
+
+### Errors
+
+The SCIM envelope, not this store's:
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+  "status": "409",
+  "scimType": "uniqueness",
+  "detail": "userName already belongs to another principal"
+}
+```
+
+| Status | `scimType` | When |
+|---|---|---|
+| 400 | `invalidSyntax`, `invalidValue`, `invalidFilter` | Unreadable body, missing `userName`/`displayName`, unsupported filter |
+| 403 | `mutability` | Deactivating the last enabled administrator |
+| 404 | — | No such id |
+| 409 | `uniqueness` | The name belongs to somebody else, or to a principal that is not a person |
