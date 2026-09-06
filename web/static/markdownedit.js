@@ -275,35 +275,51 @@ function editFor(event, textarea) {
 }
 
 function apply(textarea, edit) {
-  const expected =
-    textarea.value.slice(0, edit.from) + edit.insert + textarea.value.slice(edit.to);
+  const before = textarea.value;
+  const expected = before.slice(0, edit.from) + edit.insert + before.slice(edit.to);
 
-  // execCommand first, because it is the only way to change a textarea and
-  // leave the browser's own undo stack intact: assigning to .value wipes it,
-  // and an editor that loses ⌘Z on every automatic bullet is worse than one
-  // that never inserted the bullet.
+  // Deleting is done by setRangeText, never by execCommand.
   //
-  // It is also deprecated, and Safari has never supported it dependably on a
-  // textarea — it returns true and changes nothing, which is why this checks
-  // the text afterwards rather than trusting what it reports. Where it did
-  // nothing, setRangeText does the edit properly; undo history is the price,
-  // and a working editor without undo beats a dead one with it.
-  textarea.setSelectionRange(edit.from, edit.to);
-  let applied = false;
-  try {
-    applied = document.execCommand("insertText", false, edit.insert) &&
-      textarea.value === expected;
-  } catch {
-    applied = false;
+  // execCommand("insertText", false, "") is nominally a delete, and WebKit
+  // treats it as one and then merges the now-empty line with the line above —
+  // so ending a list ate the newline as well as the marker and put the cursor
+  // back at the end of the previous item. Reported in Safari, and it is the
+  // whole reason the fallback below has to be absolute rather than relative.
+  if (edit.insert === "") {
+    replace(textarea, edit, expected);
+    return;
   }
 
-  if (!applied) {
-    textarea.setRangeText(edit.insert, edit.from, edit.to, "end");
-    // execCommand raises input on its own; setRangeText does not, and the form
-    // listens for it to size the box and to notice there is a draft worth
-    // keeping.
+  // For an insertion, execCommand first: it is the only way to change a
+  // textarea and leave the browser's own undo stack intact, and an editor that
+  // loses ⌘Z on every automatic bullet is worse than one that never inserted
+  // the bullet.
+  textarea.setSelectionRange(edit.from, edit.to);
+  try {
+    document.execCommand("insertText", false, edit.insert);
+  } catch {
+    // Some browsers throw rather than report; either way the check below is
+    // what decides, since Safari also returns true having done nothing.
+  }
+
+  if (textarea.value !== expected) replace(textarea, edit, expected);
+  textarea.setSelectionRange(edit.cursor, edit.selectTo ?? edit.cursor);
+}
+
+// replace puts the text right from what it should be, rather than reapplying an
+// edit to whatever state execCommand left behind.
+//
+// Absolute, not relative, and that distinction is the bug it was written for: a
+// second edit computed against the original offsets, applied to text execCommand
+// had already half-changed, removed a character that was no longer there to
+// remove. Undo history is the price of this path, and a working editor without
+// undo beats a dead one with it.
+function replace(textarea, edit, expected) {
+  if (textarea.value !== expected) {
+    textarea.value = expected;
+    // Assigning the value raises no event, and the form listens for input to
+    // size the box and to notice there is a draft worth keeping.
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
-
   textarea.setSelectionRange(edit.cursor, edit.selectTo ?? edit.cursor);
 }
