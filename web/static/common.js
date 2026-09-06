@@ -12,6 +12,23 @@ const API_KEY_STORAGE = "evidence_api_key";
 // and the marker the landing page is recognised by.
 export const SIGNED_OUT_PATH = "/?signed_out=1";
 
+// mayDo reports whether this caller holds a permission.
+//
+// False only when we positively know they do not. An anonymous caller, a store
+// with no authentication configured, and a tab that has gone offline all report
+// no permissions for quite different reasons — and treating the last of those
+// as a refusal would take away offline capture, which is the one case where
+// filing a result matters most and the server cannot be asked.
+export function mayDo(me, permission) {
+  if (!me || !me.authenticated) return true;
+  return (me.permissions || []).includes(permission);
+}
+
+// mayFileResults is the question the Add Result tab asks.
+export function mayFileResults(me) {
+  return mayDo(me, "evidence:write");
+}
+
 // signedOutOnPurpose reports whether this page was reached by logging out.
 //
 // It governs whether a 401 means "your session expired, go and log in" or "yes,
@@ -142,7 +159,7 @@ function showLoginChoice() {
   const dialog = document.getElementById("login-choice-dialog");
   if (!dialog) {
     // No dialog on the page: better to reach the first provider than nothing.
-    window.location.href = LOGIN_PATHS[loginMethods[0]] || LOGIN_PATHS.oidc;
+    goToLogin(loginMethods[0]);
     return;
   }
   const list = document.getElementById("login-choice-list");

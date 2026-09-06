@@ -106,12 +106,22 @@ func (c Claims) ExternalID() string { return c.Issuer + "|" + c.Subject }
 // PrincipalSubject is the readable name this person files evidence under.
 //
 // Their email address if the provider gave one, because that is what a reader
-// looking at a record months later can act on. Failing that the opaque subject,
-// which is ugly but resolvable — and better than inventing something that looks
-// like an address and is not.
+// looking at a record months later can act on. Failing that their login name,
+// which is the same thing in most directories and resolvable in the rest.
+//
+// The opaque subject is the last resort and genuinely is a resort. Entra sends
+// no email claim at all for a cloud-only account whose mail attribute is unset,
+// which is the default for a user created in the portal — so falling straight
+// to sub stamped every record that person filed with something like
+// "user:oLArAQCryDWlzkmgTAetr1TCXViuqXyXQGg". That is not a name anybody can
+// act on, and being unable to say who ran a test defeats the point of keeping
+// the evidence.
 func (c Claims) PrincipalSubject() string {
 	if c.Email != "" {
 		return "user:" + c.Email
+	}
+	if c.PreferredUsername != "" {
+		return "user:" + c.PreferredUsername
 	}
 	return "user:" + c.Subject
 }

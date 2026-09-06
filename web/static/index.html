@@ -26,13 +26,16 @@
         <nav>
             <ul><li><strong>Evidence Store</strong></li></ul>
             <ul>
-                <li><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
-                <li><a href="#" class="nav-tab" data-tab="analytics">Analytics</a></li>
-                <li><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
-                <!-- Shown only to a caller holding principal:admin. Rendering a
-                     tab whose every request would be refused is worse than not
-                     offering it; access.js unhides this once /me says so. -->
-                <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access">Access</a></li>
+                <li id="search-tab-item"><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
+                <li id="analytics-tab-item"><a href="#" class="nav-tab" data-tab="analytics">Analytics</a></li>
+                <li id="add-tab-item"><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
+                <!-- Hidden rather than greyed, unlike the tabs above it.
+                     Those name things an ordinary user might reasonably want
+                     and be told to go and ask for; this one is somebody else's
+                     job entirely, and showing a locked door to everybody who
+                     walks past only suggests they are missing something they
+                     are not. access.js unhides it once /me says so. -->
+                <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access">Admin</a></li>
                 <!-- Hidden until there is something waiting. A counter reading
                      zero is furniture; one reading three is the most important
                      thing on the page. -->
@@ -42,6 +45,10 @@
                      install. On iOS, which fires no such event, the Share menu
                      is the way in and the README says so. -->
                 <li><a href="#" id="install-app" class="secondary" style="font-size:0.8em" hidden>Install</a></li>
+                <!-- Who is signed in, and what that lets them do. Filled in
+                     from /me; a store with no authentication configured has no
+                     answer and shows nothing. -->
+                <li id="auth-identity" class="auth-identity" hidden></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
                 <li><a href="#" id="auth-logout" class="secondary" style="font-size:0.8em" hidden>Logout</a></li>
             </ul>
@@ -407,7 +414,7 @@
         </section>
 
         <section id="tab-access" class="tab-content" hidden>
-            <h4>Access</h4>
+            <h4>Admin</h4>
             <p id="access-db-warning" class="access-warning" hidden>
                 Database authentication is switched off
                 (<code>EVIDENCE_AUTH_DB</code> is not <code>true</code>), so keys

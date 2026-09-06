@@ -90,7 +90,7 @@ button looks broken.
 
 Keycloak does not speak SCIM, so there is no provisioner in this stack by
 default. To try the endpoints by hand, mint a key with the `provisioner` role in
-the **Access** tab and call them with it:
+the **Admin** tab and call them with it:
 
 ```
 curl -H "Authorization: Bearer <the key>" http://localhost:8000/scim/v2/Users
@@ -101,17 +101,50 @@ That role reads nothing else, so the same key answers `403` on
 
 ## Pointing this at Microsoft Entra
 
-The realm is arranged to make the differences small. Registering the store as
-an Entra app and swapping four values in the overlay is the whole change:
+There is a second overlay for that, `docker-compose.entra.yml`, and the realm
+here is arranged to make the differences small. What follows was checked against
+a real tenant rather than inferred (#152).
 
-- `EVIDENCE_OIDC_ISSUER` becomes `https://login.microsoftonline.com/<tenant>/v2.0`
-- `EVIDENCE_OIDC_CLIENT_ID` and `EVIDENCE_OIDC_CLIENT_SECRET` come from the app
-  registration
-- `EVIDENCE_OIDC_GROUPS_CLAIM` becomes `roles` if you map app roles, or stays
-  `groups` if you emit the group claim — in which case the map keys are Entra
-  *group object IDs*, not names, unless group names are configured to be emitted
-- `EVIDENCE_COOKIE_SECURE` goes back to its default, since that deployment will
-  be on HTTPS
+Register the store as an **app registration**, single tenant. Multi-tenant is
+not merely discouraged: such a registration advertises its issuer as the literal
+template `https://login.microsoftonline.com/{tenantid}/v2.0`, braces and all,
+and strict issuer validation refuses it — correctly.
+
+Put the tenant id, client id and secret in `.env`, along with the public address
+Entra will send browsers back to. That address has to be reachable from the
+internet and on real HTTPS, so on a laptop it means a tunnel:
+
+```
+cloudflared tunnel --url http://localhost:8000
+```
+
+Register `<public-url>/auth/callback` as a **Web** redirect URI, exactly — a
+mismatch is the first error you will meet, and it names both URLs so it is easy
+to fix.
+
+**Use app roles, not groups.** Define app roles on the registration whose
+*Value* is the string the role map keys on — `evidence-admins`,
+`evidence-engineers`, `evidence-viewers` — and assign people to them under
+Enterprise applications → Users and groups. Then
+`EVIDENCE_OIDC_GROUPS_CLAIM=roles` and the map reads exactly as it does for
+Keycloak's groups.
+
+Emitting the group claim instead works, but a cloud-only tenant sends group
+**object IDs** rather than names, so every key in the map becomes a GUID.
+
+Assigning *groups* to app roles needs Entra ID P1; assigning individual users
+does not, which is enough to try this out.
+
+**Entra sends no `email` claim** for an account created in the portal, because
+such an account has no mail attribute — whatever scopes are requested. The store
+falls back to `preferred_username`, the UPN, so people are named
+`user:alice@contoso.onmicrosoft.com` rather than by an opaque identifier. Set
+real mail attributes and the address wins instead.
+
+Leave `EVIDENCE_OIDC_PROVIDER_LOGOUT` off unless the machine is shared. With it
+on, logging out of the store signs the person out of Entra entirely — every
+other application that account opens — and Entra additionally asks which
+identity they meant to abandon.
 
 ## Resetting
 

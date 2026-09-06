@@ -23,8 +23,8 @@ import (
 // that follows the specification getting answers it cannot read.
 //
 // What it can do is narrow. It provisions people and it deactivates them; it
-// cannot read evidence, cannot grant roles beyond what group membership implies
-// (phase 3), and cannot delete anything.
+// cannot read evidence, cannot grant roles beyond what group membership
+// implies, and cannot delete anything.
 type SCIMHandler struct {
 	store *store.SCIMStore
 	// rolesFor turns the groups somebody is in into the roles they hold here.

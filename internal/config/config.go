@@ -129,7 +129,14 @@ type OIDC struct {
 	// URL; one that does not recognise it will refuse the logout rather than
 	// redirect somewhere unexpected, which is the right way round.
 	PostLogoutURL string
-	Scopes        []string
+	// ProviderLogout ends the provider's own session as well as this one.
+	//
+	// Off by default: "log out" usually means this application, and signing
+	// somebody out of their whole corporate account as a side effect is more
+	// than they asked for. Worth turning on where a machine is shared, since
+	// otherwise the next person's Log in is answered silently as the last one.
+	ProviderLogout bool
+	Scopes         []string
 	// GroupsClaim is the token claim carrying group membership. Providers
 	// disagree: "groups" is common, Entra says "roles".
 	GroupsClaim string
@@ -361,10 +368,11 @@ func loadOIDC(roleMap map[string]string) OIDC {
 		// Left empty unless an operator says otherwise: where a logout lands
 		// is derived from the redirect URL, which already says where the store
 		// is, and deriving it in one place beats two that can disagree.
-		PostLogoutURL: strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_POST_LOGOUT_URL")),
-		Scopes:        splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
-		GroupsClaim:   envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
-		RoleMap:       roleMap,
+		PostLogoutURL:  strings.TrimSpace(os.Getenv("EVIDENCE_OIDC_POST_LOGOUT_URL")),
+		ProviderLogout: os.Getenv("EVIDENCE_OIDC_PROVIDER_LOGOUT") == "true",
+		Scopes:         splitAndTrim(envOrDefault("EVIDENCE_OIDC_SCOPES", "openid,profile,email")),
+		GroupsClaim:    envOrDefault("EVIDENCE_OIDC_GROUPS_CLAIM", "groups"),
+		RoleMap:        roleMap,
 	}
 }
 
@@ -444,19 +452,17 @@ func validateAuth(auth Auth) error {
 	return nil
 }
 
-// loadRoleMap reads the group-to-role mapping shared by both login front ends.
+// loadRoleMap reads the group-to-role mapping shared by every front end that
+// grants a role: both logins, and SCIM.
 //
-// EVIDENCE_OIDC_ROLE_MAP is still read, because it is what the OIDC release
-// documented and an operator who set it should not have their groups quietly
-// stop granting anything.
+// EVIDENCE_OIDC_ROLE_MAP was read here as well, as compatibility with the name
+// the first OIDC release documented. There is no deployment to be compatible
+// with — this store has never run anywhere but a laptop — so the fallback was
+// only a second way to spell a setting, and a second thing to explain.
 func loadRoleMap() (map[string]string, error) {
-	name, raw := "EVIDENCE_GROUP_ROLE_MAP", os.Getenv("EVIDENCE_GROUP_ROLE_MAP")
-	if raw == "" {
-		name, raw = "EVIDENCE_OIDC_ROLE_MAP", os.Getenv("EVIDENCE_OIDC_ROLE_MAP")
-	}
-	roleMap, err := ParseRoleMap(raw)
+	roleMap, err := ParseRoleMap(os.Getenv("EVIDENCE_GROUP_ROLE_MAP"))
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", name, err)
+		return nil, fmt.Errorf("EVIDENCE_GROUP_ROLE_MAP: %w", err)
 	}
 	return roleMap, nil
 }

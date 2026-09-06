@@ -348,3 +348,21 @@ func TestPendingSAMLRequestsExpireAndAreSwept(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, swept, int64(1))
 }
+
+// A SAML provider that sends no email attribute used to leave people filing
+// evidence under a raw NameID. That is the Entra problem (#152) arriving by a
+// different door: the subject is what a reader months later has to act on.
+func TestASAMLLoginWithoutAnEmailStillGetsAReadableSubject(t *testing.T) {
+	idp := newMockSAMLIdP(t)
+	idp.nameID = "alice@example.com"
+	idp.email = ""
+	dropPrincipal(t, "%alice@example.com")
+
+	base, client := samlServer(t, idp, nil)
+	samlLogIn(t, base, client).Body.Close()
+
+	me := meOf(t, base, client)
+	require.True(t, me.Authenticated)
+	assert.Equal(t, "user:alice@example.com", me.Subject,
+		"a NameID that is a login name should name the person, not be hidden behind one")
+}

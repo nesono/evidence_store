@@ -79,9 +79,10 @@ open `http://localhost:8000`.
 | `EVIDENCE_OIDC_CLIENT_SECRET` | *(empty)* | Client secret, for a confidential client |
 | `EVIDENCE_OIDC_REDIRECT_URL` | *(empty)* | Where the provider sends the browser back, e.g. `https://evidence.example.com/auth/callback` |
 | `EVIDENCE_OIDC_POST_LOGOUT_URL` | *(the store's root)* | Where the provider returns the browser after logging out; derived from the redirect URL unless set |
+| `EVIDENCE_OIDC_PROVIDER_LOGOUT` | `false` | End the provider's session on logout too. Off because "log out" usually means this application; worth turning on where a machine is shared |
 | `EVIDENCE_OIDC_SCOPES` | `openid,profile,email` | Scopes to request |
 | `EVIDENCE_OIDC_GROUPS_CLAIM` | `groups` | Claim carrying group membership (Entra calls it `roles`) |
-| `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. Also read by [SCIM provisioning](#provisioning-with-scim-20), so a group means one thing however the store hears about it. `EVIDENCE_OIDC_ROLE_MAP` is still read as a fallback |
+| `EVIDENCE_GROUP_ROLE_MAP` | *(empty)* | `group:role` pairs for either provider, e.g. `eng-all:contributor,eng-leads:admin`. Also read by [SCIM provisioning](#provisioning-with-scim-20), so a group means one thing however the store hears about it |
 | `EVIDENCE_SAML_IDP_METADATA_URL` | *(empty — SAML off)* | Identity provider metadata to fetch at startup (see [SAML](#saml)) |
 | `EVIDENCE_SAML_IDP_METADATA_FILE` | *(empty)* | The same metadata from a file, for a deployment that will not reach out |
 | `EVIDENCE_SAML_ROOT_URL` | *(empty)* | This store's public address, e.g. `https://evidence.example.com` |
@@ -216,7 +217,7 @@ recognises is `401`; if the database cannot be reached at all, requests get
 
 #### Issuing and revoking keys
 
-The **Access** tab in the web UI is the everyday way in: it lists every
+The **Admin** tab in the web UI is the everyday way in: it lists every
 principal with its roles, when its key was last used, and whether it has been
 revoked, and it issues, rotates and revokes keys. The tab is only shown to a
 caller holding `principal:admin`. See [Managing access](#managing-access) for
@@ -280,22 +281,29 @@ revoking somebody stops the browser they left open rather than waiting for a
 token to expire. `GET /auth/config` reports whether a login flow exists, which
 is how the UI knows to offer one.
 
-**Logging out ends the provider's session too.** Ending only the local one is
-not a logout: the provider still considers the person signed in, so the next
-login is answered without a password and they are silently signed back in —
-and on a shared machine the next person inherits the account. So `/auth/logout`
+**Logging out ends this session, and by default no other.** `/auth/logout`
 deletes the session row and answers with a `logout_url` for the browser to
-follow, which is the provider's `end_session_endpoint` carrying the
-`id_token_hint` from that login. Register `EVIDENCE_OIDC_POST_LOGOUT_URL` with
-the provider alongside the redirect URL; most refuse a post-logout redirect they
-were not told about. A provider advertising no logout endpoint is fine — the
-session here still ends.
+follow — the store's own signed-out page, marked so the page knows this 401 is
+what logging out looks like rather than an expired session to bounce back to the
+provider.
+
+Set `EVIDENCE_OIDC_PROVIDER_LOGOUT=true` to end the provider's session as well,
+by sending the browser to its `end_session_endpoint` with the `id_token_hint`
+from that login. It is off by default because it is a large side effect: the
+person is signed out of every other application that account opens, and against
+a real Entra tenant they are additionally asked to pick which identity they
+meant to abandon. Turn it on where a machine is shared, since otherwise the next
+person's **Log in** is answered silently as the last one.
+
+With it on, register `EVIDENCE_OIDC_POST_LOGOUT_URL` with the provider alongside
+the redirect URL; most refuse a post-logout redirect they were not told about. A
+provider advertising no logout endpoint is fine — the session here still ends.
 
 **Roles come from groups.** A group with no entry in `EVIDENCE_GROUP_ROLE_MAP`
 grants nothing, so pointing this store at a company directory does not hand
 every employee an account that can write. On each login the roles derived from
 group claims are reconciled to what the token now says — losing a group loses
-the role — while roles an administrator granted in the **Access** tab are left
+the role — while roles an administrator granted in the **Admin** tab are left
 alone. Someone whose groups map to nothing is authenticated and permitted
 nothing, which is a deliberate state and not an error.
 
@@ -413,7 +421,7 @@ There is no switch to turn it on. The endpoints are always mounted and always
 require `scim:provision`, so a deployment that has issued no token holding it
 has no provisioning.
 
-**Mint the directory a token.** In the **Access** tab, create a key with the
+**Mint the directory a token.** In the **Admin** tab, create a key with the
 `provisioner` role and nothing else, and give it to the directory as its secret
 token. That role grants `scim:provision` and no reading of any kind — this is
 the one credential in the store that lives for years inside another company's
@@ -490,7 +498,7 @@ Register the store as an enterprise application, then under **Provisioning**:
 | Setting | Value |
 |---|---|
 | Tenant URL | `https://evidence.example.com/scim/v2` |
-| Secret Token | the `provisioner` key from the Access tab |
+| Secret Token | the `provisioner` key from the Admin tab |
 
 **Test Connection** exercises the discovery endpoints and a probe query, so it
 fails immediately and legibly if the token or URL is wrong.
@@ -1000,7 +1008,7 @@ the clustering parameters are documented in full under
 
 ### Managing access
 
-The **Access** tab — visible only to a caller holding `principal:admin` — lists
+The **Admin** tab — visible only to a caller holding `principal:admin` — lists
 every principal with its roles, when its key was last used, and whether it's
 been revoked, and is where keys are issued, rotated and revoked. It requires
 `EVIDENCE_AUTH_DB=true`; see

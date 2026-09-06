@@ -1,6 +1,6 @@
 import {
-  API_BASE, getStoredAPIKey, goToLogin, logout, promptForAPIKey, setAuthMode,
-  signedOutOnPurpose,
+  API_BASE, esc, getStoredAPIKey, goToLogin, logout, mayDo,
+  promptForAPIKey, setAuthMode, signedOutOnPurpose,
 } from "./common.js";
 import { showAnalytics } from "./analytics.js";
 import { mount as mountAccess, showAccess } from "./access.js";
@@ -24,6 +24,9 @@ let currentSubject = null;
 document.querySelectorAll(".nav-tab").forEach(tab => {
   tab.addEventListener("click", (e) => {
     e.preventDefault();
+    // A tab shown but not granted. Inert rather than absent, so somebody can
+    // see the store has the feature and that they are not permitted it.
+    if (tab.classList.contains("unavailable")) return;
     const target = tab.dataset.tab;
     document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
@@ -74,6 +77,75 @@ async function showServerVersion() {
     // Offline, or the server is not answering. The header already says so.
   }
 }
+// --- What this caller may do ---
+
+// Hide Add Result from somebody who cannot file one.
+//
+// Carol, a viewer, was shown the tab and could fill the whole form in before
+// the store refused her — which is the worst moment to find out, and reads as a
+// broken store rather than a permission she does not hold.
+//
+// Hidden only when we positively know she lacks the permission. An anonymous
+// caller, a store with no authentication configured, and a tab that has gone
+// offline all report no permissions for quite different reasons, and hiding the
+// form in the last of those would take away offline capture — the one case
+// where filing a result matters most and the server cannot be asked.
+// Which tab needs what, and what to say when somebody has not got it.
+//
+// Dan — authenticated, in no mapped group, granted nothing — used to be shown
+// every tab and met a raw error from each: one in the results table, another
+// in Analytics the moment he pressed Apply. Being permitted nothing is a
+// deliberate state in this store and not a fault, so reporting it as one both
+// contradicts the design and sends a tester hunting a problem that is not
+// there (#152).
+const TAB_PERMISSIONS = [
+  ["search-tab-item", "evidence:read", "Searching evidence needs the viewer role"],
+  ["analytics-tab-item", "analytics:read", "Analytics needs the viewer role"],
+  ["add-tab-item", "evidence:write", "Filing a result needs the contributor role"],
+];
+
+function markUnavailableTabs(me) {
+  for (const [id, permission, why] of TAB_PERMISSIONS) {
+    if (mayDo(me, permission)) continue;
+    const item = document.getElementById(id);
+    if (!item) continue;
+    item.querySelector(".nav-tab")?.classList.add("unavailable");
+    item.title = why;
+  }
+}
+
+// --- Who is signed in ---
+
+// Answered in the header, beside the logout button, because "am I still the
+// person I think I am, and what does that let me do?" is a question a tester
+// should not have to open a tab to answer — particularly where one store is
+// reached by several people from the same bench.
+function showIdentity(me) {
+  const slot = document.getElementById("auth-identity");
+  if (!slot || !me.authenticated || !me.subject) return;
+
+  // The subject carries a "user:" prefix that means something to the store and
+  // nothing to a reader.
+  const name = me.subject.replace(/^user:/, "");
+  const roles = (me.roles || []).length
+    ? me.roles.join(", ")
+    // Authenticated and granted nothing is a real state, not a failure, and
+    // saying so plainly beats an empty space that reads like a bug.
+    : "no roles";
+  slot.innerHTML = `${esc(name)} <span class="auth-roles">(${esc(roles)})</span>`;
+  slot.hidden = false;
+}
+
+// Reached by somebody the identity provider admitted and this store has
+// granted nothing. Says so, rather than letting the failed search speak for it.
+function showNoAccess() {
+  const tbody = document.getElementById("results-body");
+  if (!tbody) return;
+  tbody.innerHTML =
+    `<tr><td colspan="9" class="empty-state">Your account has no access to this store yet.` +
+    ` Ask an administrator to grant you a role.</td></tr>`;
+}
+
 // --- Signed out ---
 
 // Reached by logging out. The table is the page's main surface, so it is where
@@ -168,6 +240,8 @@ async function loadIdentity() {
     methods: authConfig.login_methods,
   });
   mountAccess(me);
+  markUnavailableTabs(me);
+  showIdentity(me);
   pinSourceToCaller(me);
   // The installed app's Add Result shortcut opens "/#add". Done after Access is
   // mounted, so a fragment naming a tab this caller does not have selects
@@ -201,6 +275,11 @@ async function loadIdentity() {
   // a fault; say what happened instead.
   if (signedOutOnPurpose() && !me.authenticated) {
     showSignedOut();
+  } else if (!mayDo(me, "evidence:read")) {
+    // Searching would be a 403, and the table would report it as an error. The
+    // account is not broken; it simply has not been given anything yet, and
+    // whoever is looking at it needs to know to go and ask.
+    showNoAccess();
   } else {
     await doSearch(filters);
   }
