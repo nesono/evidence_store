@@ -451,6 +451,57 @@ func TestByDefaultLoggingOutLeavesTheProviderAlone(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, statusOf(t, base, client, "/api/v1/me"))
 }
 
+// "Switch user". Logging out ends this store's session and not the provider's,
+// so an ordinary login is answered instantly by whoever is still signed in
+// there — the convenience, until somebody wants to be someone else.
+func TestSwitchUserAsksForTheAccountPicker(t *testing.T) {
+	idp := newMockIdP(t)
+	base, _ := ssoServer(t, idp, nil)
+
+	sent := loginRedirect(t, base, "/auth/login?switch_user=1")
+	assert.Equal(t, "login", sent.Query().Get("prompt"),
+		"prompt=login, not select_account: Keycloak ignores the latter outright")
+}
+
+func TestAnOrdinaryLoginAsksForNothing(t *testing.T) {
+	idp := newMockIdP(t)
+	base, _ := ssoServer(t, idp, nil)
+
+	sent := loginRedirect(t, base, "/auth/login")
+	assert.Empty(t, sent.Query().Get("prompt"),
+		"a plain login should let the provider answer silently if it can")
+}
+
+// Only switch_user=1 does anything. A prompt named directly in the query string
+// is not forwarded: prompt=none tells a provider to fail rather than ask, and a
+// route that passed it on would be a way to drive somebody else's login flow.
+func TestNoOtherPromptIsForwarded(t *testing.T) {
+	idp := newMockIdP(t)
+	base, _ := ssoServer(t, idp, nil)
+
+	for _, query := range []string{"prompt=none", "prompt=consent", "switch_user=yes", "switch_user=0"} {
+		sent := loginRedirect(t, base, "/auth/login?"+query)
+		assert.Empty(t, sent.Query().Get("prompt"), "%q should not reach the provider", query)
+	}
+}
+
+// loginRedirect starts a login and returns where the store sent the browser,
+// without following it.
+func loginRedirect(t *testing.T, base, path string) *url.URL {
+	t.Helper()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(base + path)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusFound, resp.StatusCode)
+
+	sent, err := url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	return sent
+}
+
 // A provider that advertises no logout endpoint is allowed, and the store has
 // to stay usable in front of one: the local session still ends, and the browser
 // is still told where to land.

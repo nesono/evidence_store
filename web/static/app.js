@@ -169,6 +169,14 @@ document.getElementById("close-login-choice")?.addEventListener("click", () => {
   document.getElementById("login-choice-dialog").close();
 });
 
+// Asking the provider for its account picker rather than being answered
+// silently as whoever logged in last. Standard OIDC, so it works the same
+// against Keycloak and Entra with nothing provider-specific here.
+document.getElementById("auth-switch")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  goToLogin(undefined, { selectAccount: true });
+});
+
 document.getElementById("auth-login")?.addEventListener("click", (e) => {
   e.preventDefault();
   // Where there is an identity provider, that is what "log in" means. The API

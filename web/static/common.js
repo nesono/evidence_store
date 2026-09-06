@@ -77,6 +77,14 @@ export function updateAuthUI() {
     loginBtn.hidden = signedIn;
     loginBtn.textContent = ssoEnabled ? "Log in" : "Set API Key";
   }
+  const switchBtn = document.getElementById("auth-switch");
+  if (switchBtn) {
+    // Shown exactly where it can do something: an OIDC provider that can be
+    // asked for its picker. An API key has no account to switch, SAML has no
+    // such parameter, and while signed in the way to become somebody else is
+    // to log out first.
+    switchBtn.hidden = signedIn || !loginMethods.includes("oidc");
+  }
 }
 
 export function promptForAPIKey(msg) {
@@ -146,16 +154,21 @@ function isWrite(method) {
 // With two providers configured and no preference given, ask rather than
 // guess: sending somebody to the wrong directory produces a login screen they
 // have no account on, which reads as the store being broken.
-export function goToLogin(method) {
+export function goToLogin(method, { selectAccount = false } = {}) {
   const chosen = method || (loginMethods.length === 1 ? loginMethods[0] : null);
   if (!chosen) {
-    showLoginChoice();
+    showLoginChoice({ selectAccount });
     return;
   }
-  window.location.href = LOGIN_PATHS[chosen] || LOGIN_PATHS.oidc;
+  const path = LOGIN_PATHS[chosen] || LOGIN_PATHS.oidc;
+  // Only the OIDC flow carries it. SAML has no equivalent parameter, and
+  // appending one there would be noise its provider ignores.
+  window.location.href = selectAccount && chosen === "oidc"
+    ? `${path}?switch_user=1`
+    : path;
 }
 
-function showLoginChoice() {
+function showLoginChoice({ selectAccount = false } = {}) {
   const dialog = document.getElementById("login-choice-dialog");
   if (!dialog) {
     // No dialog on the page: better to reach the first provider than nothing.
@@ -168,7 +181,7 @@ function showLoginChoice() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = LOGIN_LABELS[method] || method;
-    button.addEventListener("click", () => goToLogin(method));
+    button.addEventListener("click", () => goToLogin(method, { selectAccount }));
     list.appendChild(button);
   }
   dialog.showModal();
