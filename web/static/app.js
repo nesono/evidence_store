@@ -14,6 +14,7 @@ import {
 } from "./search.js";
 import { beginCorrection, mountAddForm, pinSourceToCaller } from "./addform.js";
 import { mountOutbox, runSync } from "./outboxview.js";
+import { mountMarkdownEditor } from "./markdownedit.js";
 
 // Who is signed in. Learned from /me at startup and handed to the two views
 // that need it, so the answer has one home rather than a copy in each.
@@ -266,6 +267,10 @@ async function loadIdentity() {
     onEdit: beginCorrection,
   });
   runSync();
+  // The log field is the one place somebody writes prose in this store, and
+  // the only one where markdown means anything.
+  document.querySelectorAll("textarea[name=observations]").forEach(mountMarkdownEditor);
+
   mountSearch();
   mountAddForm({ subject: () => currentSubject });
 
