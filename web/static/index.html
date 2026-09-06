@@ -50,6 +50,12 @@
                      answer and shows nothing. -->
                 <li id="auth-identity" class="auth-identity" hidden></li>
                 <li><a href="#" id="auth-login" class="secondary" style="font-size:0.8em">Set API Key</a></li>
+                <!-- Offered beside Log in wherever a provider can be asked for
+                     its account picker. Logging out ends this store's session
+                     and not the provider's, so an ordinary Log in is answered
+                     instantly as whoever is still signed in there — which is
+                     the convenience until somebody wants to be someone else. -->
+                <li><a href="#" id="auth-switch" class="secondary" style="font-size:0.8em" hidden>Switch user</a></li>
                 <li><a href="#" id="auth-logout" class="secondary" style="font-size:0.8em" hidden>Logout</a></li>
             </ul>
         </nav>

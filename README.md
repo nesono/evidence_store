@@ -287,6 +287,19 @@ follow — the store's own signed-out page, marked so the page knows this 401 is
 what logging out looks like rather than an expired session to bounce back to the
 provider.
 
+**Switch user** sits beside Log in on the signed-out page, for the other half of
+that: because the provider still knows who you are, an ordinary Log in is
+answered instantly as whoever was here last. It sends `/auth/login?switch_user=1`,
+which asks the provider to establish who this is rather than answer from the
+session it holds.
+
+That is spelled the store's own way rather than passed through as an OIDC
+`prompt`, because which value achieves it differs by provider — Keycloak ignores
+`select_account` outright and waves the browser through, while `prompt=login` is
+honoured by both it and Entra. Demanding re-authentication is what switching
+user means in any case: you have to prove you are the other person, not merely
+name them.
+
 Set `EVIDENCE_OIDC_PROVIDER_LOGOUT=true` to end the provider's session as well,
 by sending the browser to its `end_session_endpoint` with the `id_token_hint`
 from that login. It is off by default because it is a large side effect: the

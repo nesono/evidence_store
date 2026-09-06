@@ -72,11 +72,32 @@ func NewOIDCProvider(ctx context.Context, cfg config.OIDC) (*OIDCProvider, error
 // AuthCodeURL is where the browser is sent to log in. Authorization Code with
 // PKCE: the verifier never leaves this server, so an authorization code
 // intercepted on its way back cannot be redeemed by whoever caught it.
-func (p *OIDCProvider) AuthCodeURL(state, verifier string) string {
-	return p.oauth.AuthCodeURL(state,
+func (p *OIDCProvider) AuthCodeURL(state, verifier string, reauthenticate bool) string {
+	opts := []oauth2.AuthCodeOption{
 		oauth2.SetAuthURLParam("code_challenge", oauth2.S256ChallengeFromVerifier(verifier)),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-	)
+	}
+	// How somebody asks to arrive as a different person.
+	//
+	// Logging out ends this store's session and not the provider's, so the next
+	// login is answered instantly by whoever is still signed in there — the
+	// convenience, right up until the moment you wanted to be somebody else.
+	//
+	// prompt=login rather than select_account, which is the more obvious
+	// reading of "switch user" and the wrong one: Keycloak ignores
+	// select_account outright and waves the browser straight through, which was
+	// measured against a real one rather than assumed. login is honoured by
+	// both Keycloak and Entra, and demanding they authenticate again is what
+	// switching user means in any case — you have to prove you are the other
+	// person, not merely name them.
+	//
+	// One parameter, not a pass-through of whatever a query string says.
+	// prompt=none in particular tells a provider to fail rather than ask, and a
+	// route that forwarded it would be a way to drive somebody else's login.
+	if reauthenticate {
+		opts = append(opts, oauth2.SetAuthURLParam("prompt", "login"))
+	}
+	return p.oauth.AuthCodeURL(state, opts...)
 }
 
 // Claims is what a login tells us about a person: who they are, what to call

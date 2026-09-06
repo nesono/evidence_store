@@ -85,7 +85,16 @@ func (h *SSOHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// server memory, so a login survives the request landing on a different
 	// replica than the one that started it.
 	http.SetCookie(w, h.cookie(loginStateCookie, state+"|"+verifier, loginTimeout))
-	http.Redirect(w, r, h.oidc.AuthCodeURL(state, verifier), http.StatusFound)
+
+	// "Switch user" asks the provider to establish who this is rather than
+	// answering from the session it already holds.
+	//
+	// The store's own spelling, not OIDC's: which prompt value achieves this
+	// differs between providers — Keycloak ignores select_account entirely —
+	// and that is a detail the page should not have to know.
+	http.Redirect(w, r,
+		h.oidc.AuthCodeURL(state, verifier, r.URL.Query().Get("switch_user") == "1"),
+		http.StatusFound)
 }
 
 // Callback is where the provider sends the browser back.
