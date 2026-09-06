@@ -444,8 +444,8 @@ curl "http://localhost:8000/api/v1/evidence?branch=~^release/.*"
 # Regex on multiple fields — everything a person filed, on org repos
 curl "http://localhost:8000/api/v1/evidence?evidence_type=~^(manual_test|demonstration)$&repo=~^myorg/"
 
-# Regex on tags — match any tag starting with "nightly-"
-curl "http://localhost:8000/api/v1/evidence?tags=~^nightly-"
+# Regex on tags — regression and regression-nightly, but not progression
+curl "http://localhost:8000/api/v1/evidence?tags=~^regression"
 
 # Regex on notes
 curl "http://localhost:8000/api/v1/evidence?notes=~device.*XYZ"
