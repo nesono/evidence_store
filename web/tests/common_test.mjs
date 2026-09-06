@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { formatTime, resultBadge } from "../static/common.js";
+import { formatTime, mayDo, mayFileResults, resultBadge } from "../static/common.js";
 
 test("a time is shown in UTC, whatever this machine thinks the time is", () => {
   // Every record's finished_at and ingested_at goes through here. Rendering one
@@ -82,3 +82,61 @@ async function signedOutWith(search) {
     else globalThis.window = previous;
   }
 }
+
+// --- Who may file a result ---
+
+// Found against a real Entra tenant: Carol, a viewer, was shown the Add Result
+// tab and could fill the entire form in before the store refused her. That is
+// the worst moment to learn it, and reads as a broken store rather than a
+// permission she does not hold.
+test("somebody who cannot write is not offered the form", () => {
+  assert.equal(mayFileResults({ authenticated: true, permissions: ["evidence:read"] }), false);
+});
+
+test("somebody who can write is", () => {
+  assert.equal(
+    mayFileResults({ authenticated: true, permissions: ["evidence:read", "evidence:write"] }), true);
+});
+
+// The three ways of holding no permissions that are not refusals. Offline is
+// the one that matters: capture is the whole point of the offline mode, and
+// hiding the form because /me could not be reached would take it away exactly
+// when it is needed.
+test("no permissions is not the same as refused", () => {
+  for (const me of [
+    { authenticated: false, permissions: [] },   // anonymous, or offline
+    { authenticated: false },                    // a store with no auth configured
+    null,                                        // /me never answered at all
+  ]) {
+    assert.equal(mayFileResults(me), true, `${JSON.stringify(me)} should still be offered the form`);
+  }
+});
+
+// Dan: admitted by the identity provider, granted nothing here. Every tab was
+// shown to him and every one met a raw error — one in the results table,
+// another in Analytics on pressing Apply. Being permitted nothing is a
+// deliberate state in this store, so reporting it as a fault is wrong twice
+// over: it contradicts the design and sends a tester hunting a problem that is
+// not there (#152).
+test("a permission somebody does not hold is refused", () => {
+  const dan = { authenticated: true, permissions: [] };
+  for (const permission of ["evidence:read", "analytics:read", "evidence:write"]) {
+    assert.equal(mayDo(dan, permission), false, `dan should not hold ${permission}`);
+  }
+});
+
+test("a permission somebody does hold is not", () => {
+  const carol = { authenticated: true, permissions: ["evidence:read", "analytics:read"] };
+  assert.equal(mayDo(carol, "evidence:read"), true);
+  assert.equal(mayDo(carol, "analytics:read"), true);
+  assert.equal(mayDo(carol, "evidence:write"), false, "a viewer still cannot file");
+});
+
+// Same rule as before, and it matters most here: offline, /me cannot be reached
+// at all, and treating that silence as a refusal would grey out the whole app
+// exactly when somebody is standing on a proving ground trying to use it.
+test("permissions we could not read are not refusals", () => {
+  for (const me of [{ authenticated: false, permissions: [] }, { authenticated: false }, null]) {
+    assert.equal(mayDo(me, "evidence:read"), true, `${JSON.stringify(me)} should not be refused`);
+  }
+});

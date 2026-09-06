@@ -1,4 +1,4 @@
-// The Access tab: who can talk to this store, and what they may do.
+// The Admin tab: who can talk to this store, and what they may do.
 //
 // Before this existed, issuing a key meant an environment variable and a
 // redeploy, and revoking one meant the same. Everything here is one request to
@@ -249,11 +249,17 @@ export async function showAccess() {
 // mount decides whether the tab exists at all. An open store — nothing
 // configured — shows it, because everything is permitted there and hiding the
 // page would only puzzle whoever is setting the store up.
+//
+// Hidden rather than greyed for everybody else, unlike the other tabs. Those
+// name things an ordinary tester might reasonably want and be told to ask for;
+// administering the store is somebody else's job, and a visibly locked door
+// only suggests they are missing something they are not.
 export function mount(me) {
   const permitted = !me.authenticated || (me.permissions || []).includes("principal:admin");
   if (!permitted) return false;
 
   document.getElementById("access-tab-item").hidden = false;
+
   roleCheckboxes(document.getElementById("access-new-roles"), [], "new");
   document.getElementById("access-form").addEventListener("submit", issueKey);
   document.querySelector("#access-table tbody").addEventListener("click", onTableClick);

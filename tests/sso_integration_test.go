@@ -33,6 +33,13 @@ const mockClientID = "evidence-store-test"
 // of the final redirect so a test can see where it was sent.
 func ssoServer(t *testing.T, idp *mockIdP, roleMap map[string]string) (string, *http.Client) {
 	t.Helper()
+	return ssoServerWith(t, idp, roleMap, nil)
+}
+
+// ssoServerWith is ssoServer for a test that needs the OIDC configuration
+// bent — ending the provider's session on logout, say, which is opt-in.
+func ssoServerWith(t *testing.T, idp *mockIdP, roleMap map[string]string, tweak func(*config.OIDC)) (string, *http.Client) {
+	t.Helper()
 
 	// The redirect URL has to be an absolute address the provider will send a
 	// browser back to, and a real deployment spells it out in configuration for
@@ -49,6 +56,9 @@ func ssoServer(t *testing.T, idp *mockIdP, roleMap map[string]string) (string, *
 		Scopes:       []string{"openid", "profile", "email", "groups"},
 		GroupsClaim:  "groups",
 		RoleMap:      roleMap,
+	}
+	if tweak != nil {
+		tweak(&oidcCfg)
 	}
 	// The test server speaks plain HTTP, which is the one setting a real
 	// deployment should never copy.
@@ -390,16 +400,18 @@ func TestLogoutEndsTheSessionImmediately(t *testing.T) {
 	assert.Zero(t, remaining, "logging out should end the session, not just forget it")
 }
 
-// Ending the local session is only half a logout. The provider keeps its own,
-// so a store that stops here signs the same person straight back in the moment
-// they click Log in — no password asked — and on a shared machine hands the
-// next person the last one's account.
+// Where a deployment asks for it, logging out ends the provider's session too.
+//
+// Opt-in, because it is a large side effect: the person is signed out of every
+// other application that account opens. Worth it on a shared bench, where the
+// next person's Log in would otherwise be answered silently as the last one.
 func TestLogoutSendsTheBrowserOnToTheProvider(t *testing.T) {
 	idp := newMockIdP(t)
 	idp.groups = []string{"eng-all"}
 	dropPrincipal(t, "%idp-subject-001")
 
-	base, client := ssoServer(t, idp, map[string]string{"eng-all": "contributor"})
+	base, client := ssoServerWith(t, idp, map[string]string{"eng-all": "contributor"},
+		func(c *config.OIDC) { c.ProviderLogout = true })
 	logIn(t, base, client).Body.Close()
 	require.True(t, meOf(t, base, client).Authenticated)
 
@@ -415,6 +427,30 @@ func TestLogoutSendsTheBrowserOnToTheProvider(t *testing.T) {
 		"the browser has to come back marked as signed out, or the page logs it straight back in")
 }
 
+// By default a logout ends this session and no other.
+//
+// "Log out" almost always means this application. Signing somebody out of their
+// whole corporate account because they left an evidence store is more than they
+// asked for — and it is what a real Entra tenant does, right down to an account
+// picker asking which identity they meant to abandon (#152).
+func TestByDefaultLoggingOutLeavesTheProviderAlone(t *testing.T) {
+	idp := newMockIdP(t)
+	idp.groups = []string{"eng-all"}
+	dropPrincipal(t, "%idp-subject-001")
+
+	base, client := ssoServer(t, idp, map[string]string{"eng-all": "contributor"})
+	logIn(t, base, client).Body.Close()
+	require.True(t, meOf(t, base, client).Authenticated)
+
+	next := logOut(t, base, client)
+	assert.Equal(t, "/?signed_out=1", next,
+		"the browser should land here, not at the provider")
+	assert.NotContains(t, next, idp.server.URL)
+
+	// The session here still ends, which is what logging out has to mean.
+	assert.Equal(t, http.StatusUnauthorized, statusOf(t, base, client, "/api/v1/me"))
+}
+
 // A provider that advertises no logout endpoint is allowed, and the store has
 // to stay usable in front of one: the local session still ends, and the browser
 // is still told where to land.
@@ -424,7 +460,8 @@ func TestLogoutWithoutAProviderEndpointStillEndsTheSession(t *testing.T) {
 	idp.groups = []string{"eng-all"}
 	dropPrincipal(t, "%idp-subject-001")
 
-	base, client := ssoServer(t, idp, map[string]string{"eng-all": "contributor"})
+	base, client := ssoServerWith(t, idp, map[string]string{"eng-all": "contributor"},
+		func(c *config.OIDC) { c.ProviderLogout = true })
 	logIn(t, base, client).Body.Close()
 	require.True(t, meOf(t, base, client).Authenticated)
 

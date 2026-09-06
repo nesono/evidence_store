@@ -330,8 +330,21 @@ func (h *SSOHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// provider that advertises no logout endpoint, or a logout by somebody who
 	// was not signed in. The marker is what stops the page treating the first
 	// 401 as an expired session and sending them back out to log in.
+	// Ending the provider's session too is opt-in, because "log out" almost
+	// always means this application and not every other one the same account
+	// opens. Signing somebody out of their whole Microsoft or Google account
+	// because they left an evidence store is a surprising amount of collateral.
+	//
+	// Where it is turned on — a shared test bench, a kiosk — the reason is
+	// concrete: the next person clicks Log in and is admitted as whoever used
+	// the machine last, without ever seeing a password prompt. A deployment
+	// where that matters says so with EVIDENCE_OIDC_PROVIDER_LOGOUT.
+	//
+	// Turning it off does not bring back the bug it was introduced for: the
+	// signed-out marker is what stops the page treating the next 401 as an
+	// expired session and bouncing straight back to the provider.
 	next := signedOutPath
-	if h.oidc != nil {
+	if h.oidc != nil && h.oidcCfg.ProviderLogout {
 		if url := h.oidc.EndSessionURL(ended.IDToken, h.postLogoutURL()); url != "" {
 			next = url
 		}

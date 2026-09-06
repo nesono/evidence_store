@@ -194,6 +194,21 @@ func (p *SAMLProvider) ParseAssertion(r *http.Request, possibleRequestIDs []stri
 		// in two when they are renamed.
 		return nil, fmt.Errorf("SAML assertion carries no NameID")
 	}
+
+	// A SAML NameID is usually a login name — an email address or a UPN — where
+	// OIDC's sub is deliberately opaque. Offering it as the preferred username
+	// gives the subject the same readable fallback an OIDC login has: without
+	// it, a provider that sends no email attribute would have people filing
+	// evidence under a raw NameID, which is the Entra problem (#152) arriving
+	// by a different door.
+	//
+	// Only when it looks like a name rather than an identifier. A provider
+	// using persistent or transient NameIDs sends an opaque string, and
+	// promoting that would make the subject no better and the intent less
+	// clear.
+	if strings.Contains(claims.Subject, "@") {
+		claims.PreferredUsername = claims.Subject
+	}
 	return claims, nil
 }
 

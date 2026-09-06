@@ -605,6 +605,25 @@ body > main {
     opacity: 0.6;
 }
 
+/* A tab this caller cannot use. Visible, so they know the store has the
+   feature and who to ask for it; plainly inert, so they do not try. */
+.nav-tab.unavailable {
+    opacity: 0.3;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+/* Who is signed in. Quiet: it answers a question nobody asks twice. */
+.auth-identity {
+    font-size: 0.8em;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.auth-identity .auth-roles {
+    opacity: 0.75;
+}
+
 .nav-tab.active {
     font-weight: 600;
     opacity: 1;

@@ -1,0 +1,42 @@
+# Single sign-on against a real Microsoft Entra tenant.
+#
+# The sibling of docker-compose.sso.yml, which runs a Keycloak on this machine.
+# This one points at a tenant that already exists, so there is no identity
+# provider to start — only the app's own configuration changes.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.entra.yml up -d --build
+#
+# Entra calls this store back, and browsers reach it over the public address, so
+# a deployment needs a real HTTPS URL. For a laptop that means a tunnel:
+#
+#   cloudflared tunnel --url http://localhost:8000
+#
+# Put the values in .env, which is git-ignored — a client secret is not a
+# property of the project:
+#
+#   PUBLIC_URL=https://<something>.trycloudflare.com
+#   ENTRA_TENANT_ID=...
+#   ENTRA_CLIENT_ID=...
+#   ENTRA_CLIENT_SECRET=...
+#   ENTRA_GROUP_ROLE_MAP=<group>:admin,<group>:contributor
+#
+# The redirect URL must be registered on the app registration exactly as it
+# appears here, and the app must be single-tenant: a multi-tenant registration
+# advertises its issuer as the literal template ".../{tenantid}/v2.0", which
+# strict issuer validation refuses — correctly.
+
+services:
+  app:
+    environment:
+      EVIDENCE_AUTH_DB: "true"
+      EVIDENCE_OIDC_ISSUER: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0
+      EVIDENCE_OIDC_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      EVIDENCE_OIDC_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET}
+      EVIDENCE_OIDC_REDIRECT_URL: ${PUBLIC_URL}/auth/callback
+      # Entra names the group claim "groups" when you emit group membership,
+      # and "roles" when you map app roles instead. Which one a tenant sends is
+      # its own choice, so it is a setting rather than an assumption.
+      EVIDENCE_OIDC_GROUPS_CLAIM: ${ENTRA_GROUPS_CLAIM:-groups}
+      EVIDENCE_GROUP_ROLE_MAP: ${ENTRA_GROUP_ROLE_MAP:-}
+      # Real HTTPS this time, so the session cookie keeps its default posture.
+      EVIDENCE_COOKIE_SECURE: "true"

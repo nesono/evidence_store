@@ -144,9 +144,11 @@ export function openTabFromHash(hash = window.location.hash) {
   const tab = tabFromHash(hash);
   if (!tab) return null;
   const link = document.querySelector(`.nav-tab[data-tab="${tab}"]`);
-  // Access is only mounted for an administrator; a shortcut to a tab this
-  // caller does not have is silently the ordinary page.
-  if (!link || link.closest("[hidden]")) return null;
+  // A shortcut to a tab this caller does not have is silently the ordinary
+  // page. Both spellings count: hidden, and shown-but-not-granted — otherwise
+  // the fragment would be a way round a tab that is greyed out precisely
+  // because its owner may not use it.
+  if (!link || link.closest("[hidden]") || link.classList.contains("unavailable")) return null;
   link.click();
   return tab;
 }

@@ -17,14 +17,15 @@ const (
 
 	// PermSourceAny allows writing evidence whose source is not the caller's
 	// own subject. Enforced in the evidence handler rather than in middleware,
-	// since only the handler has parsed the body. Not wired up yet — phase 3.
+	// since only the handler has parsed the body.
 	PermSourceAny Permission = "source:any"
 
-	// PermPrincipalAdmin and PermRetentionAdmin guard surfaces that do not
-	// exist yet (principal CRUD in phase 4; retention is a background worker
-	// with no HTTP endpoint at all). They are declared now so the role table
-	// below is the whole story rather than a partial one.
+	// PermPrincipalAdmin guards the Admin tab: who exists, what they may do,
+	// and whether their credential still works.
 	PermPrincipalAdmin Permission = "principal:admin"
+	// PermRetentionAdmin has no HTTP route to guard — retention is a background
+	// worker — and is declared so the role table is the whole story rather than
+	// a partial one.
 	PermRetentionAdmin Permission = "retention:admin"
 
 	// PermSCIMProvision allows a directory to create, update and deactivate
