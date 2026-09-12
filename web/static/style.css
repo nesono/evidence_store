@@ -1713,3 +1713,111 @@ body > main {
     padding-top: 0.5rem;
     color: var(--pico-muted-color);
 }
+
+/* --- Phones ---------------------------------------------------------------
+   Measured at 390px rather than guessed: every tab panned sideways by 272px,
+   which is the failure that makes a page feel broken rather than cramped —
+   the whole layout slides under the thumb and taps land slightly wrong.
+
+   The cause was the header, one unwrapping row of tabs, status, identity and
+   three buttons. Everything below deals with what that measurement found. */
+@media (max-width: 480px) {
+    /* The header wraps instead of running off the side. Pico lays its nav out
+       as a row that will not break, so the break has to be asked for. */
+    body > header nav {
+        flex-wrap: wrap;
+        row-gap: 0.2rem;
+    }
+
+    body > header nav ul {
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+
+    body > header nav li {
+        padding: 0.1rem 0.3rem;
+    }
+
+    /* The store's name is the one thing on the header a tester never needs:
+       they know which application they opened. The tabs do need the room. */
+    body > header nav strong {
+        display: none;
+    }
+
+    /* Who is signed in matters on a shared bench, but the roles beside it are
+       reference rather than news, and they are what pushes the row over. */
+    .auth-identity .auth-roles {
+        display: none;
+    }
+
+    /* Text in a form field under 16px makes iOS zoom the page when it is
+       focused, and it does not zoom back — the tester is left panning a form
+       they were halfway through. Every input was between 10 and 14px.
+       Spelt out at the same specificity as the rules that set those sizes,
+       since a shorter selector loses to them however late it appears. */
+    input, select, textarea,
+    #add-form input, #add-form select, #add-form textarea,
+    #filter-bar .fb-field input, #filter-bar .fb-dropdown > summary,
+    #window-size, #window-size-label,
+    #an-bar .an-field input, #an-bar .an-field select {
+        font-size: 16px;
+    }
+
+    /* Something to hit with a thumb. 44px is Apple's floor and Android's is
+       48; the measured buttons were 23 to 31px tall. */
+    button, .fa-actions button, #add-form button,
+    #filter-bar button, #window-nav button, .an-page-nav button {
+        min-height: 44px;
+    }
+
+    /* Except the ones that sit inline in a line of fields, where a 44px box
+       would break the line it belongs to. These get width instead. */
+    .fill-button, .fb-actions button {
+        min-height: 36px;
+        padding-inline: 0.8rem;
+    }
+
+    /* One field per line. Two columns at this width leaves neither usable. */
+    #filter-bar .fb-field,
+    #add-form .grid > label,
+    .an-field {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    /* The label goes above its box rather than beside it. The filter inputs are
+       sized in `ch` — 40 of them, the width of a commit hash — which is wider
+       than the screen before the label is counted, and a label like "Branch,
+       tag or commit" beside it leaves nothing. */
+    #filter-bar .fb-field {
+        flex-direction: column;
+        align-items: stretch;
+        white-space: normal;
+    }
+
+    #filter-bar .fb-field input,
+    #add-form .grid > label input {
+        flex: 1 1 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* The results table keeps only what identifies a record at a glance; the
+       768px rules already drop five columns, and at this width the repo goes
+       too, since a tester on a rig is looking at one repo anyway. */
+    #results-table .col-repo {
+        display: none;
+    }
+
+    /* A table is the one thing here that legitimately exceeds the width — the
+       Admin one lists a credential and four things to do to it — so it scrolls
+       inside its own tab rather than taking the page with it. */
+    #tab-access {
+        overflow-x: auto;
+    }
+
+    /* Paging arrows were 28px wide. Square them off so a thumb can hit them. */
+    #window-nav button {
+        min-width: 44px;
+    }
+}

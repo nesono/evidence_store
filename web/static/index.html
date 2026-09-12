@@ -67,18 +67,18 @@
             <form id="add-form">
                 <div class="grid">
                     <label>Repo <small>(required)</small>
-                        <input type="text" name="repo" placeholder="org/repo" list="repos-list" required>
+                        <input type="text" name="repo" placeholder="org/repo" list="repos-list" required autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label>Branch
-                        <input type="text" name="branch" placeholder="main">
+                        <input type="text" name="branch" placeholder="main" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label>Commit <small>(required)</small>
-                        <input type="text" name="rcs_ref" placeholder="abc123..." required>
+                        <input type="text" name="rcs_ref" placeholder="abc123..." required autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                 </div>
                 <div class="grid">
                     <label>Procedure <small>(required)</small>
-                        <input type="text" name="procedure_ref" placeholder="manual/login-flow" required>
+                        <input type="text" name="procedure_ref" placeholder="manual/login-flow" required autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <!-- Three collection methods, not a free-text box: the type
                          is what tells a reader what a record's metadata means,
@@ -93,7 +93,7 @@
                         </select>
                     </label>
                     <label>Username/Source-Url <small>(required)</small>
-                        <input type="text" name="source" placeholder="your name" list="sources-list" required>
+                        <input type="text" name="source" placeholder="your name" list="sources-list" required autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                 </div>
                 <div class="grid">
@@ -106,13 +106,13 @@
                     </fieldset>
                     <label>Finished at <small>(UTC)</small>
                         <span class="input-with-button">
-                            <input type="text" name="finished_at" placeholder="2026-03-30 14:00 (UTC)" data-utc-preview>
+                            <input type="text" name="finished_at" placeholder="2026-03-30 14:00 (UTC)" data-utc-preview autocapitalize="off" autocorrect="off" spellcheck="false">
                             <button type="button" id="fill-now" class="secondary outline" title="Fill with current time (UTC)">Now</button>
                         </span>
                         <small class="utc-preview" data-preview-for="finished_at"></small>
                     </label>
                     <label>Tags
-                        <input type="text" name="tags" placeholder="regression,progression">
+                        <input type="text" name="tags" placeholder="regression,progression" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                 </div>
                 <!-- Where the test was run. One field for both a coordinate pair
@@ -122,7 +122,7 @@
                 <label class="location-field">Location
                     <small>(where you ran it &mdash; coordinates or a place name)</small>
                     <span class="input-with-button">
-                        <input type="text" name="location" placeholder="52.51631, 13.37771 or Test track, bay 4">
+                        <input type="text" name="location" placeholder="52.51631, 13.37771 or Test track, bay 4" autocapitalize="sentences" spellcheck="true">
                         <button type="button" id="fill-location" class="secondary outline" title="Use this device's current position">Locate</button>
                     </span>
                     <small class="location-status" id="location-status"></small>
@@ -135,7 +135,7 @@
                 <label class="weather-field">Weather
                     <small>(conditions while you ran it)</small>
                     <span class="input-with-button">
-                        <input type="text" name="weather_conditions" placeholder="Overcast, 8 °C, wind 20 km/h, light rain">
+                        <input type="text" name="weather_conditions" placeholder="Overcast, 8 °C, wind 20 km/h, light rain" autocapitalize="sentences" spellcheck="true">
                         <button type="button" id="fill-weather" class="secondary outline" title="Look up the weather for the location and finish time">Look up</button>
                         <!-- The other way to fill this in, and the only one that
                              works on a proving ground: the tester is standing in
@@ -161,7 +161,7 @@
                     </div>
                 </label>
                 <label>Notes
-                    <textarea name="notes" rows="3" placeholder="Optional notes about the test result..."></textarea>
+                    <textarea name="notes" rows="3" placeholder="Optional notes about the test result..." autocapitalize="sentences" spellcheck="true"></textarea>
                 </label>
                 <!-- The tester's running account of the procedure, kept apart from
                      Notes: notes summarise the record, the log records what was
@@ -170,7 +170,7 @@
                 <label>Test log
                     <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links; paste or drop images to attach them)<br>
                         Enter continues a list, Tab and Shift-Tab nest it, and <kbd>&#8984;/Ctrl</kbd> with <kbd>B</kbd>, <kbd>I</kbd>, <kbd>K</kbd> or <kbd>E</kbd> (also <kbd>&#8679;E</kbd>, where an extension has taken <kbd>&#8984;E</kbd>) formats the selection.</small>
-                    <textarea name="observations" rows="10" placeholder="1. Powered on the rig — all lights green&#10;2. Pressed the brake pedal — firm, no travel&#10;&#10;Saw `ERR_42` on screen 2 during step 3."></textarea>
+                    <textarea name="observations" rows="10" placeholder="1. Powered on the rig — all lights green&#10;2. Pressed the brake pedal — firm, no travel&#10;&#10;Saw `ERR_42` on screen 2 during step 3." autocapitalize="sentences" spellcheck="true"></textarea>
                 </label>
                 <div class="test-log-tools">
                     <button type="button" class="secondary outline" id="test-log-preview-toggle" aria-expanded="false" aria-controls="test-log-preview">Preview</button>
@@ -193,14 +193,14 @@
             <form id="filter-form">
                 <div id="filter-bar">
                     <label class="fb-field fb-field-repo">Repo
-                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
+                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <!-- One box for all three identities. A user pasting what they are
                          looking at should not have to say first whether it is a branch,
                          a tag or a commit, and combining them never made sense: a record
                          has exactly one of each. -->
                     <label class="fb-field fb-field-ref">Branch, tag or commit
-                        <input type="text" name="ref" placeholder="main, v2.0.0, abc123 or ~^release/">
+                        <input type="text" name="ref" placeholder="main, v2.0.0, abc123 or ~^release/" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <!-- A checkbox dropdown. There is no native HTML control for this:
                          <select multiple> renders as an always-expanded list box, not a
@@ -240,8 +240,8 @@
                                 <option value="demonstration">Demonstration</option>
                             </select>
                         </label>
-                        <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list"></label>
-                        <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*"></label>
+                        <label>Source <input type="text" name="source" placeholder="CI URL or user" list="sources-list" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+                        <label>Procedure <input type="text" name="procedure_ref" placeholder="//pkg:target or ~//pkg/.*" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
                     </div>
                     <!-- The two fields and the calendar that fills them are one
                          control. A range is a pair: picking one end on a calendar
@@ -253,14 +253,14 @@
                     <div class="grid dt-range" id="finished-range">
                         <label>After <small>(UTC)</small>
                             <span class="input-with-button">
-                                <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview autocomplete="off">
+                                <input type="text" name="finished_after" placeholder="2026-01-01 00:00 (UTC)" data-utc-preview autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                                 <button type="button" class="dt-field-clear" data-clears="finished_after" title="Clear the start of the range" aria-label="Clear the start of the range">&times;</button>
                             </span>
                             <small class="utc-preview" data-preview-for="finished_after"></small>
                         </label>
                         <label>Before <small>(UTC)</small>
                             <span class="input-with-button">
-                                <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview autocomplete="off">
+                                <input type="text" name="finished_before" placeholder="2026-12-31 23:59 (UTC)" data-utc-preview autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                                 <button type="button" class="dt-field-clear" data-clears="finished_before" title="Clear the end of the range" aria-label="Clear the end of the range">&times;</button>
                             </span>
                             <small class="utc-preview" data-preview-for="finished_before"></small>
@@ -274,8 +274,8 @@
                         </div>
                     </div>
                     <div class="grid">
-                        <label>Tags <input type="text" name="tags" placeholder="regression,progression or ~^reg.*"></label>
-                        <label>Notes <input type="text" name="notes" placeholder="keyword or ~pattern"></label>
+                        <label>Tags <input type="text" name="tags" placeholder="regression,progression or ~^reg.*" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+                        <label>Notes <input type="text" name="notes" placeholder="keyword or ~pattern" autocapitalize="sentences" spellcheck="true"></label>
                         <label class="fa-checkbox"><input type="checkbox" name="include_inherited" checked> Include inherited</label>
                     </div>
                 </div>
@@ -335,10 +335,10 @@
             <form id="analytics-filter">
                 <div id="an-bar">
                     <label class="an-field">Repo
-                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list">
+                        <input type="text" name="repo" placeholder="org/repo or ~^org/.*" list="repos-list" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label class="an-field">Branch, tag or commit
-                        <input type="text" name="ref" placeholder="main, v2.0.0 or abc123">
+                        <input type="text" name="ref" placeholder="main, v2.0.0 or abc123" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label class="an-field">Show
                         <select name="label" id="an-label">
@@ -363,10 +363,10 @@
                         </select>
                     </label>
                     <label class="an-field an-custom-range" hidden>After <small>(UTC)</small>
-                        <input type="text" name="finished_after" placeholder="2026-01-01">
+                        <input type="text" name="finished_after" placeholder="2026-01-01" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label class="an-field an-custom-range" hidden>Before <small>(UTC)</small>
-                        <input type="text" name="finished_before" placeholder="2026-12-31">
+                        <input type="text" name="finished_before" placeholder="2026-12-31" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <div class="an-actions">
                         <button type="submit">Apply</button>
@@ -434,10 +434,10 @@
                 <form id="access-form">
                     <div class="grid">
                         <label>Subject <small>(required)</small>
-                            <input type="text" name="subject" placeholder="ci:nightly-build" required>
+                            <input type="text" name="subject" placeholder="ci:nightly-build" required autocapitalize="off" autocorrect="off" spellcheck="false">
                         </label>
                         <label>Display name
-                            <input type="text" name="display_name" placeholder="Nightly build">
+                            <input type="text" name="display_name" placeholder="Nightly build" autocapitalize="sentences" spellcheck="true">
                         </label>
                     </div>
                     <fieldset id="access-new-roles">
