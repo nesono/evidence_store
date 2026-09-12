@@ -46,9 +46,66 @@ const BLOCK_START = /^(?:```|#{1,6}\s|>|\s*(?:[-*+]|\d+[.)])\s|(?:-{3,}|\*{3,}|_
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const FENCE = /^```\s*([A-Za-z0-9_+-]*)\s*$/;
 const RULE = /^(?:-{3,}|\*{3,}|_{3,})\s*$/;
-const BULLET = /^\s*[-*+]\s+(.*)$/;
-const NUMBER = /^\s*\d+[.)]\s+(.*)$/;
+// Indentation is captured rather than skipped: it is what a nested list is.
+const BULLET = /^(\s*)[-*+]\s+(.*)$/;
+const NUMBER = /^(\s*)\d+[.)]\s+(.*)$/;
 const QUOTE = /^>\s?(.*)$/;
+
+// renderList turns a run of list lines into markup, nesting by indentation.
+//
+// A tester writing steps indents the sub-steps, because that is what the shape
+// means everywhere else they have ever written a list. Reading it back flat
+// loses the only structure they put in — and the editor offers Tab for exactly
+// this, so producing it and then discarding it would be worse than not offering
+// it at all.
+//
+// Depth is by relative indentation rather than a fixed number of spaces: two
+// spaces and four are both nesting, and a tester who used a tab meant it too.
+// A line indented less than its predecessor closes lists until it fits, which
+// is what makes an outdent land where it looks like it should.
+function renderList(lines, base) {
+  const items = lines.map(line => {
+    const bullet = BULLET.exec(line);
+    const match = bullet || NUMBER.exec(line);
+    return {
+      indent: match[1].replace(/\t/g, "  ").length,
+      tag: bullet ? "ul" : "ol",
+      text: match[2].trim(),
+      children: [],
+    };
+  });
+
+  // A tree first, then markup. Emitting as we go produced a <ul> as the direct
+  // child of a <ul>, which browsers tolerate and which is wrong: a sublist
+  // belongs inside the <li> it hangs from, or it is not that item's list.
+  const roots = [];
+  const stack = [];
+  for (const item of items) {
+    while (stack.length && item.indent <= stack[stack.length - 1].indent) stack.pop();
+    const parent = stack[stack.length - 1];
+    (parent ? parent.children : roots).push(item);
+    stack.push(item);
+  }
+  return renderLevel(roots, base);
+}
+
+// renderLevel emits one level, splitting where the kind of marker changes so a
+// bullet written under numbers does not silently become a number.
+function renderLevel(items, base) {
+  const out = [];
+  let i = 0;
+  while (i < items.length) {
+    const tag = items[i].tag;
+    const run = [];
+    while (i < items.length && items[i].tag === tag) run.push(items[i++]);
+    const body = run.map(item => {
+      const nested = item.children.length ? "\n" + renderLevel(item.children, base) : "";
+      return `<li>${inline(item.text, base)}${nested}</li>`;
+    });
+    out.push(`<${tag}>\n${body.join("\n")}\n</${tag}>`);
+  }
+  return out.join("\n");
+}
 
 export function escapeHTML(s) {
   return String(s)
@@ -182,15 +239,13 @@ export function renderMarkdown(src, { blobBase: base = DEFAULT_BLOB_BASE } = {})
       continue;
     }
 
-    const marker = BULLET.test(line) ? BULLET : NUMBER.test(line) ? NUMBER : null;
-    if (marker) {
-      const tag = marker === BULLET ? "ul" : "ol";
-      const items = [];
-      while (i < lines.length && marker.test(lines[i])) {
-        items.push(`<li>${inline(lines[i].match(marker)[1].trim(), base)}</li>`);
+    if (BULLET.test(line) || NUMBER.test(line)) {
+      const block = [];
+      while (i < lines.length && (BULLET.test(lines[i]) || NUMBER.test(lines[i]))) {
+        block.push(lines[i]);
         i++;
       }
-      out.push(`<${tag}>\n${items.join("\n")}\n</${tag}>`);
+      out.push(renderList(block, base));
       continue;
     }
 

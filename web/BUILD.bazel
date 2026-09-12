@@ -28,6 +28,7 @@ go_library(
         "static/location.js",
         "static/manifest.webmanifest",
         "static/markdown.js",
+        "static/markdownedit.js",
         "static/offline.js",
         "static/outbox.js",
         "static/outboxview.js",
