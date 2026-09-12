@@ -9,6 +9,10 @@
          out, and a stylesheet that does not arrive leaves an unreadable page.
          See "Refreshing the vendored stylesheet" in the README. -->
     <link rel="stylesheet" href="pico.min.css">
+    <!-- The design tokens, built from web/src/app.css. Loaded before style.css
+         so the rules being migrated can reach for a token while both are here;
+         phase 6 of docs/ui-redesign-plan.md removes the two above it. -->
+    <link rel="stylesheet" href="app.css">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">

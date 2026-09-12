@@ -1147,6 +1147,27 @@ It files records under `smoke/browser-check`; see
 [web/smoke/README.md](web/smoke/README.md) for what it covers, what it leaves
 behind, and why it exists.
 
+### Building the stylesheet
+
+The web UI's design tokens live in `web/src/app.css` and are built to
+`web/static/app.css` by Tailwind:
+
+```bash
+npm ci
+npm run build:css
+```
+
+**The built file is committed.** That is what keeps `go build`, `bazel build`
+and the Docker image free of any node dependency — the image is a Go builder on
+Alpine and stays that way. CI rebuilds the stylesheet and fails if the committed
+copy differs, so a token change without a rebuild is caught rather than shipped.
+
+`npm run watch:css` rebuilds on save while working on it.
+
+The build is **CSS only** and deliberately so: the ES modules under
+`web/static` are served exactly as written, which is why the frontend tests run
+under `node --test` with nothing installed.
+
 ### Linting
 
 CI runs `go vet` and `golangci-lint`, the latter pinned in

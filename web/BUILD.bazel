@@ -33,6 +33,7 @@ go_library(
         "static/outbox.js",
         "static/outboxview.js",
         "static/search.js",
+        "static/app.css",
         "static/pico.min.css",
         "static/style.css",
         "static/sw.js",

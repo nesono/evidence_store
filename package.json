@@ -1,0 +1,13 @@
+{
+  "name": "evidence-store-web",
+  "private": true,
+  "description": "CSS build for the web UI. The only tooling this frontend has, and deliberately CSS-only: the ES modules are served as written so they stay testable under node with nothing installed.",
+  "scripts": {
+    "build:css": "tailwindcss --input web/src/app.css --output web/static/app.css --minify",
+    "watch:css": "tailwindcss --input web/src/app.css --output web/static/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  }
+}

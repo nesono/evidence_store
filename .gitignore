@@ -6,3 +6,8 @@
 # Local compose settings — a port that is free on this machine is not a
 # property of the project.
 .env
+
+# The CSS build's dependencies. The built stylesheet itself is committed, so
+# nothing downstream of it needs node — but package-lock.json is, because CI
+# installs with `npm ci` and that is what makes the build reproducible.
+node_modules/
