@@ -52,6 +52,29 @@ jobs:
       - name: Run frontend unit tests
         run: node --test web/tests/*_test.mjs
 
+  # The web UI's stylesheet is built from web/src/app.css by Tailwind and the
+  # output is committed, so that go build, Bazel and the Docker image need no
+  # node at all. This is what stops the committed file drifting from its source:
+  # a change to the tokens without a rebuild fails here rather than shipping a
+  # stylesheet nobody can reproduce.
+  css-build:
+    name: CSS Is Built
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:css
+      - name: Check the committed stylesheet matches its source
+        run: |
+          if ! git diff --quiet -- web/static/app.css; then
+            echo "::error::web/static/app.css is out of date. Run 'npm run build:css' and commit the result."
+            git --no-pager diff --stat -- web/static/app.css
+            exit 1
+          fi
+
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest

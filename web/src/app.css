@@ -1,0 +1,170 @@
+/* The design system, as a stylesheet.
+ *
+ * Tailwind v4 keeps its theme in CSS rather than a JavaScript config, which
+ * suits a project with no other JavaScript tooling: the tokens below are the
+ * whole system, and reviewing them is reading this file.
+ *
+ * Built to web/static/app.css by `npm run build:css`, and that output is
+ * committed — so `go build`, Bazel and the Docker image need no node, and the
+ * ES modules stay served as written and testable under node with nothing
+ * installed. CI checks the committed file still matches this source.
+ *
+ * Phase 1 of docs/ui-redesign-plan.md: nothing looks different yet. Pico and
+ * style.css still do the work; this declares the vocabulary the screens will be
+ * migrated onto, one at a time.
+ *
+ * That coexistence is safe by construction rather than by luck, and the reason
+ * is worth knowing before phase 2. Tailwind emits everything — its reset
+ * included — inside `@layer base`, `@layer components` and `@layer utilities`,
+ * and unlayered CSS beats layered CSS in the cascade whatever order it loads
+ * in. Pico and style.css are unlayered, so they win, which is why adding this
+ * file changed nothing: measured across eleven elements, every computed value
+ * identical with the sheet on and off.
+ *
+ * The same rule cuts the other way as screens migrate. A Tailwind utility will
+ * also lose to any style.css rule touching the same property, so a screen has
+ * to have its old rules deleted in the same change that moves it over. Half a
+ * migration will look like the utilities silently not working.
+ */
+
+@import "tailwindcss";
+
+/* `static` so every token is emitted whether or not a utility class uses it
+ * yet. v4 tree-shakes an unused theme value, which is right once the migration
+ * is done and wrong during it: these tokens are the vocabulary the screens are
+ * being moved onto, and the stylesheet being replaced needs to reference them
+ * while both are loaded. */
+@theme static {
+  /* --- Type ---------------------------------------------------------------
+   * A system stack: no request, renders on the first paint, and the device
+   * this is least tested on is a phone at a proving ground with bad
+   * reception. The monospace stack is for identifiers — commit hashes, refs,
+   * blob digests — where a lining, fixed-width digit is the whole point.
+   */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* --- Type scale ---------------------------------------------------------
+   * Tighter and shorter than Tailwind's default. This is a tool for reading
+   * tables of evidence, not an article: the body size is 14px because that is
+   * what the store has always used, and the scale above it exists to label
+   * sections rather than to be admired.
+   *
+   * One exception, and it is not negotiable: anything a phone can focus must
+   * render at 16px or iOS zooms the page and does not zoom back (#77). So
+   * `--text-base` is 16px and the dense 14px is `--text-ui`, which is what the
+   * chrome uses and what a form field must not.
+   */
+  --text-2xs: 0.6875rem;   /* 11px — counters, timestamps in a dense row */
+  --text-xs: 0.75rem;      /* 12px — table cells, help text */
+  --text-ui: 0.875rem;     /* 14px — the store's body size */
+  --text-base: 1rem;       /* 16px — form fields, and nothing smaller */
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+
+  /* --- Spacing ------------------------------------------------------------
+   * Tailwind's default step is 0.25rem, which is right; what differs is which
+   * steps get used. The named ones below are the ones this tool should reach
+   * for, so a new component does not invent 0.35rem the way the current
+   * stylesheet has two dozen times.
+   */
+  --spacing: 0.25rem;
+
+  /* --- Colour -------------------------------------------------------------
+   * Carried over from the existing stylesheet rather than invented, so nothing
+   * shifts underfoot when a screen migrates. Each has a dark counterpart now,
+   * which is the point: dark mode cannot be retrofitted onto colours that
+   * exist only as literals in a rule.
+   *
+   * Lightness is tuned per theme rather than reused: #2d9e2d on a dark ground
+   * is legible but muddy, and a badge that says PASS has to read at a glance.
+   */
+  --color-pass: #2d9e2d;
+  --color-fail: #d32f2f;
+  --color-error: #e67e22;
+  --color-skipped: #888888;
+
+  --color-pass-dark: #4ec24e;
+  --color-fail-dark: #ef5350;
+  --color-error-dark: #f5a04a;
+  --color-skipped-dark: #a0a0a0;
+
+  /* Ink and ground, for both themes. Named for what they do rather than what
+   * they look like, so a dark ground is not called "white". */
+  --color-ground: #ffffff;
+  --color-ground-sunken: #f7f7f7;   /* table stripes, panels */
+  --color-ground-raised: #ffffff;   /* dialogs above the page */
+  --color-ink: #202020;
+  --color-ink-muted: #5f5f5f;       /* labels, units, help text */
+  --color-line: #dcdcdc;            /* borders, table rules */
+
+  --color-ground-dark: #16181a;
+  --color-ground-sunken-dark: #1d2022;
+  --color-ground-raised-dark: #22262a;
+  --color-ink-dark: #e8e8e8;
+  --color-ink-muted-dark: #a2a8ad;
+  --color-line-dark: #34383c;
+
+  /* The one accent. A tool with two accent colours has none. */
+  --color-accent: #1f6feb;
+  --color-accent-dark: #4c8dff;
+
+  /* Evidence inherited from another commit is shown but not claimed as this
+   * commit's own, so it is tinted rather than badged. */
+  --color-inherited: #f3f6fb;
+  --color-inherited-dark: #1c2430;
+
+  /* --- Radii and borders -------------------------------------------------
+   * Small. Large radii read as friendly, and this is a record-keeping tool
+   * whose job is to look precise.
+   */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+}
+
+/* The dark palette, applied by mapping the same token names onto their dark
+ * counterparts. Screens therefore reference `--color-ink` and get the right one
+ * in either theme, which is what stops dark mode becoming a second stylesheet.
+ *
+ * Following the system for now; whether a toggle is wanted is a phase 6
+ * question, and adding one later means setting [data-theme] instead of relying
+ * on the media query. The selector is written to allow both.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-pass: var(--color-pass-dark);
+    --color-fail: var(--color-fail-dark);
+    --color-error: var(--color-error-dark);
+    --color-skipped: var(--color-skipped-dark);
+    --color-ground: var(--color-ground-dark);
+    --color-ground-sunken: var(--color-ground-sunken-dark);
+    --color-ground-raised: var(--color-ground-raised-dark);
+    --color-ink: var(--color-ink-dark);
+    --color-ink-muted: var(--color-ink-muted-dark);
+    --color-line: var(--color-line-dark);
+    --color-accent: var(--color-accent-dark);
+    --color-inherited: var(--color-inherited-dark);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-pass: var(--color-pass-dark);
+  --color-fail: var(--color-fail-dark);
+  --color-error: var(--color-error-dark);
+  --color-skipped: var(--color-skipped-dark);
+  --color-ground: var(--color-ground-dark);
+  --color-ground-sunken: var(--color-ground-sunken-dark);
+  --color-ground-raised: var(--color-ground-raised-dark);
+  --color-ink: var(--color-ink-dark);
+  --color-ink-muted: var(--color-ink-muted-dark);
+  --color-line: var(--color-line-dark);
+  --color-accent: var(--color-accent-dark);
+  --color-inherited: var(--color-inherited-dark);
+}

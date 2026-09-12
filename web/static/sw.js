@@ -24,6 +24,7 @@ const SHELL_CACHE = `evidence-shell-${VERSION}`;
 const SHELL = [
   "/",
   "/index.html",
+  "/app.css",
   "/pico.min.css",
   "/style.css",
   "/app.js",

@@ -129,6 +129,19 @@ inline `style` attributes in the markup and **no** colours set from JavaScript
 at all. So the colour surface really is the stylesheet, and the four attributes
 are cosmetic (`font-size` on header links).
 
+**Layered utilities lose to unlayered rules.** Found in phase 1 and the single
+most useful thing to know before phase 2: Tailwind emits into `@layer base`,
+`components` and `utilities`, and unlayered CSS beats layered CSS in the cascade
+regardless of load order. Pico and `style.css` are unlayered, which is why
+adding the token sheet changed nothing — verified across eleven elements, every
+computed value identical with it on and off.
+
+It follows that a Tailwind utility will lose to any `style.css` rule touching the
+same property. So each screen must have its old rules **deleted in the same
+change that moves it over**; a half-migrated screen looks like the utilities
+silently not working, and somebody will spend an afternoon on specificity before
+finding this paragraph.
+
 **Tailwind's defaults are not this tool's defaults.** Its spacing and type
 scales are generous and this is a dense application. The theme has to say so in
 phase 1, because every screen after the shell inherits it, and a drift towards
