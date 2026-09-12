@@ -48,19 +48,29 @@
 
   /* --- Type scale ---------------------------------------------------------
    * Tighter and shorter than Tailwind's default. This is a tool for reading
-   * tables of evidence, not an article: the body size is 14px because that is
-   * what the store has always used, and the scale above it exists to label
-   * sections rather than to be admired.
+   * tables of evidence, not an article: the scale above the body size exists to
+   * label sections rather than to be admired.
+   *
+   * The px values named below are the nominal ones, at a 16px root. They are
+   * not what renders today, and that is worth knowing rather than discovering:
+   * Pico scales the root font size by viewport, from 100% to 131.25%, so every
+   * rem here is multiplied by between 1 and 1.31 until phase 6 removes it.
+   * Measured at 1440px the root is 20px, which makes `--text-ui` 17.5px rather
+   * than 14. The old rules scaled the same way — they were `em` against the
+   * same root — so nothing has changed underfoot; the numbers simply become
+   * literal once Pico goes.
    *
    * One exception, and it is not negotiable: anything a phone can focus must
    * render at 16px or iOS zooms the page and does not zoom back (#77). So
-   * `--text-base` is 16px and the dense 14px is `--text-ui`, which is what the
-   * chrome uses and what a form field must not.
+   * `--text-base` is 1rem and the dense step is `--text-ui`, which is what the
+   * chrome uses and what a form field must not. The floor holds at every
+   * viewport, because Pico's smallest root is 100% — exactly 16px — and that is
+   * the step a phone gets.
    */
-  --text-2xs: 0.6875rem;   /* 11px — counters, timestamps in a dense row */
-  --text-xs: 0.75rem;      /* 12px — table cells, help text */
-  --text-ui: 0.875rem;     /* 14px — the store's body size */
-  --text-base: 1rem;       /* 16px — form fields, and nothing smaller */
+  --text-2xs: 0.6875rem;   /* nominally 11px — counters, dense timestamps */
+  --text-xs: 0.75rem;      /* nominally 12px — table cells, help text */
+  --text-ui: 0.875rem;     /* nominally 14px — the store's body size */
+  --text-base: 1rem;       /* 16px at the smallest root: form fields, nothing less */
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
@@ -167,4 +177,237 @@
   --color-line: var(--color-line-dark);
   --color-accent: var(--color-accent-dark);
   --color-inherited: var(--color-inherited-dark);
+}
+
+/* --- The shell -----------------------------------------------------------
+ * Header, navigation, tabs, badges and footer: the parts every screen shares,
+ * so they set the vocabulary the rest are migrated onto.
+ *
+ * Written as CSS against the tokens rather than as utility classes in the
+ * markup, and that is forced rather than chosen. Tailwind's utilities live in
+ * `@layer utilities`, Pico is unlayered, and unlayered CSS wins whatever the
+ * order — so a `flex` class on the header would lose to Pico's own nav rules
+ * for as long as Pico is loaded. These rules are unlayered too, and come after
+ * Pico, so they win. Once phase 6 removes Pico, utilities in the markup become
+ * possible and this block can shrink into them.
+ *
+ * The class names are unchanged. Forty of them are reached for by JavaScript,
+ * and several by the tests; they are an API, whatever styles them.
+ */
+
+/* Pico spends about 80px of vertical space on the header before any content
+ * appears — 1rem of padding on the header and another on each nav item. This
+ * is a dense tool, so the chrome is pulled in and the room handed to the
+ * results window. */
+body > header {
+  padding-block: calc(var(--spacing) * 1.5);
+}
+
+body > header nav {
+  font-size: var(--text-ui);
+}
+
+body > header nav li {
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.5);
+}
+
+body > header nav strong {
+  font-size: var(--text-ui);
+  letter-spacing: -0.01em;
+}
+
+body > main {
+  padding-block: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+}
+
+/* --- Tabs ---
+ * The current tab is marked by weight and a rule beneath it rather than a
+ * filled shape: a tab bar of four coloured blocks would be the loudest thing
+ * on a page whose subject is a table. */
+.nav-tab {
+  font-weight: 400;
+  color: var(--color-ink-muted);
+  text-decoration: none;
+}
+
+.nav-tab:hover {
+  color: var(--color-ink);
+}
+
+.nav-tab.active {
+  font-weight: 600;
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+/* A tab this caller cannot use. Visible, so they know the store has the
+ * feature and who to ask for it; plainly inert, so they do not try. */
+.nav-tab.unavailable {
+  color: var(--color-ink-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* Who is signed in. Quiet: it answers a question nobody asks twice. */
+.auth-identity {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+}
+
+.auth-identity .auth-roles {
+  opacity: 0.8;
+}
+
+/* --- Result badges ---
+ * The one place colour carries meaning rather than decoration, so it is the
+ * one place a saturated fill is right. */
+.badge {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: var(--radius-md);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+.badge-pass    { background: var(--color-pass); }
+.badge-fail    { background: var(--color-fail); }
+.badge-error   { background: var(--color-error); }
+.badge-skipped { background: var(--color-skipped); }
+
+/* A tag is a label, not a verdict, so it reads as one: no colour, no shouting. */
+.badge-tag {
+  background: var(--color-ground-sunken);
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-line);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* --- Connection and queue ---
+ * A dot, because whether the store is reachable is a yes or no. */
+.health-ok   { background: var(--color-pass); }
+.health-fail { background: var(--color-fail); }
+
+/* Unsent records. Amber rather than red: nothing is lost, but it is waiting,
+ * and a counter reading three is the most important thing on the page. */
+.outbox-status {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--color-error);
+  color: #fff;
+}
+
+.outbox-status:hover {
+  background: color-mix(in oklab, var(--color-error) 85%, black);
+  color: #fff;
+}
+
+/* --- Footer ---
+ * Which build is answering. Read when something else has already gone wrong,
+ * ignored the rest of the time. */
+.app-footer {
+  padding-top: 0;
+  padding-bottom: calc(var(--spacing) * 6);
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+
+.app-footer #server-version {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The control vocabulary ---------------------------------------------
+ * Defined here so every screen migrated after this one reaches for the same
+ * button and the same field, rather than each phase inventing its own.
+ *
+ * Deliberately not applied to `button` and `input` globally yet. Pico styles
+ * those across every screen, and overriding it globally would restyle Search,
+ * Add Result, Analytics and Admin in a change that claims to be about the
+ * shell. Screens opt in as they migrate.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 1.5);
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: 500;
+  line-height: var(--leading-tight);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-ground-sunken);
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, black);
+}
+
+/* A button that reads as text, for the fill-in helpers beside a field. */
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-accent);
+  padding-inline: calc(var(--spacing) * 1.5);
+}
+
+.btn-quiet:hover {
+  background: var(--color-ground-sunken);
+}
+
+/* 16px, not the dense 14, and this is the rule that matters most on a phone:
+ * text under 16px in a focusable field makes iOS zoom the page and not zoom
+ * back, leaving a tester panning a form they were halfway through (#77). */
+.field {
+  width: 100%;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+/* An identifier — a commit, a ref, a digest — where a fixed-width digit is the
+ * whole point. */
+.field-mono {
+  font-family: var(--font-mono);
+}
+
+.label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-ink-muted);
 }
