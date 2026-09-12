@@ -127,6 +127,18 @@
   --color-accent: #1f6feb;
   --color-accent-dark: #4c8dff;
 
+  /* Two measures rather than verdicts, so they sit outside the pass/fail
+   * palette deliberately: a flip rate is not a kind of failure and a coverage
+   * figure is not a kind of pass. Carried over from the analytics stylesheet
+   * unchanged, and now declared where every other colour is.
+   *
+   * The lightness is raised for dark mode rather than the hue reused: indigo
+   * and blue at these values disappear against a dark ground. */
+  --color-metric-flip: #6a5acd;
+  --color-metric-cover: #2a78d6;
+  --color-metric-flip-dark: #9b8cff;
+  --color-metric-cover-dark: #5aa2f5;
+
   /* Evidence inherited from another commit is shown but not claimed as this
    * commit's own, so it is tinted rather than badged. */
   --color-inherited: #f3f6fb;
@@ -151,6 +163,8 @@
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --color-metric-flip: var(--color-metric-flip-dark);
+    --color-metric-cover: var(--color-metric-cover-dark);
     --color-pass: var(--color-pass-dark);
     --color-fail: var(--color-fail-dark);
     --color-error: var(--color-error-dark);
@@ -167,6 +181,8 @@
 }
 
 :root[data-theme="dark"] {
+  --color-metric-flip: var(--color-metric-flip-dark);
+  --color-metric-cover: var(--color-metric-cover-dark);
   --color-pass: var(--color-pass-dark);
   --color-fail: var(--color-fail-dark);
   --color-error: var(--color-error-dark);
@@ -1075,3 +1091,534 @@ body > main {
   font-size: 0.9em;
   font-style: italic;
 }
+
+/* --- Analytics and Admin -------------------------------------------------
+ * Phase 5 of docs/ui-redesign-plan.md, and the last screens.
+ *
+ * Moved by a scripted substitution rather than rewritten by hand. There are
+ * 104 rules here and the layouts are staying exactly as they are, so retyping
+ * them would have risked a hundred small transcription errors to no purpose.
+ * What the script changed is the vocabulary: --pico-muted-color and friends
+ * became tokens, the em font sizes became scale steps, and the local
+ * --an-pass/--an-fail/--an-error/--an-skipped palette collapsed into the
+ * --color-* tokens it had been duplicating since analytics was built.
+ *
+ * That last one is the point of the phase. Analytics had its own copy of the
+ * four verdict colours, which is how a chart ends up disagreeing with the badge
+ * beside it.
+ */
+
+/* Filter bar */
+#an-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+}
+
+.an-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-ink-muted);
+}
+
+#an-bar .an-field input { width: 13rem; }
+
+#an-bar .an-field select { width: 11.5rem; }
+
+#an-bar .an-custom-range input { width: 9rem; }
+
+.an-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* Sub-view switcher */
+#an-views {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--color-line);
+    margin-bottom: 1.1rem;
+}
+
+#an-views button {
+    margin: 0;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--color-ink-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    width: auto;
+}
+
+#an-views button.active {
+    color: var(--pico-primary, #1095c1);
+    border-bottom-color: var(--pico-primary, #1095c1);
+}
+
+.an-error {
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--color-fail);
+    background: #fdf0f0;
+    font-size: 0.9rem;
+}
+
+/* Hero figure and stat tiles */
+.an-hero {
+    margin-bottom: 1.4rem;
+}
+
+.an-hero-value {
+    font-size: 3rem;
+    line-height: 1.05;
+    font-weight: 600;
+}
+
+.an-hero-label {
+    font-size: 1rem;
+    color: var(--color-ink-muted);
+}
+
+.an-hero-span {
+    margin-top: 0.2rem;
+    font-size: 0.8rem;
+    color: var(--color-ink-muted);
+}
+
+.an-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1.6rem;
+}
+
+.an-tile {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+}
+
+.an-tile-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.an-tile-label {
+    font-size: 0.8rem;
+    color: var(--color-ink-muted);
+}
+
+.an-tile-hint {
+    font-size: 0.7rem;
+    color: var(--color-ink-muted);
+    opacity: 0.8;
+}
+
+.an-section-title {
+    margin: 1.6rem 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.an-note {
+    margin: 0 0 0.8rem;
+    font-size: 0.8rem;
+    color: var(--color-ink-muted);
+}
+
+/* Stacked part-to-whole bar. 2px surface gaps between segments, rounded outer
+   ends only — the interior joins stay square so the bar reads as one length. */
+.an-stack {
+    display: flex;
+    gap: 2px;
+    height: 22px;
+    margin-bottom: 0.6rem;
+}
+
+.an-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2px;
+    overflow: hidden;
+}
+
+.an-seg:first-child { border-radius: var(--radius-md) 0 0 4px; }
+
+.an-seg:last-child  { border-radius: 0 4px 4px 0; }
+
+.an-seg:only-child  { border-radius: var(--radius-md); }
+
+.an-seg-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    padding: 0 0.3rem;
+}
+
+.an-seg-pass,    .an-swatch.an-seg-pass    { background: var(--color-pass); }
+
+.an-seg-fail,    .an-swatch.an-seg-fail    { background: var(--color-fail); }
+
+.an-seg-error,   .an-swatch.an-seg-error   { background: var(--color-error); }
+
+.an-seg-skipped, .an-swatch.an-seg-skipped { background: var(--color-skipped); }
+
+.an-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.an-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+}
+
+.an-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex: none;
+}
+
+.an-legend-name { color: var(--color-ink-muted); }
+
+.an-legend-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.an-legend-share { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+
+/* Meters */
+.an-meter-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.an-meter {
+    flex: 1;
+    min-width: 2.5rem;
+    height: 6px;
+    background: var(--color-ground-sunken);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.an-meter-fill {
+    height: 100%;
+    border-radius: 0 3px 3px 0;
+}
+
+.an-meter-fail  { background: var(--color-fail); }
+
+.an-meter-error { background: var(--color-error); }
+
+.an-meter-flip  { background: var(--color-metric-flip); }
+
+.an-meter-cover { background: var(--color-metric-cover); }
+
+.an-meter-reliability { background: var(--color-pass); }
+
+.an-num {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.2rem;
+    text-align: right;
+}
+
+.an-num-plain { color: var(--color-ink-muted); display: inline-block; }
+
+.an-rate {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+}
+
+.an-rate .an-num { min-width: 0; }
+
+.an-rate .an-meter {
+    flex: none;
+    width: 100%;
+    height: 6px;
+}
+
+/* Tables */
+.an-table-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0.8rem 0 0.4rem;
+    font-size: 0.85rem;
+    color: var(--color-ink-muted);
+}
+
+.an-page-nav { display: flex; gap: 0.3rem; }
+
+.an-page-nav button {
+    margin: 0;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8rem;
+    width: auto;
+}
+
+.an-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.an-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+}
+
+.an-sortable { cursor: pointer; user-select: none; }
+
+.an-sortable:hover { color: var(--pico-primary, #1095c1); }
+
+.an-sorted { color: var(--pico-primary, #1095c1); }
+
+.an-table tbody tr[data-procedure] { cursor: pointer; }
+
+.an-table tbody tr[data-procedure]:hover { background: rgba(0, 0, 0, 0.03); }
+
+/* The test name takes whatever the fixed columns leave. Rate columns keep one
+   width whether or not they currently hold a meter, so sorting never reflows
+   the table. */
+.an-col-num  { text-align: right; font-variant-numeric: tabular-nums; width: 4rem; }
+
+.an-col-rate { width: 6.5rem; text-align: right; }
+
+.an-col-time { width: 8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.an-col-labels { width: 7.5rem; }
+
+.an-col-test { width: auto; }
+
+.an-test-name {
+    display: block;
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.an-test-repo {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--color-ink-muted);
+}
+
+.an-muted { color: var(--color-ink-muted); }
+
+/* Label chips */
+.an-chip {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.an-chip-stable         { background: #e3f3e3; color: #1d661d; }
+
+.an-chip-always_failing { background: #fbe3e3; color: #9c2020; }
+
+.an-chip-flaky          { background: #ede9fb; color: #4a3aa7; }
+
+.an-chip-infra_heavy    { background: #fdeede; color: #9a5410; }
+
+.an-chip-sparse         { background: #ececea; color: #56554f; }
+
+/* Clusters */
+.an-cluster-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.an-cluster-controls .an-field input { width: 8rem; }
+
+.an-cluster-controls .an-field select { width: 15rem; }
+
+.an-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+}
+
+.an-checkbox input { margin: 0; }
+
+.an-cluster {
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.an-cluster-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.9rem;
+    margin-bottom: 0.4rem;
+}
+
+.an-cluster-title { font-weight: 600; }
+
+.an-cluster-stat {
+    font-size: 0.78rem;
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.an-cluster-members {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+}
+
+.an-cluster-members li {
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.78rem;
+    list-style: none;
+}
+
+.an-cluster-members li::marker { content: ""; }
+
+/* --- Access tab --- */
+/* Same density as the results table: this is a list of credentials to scan,
+   not prose to read. */
+#access-table {
+    font-size: 0.85rem;
+    table-layout: fixed;
+}
+
+#access-table th,
+#access-table td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+}
+
+#access-table .col-subject { width: 30%; word-break: break-all; }
+
+#access-table .col-roles   { width: 26%; }
+
+#access-table .col-status  { width: 7em; }
+
+#access-table .col-seen    { width: 10em; }
+
+#access-table .col-actions { width: 16em; text-align: right; }
+
+#access-table .col-actions button {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.78rem;
+    margin: 0 0 0 0.25rem;
+    width: auto;
+    display: inline-block;
+}
+
+/* One role per line, because the description is the point: an admin choosing
+   between contributor and ci should not have to remember the difference. */
+.access-role {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.85rem;
+}
+
+.access-role small { color: var(--color-ink-muted); }
+
+.access-role-editor td { background: var(--color-ground-sunken); }
+
+.access-warning,
+.access-error {
+    padding: 0.6rem 0.8rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+}
+
+.access-warning { background: #fdf3e0; color: #8a5a00; }
+
+.access-error   { background: #fdecea; color: #a32219; }
+
+.access-ok      { color: #2d9e2d; font-size: 0.85rem; }
+
+/* The key is readable once. Make it look like the thing to copy. */
+#access-key-value {
+    font-family: var(--pico-font-family-monospace, monospace);
+    font-size: 0.9rem;
+}
+
+/* The five rules the first pass of this phase missed. Its selector pattern
+ * matched `#analytics`, and the container is `#tab-analytics`, so these stayed
+ * behind in style.css — unlayered, and so beating every migrated rule for the
+ * controls they touch. Found by grepping for what was left rather than trusting
+ * the script that moved the rest. */
+
+#tab-analytics [hidden] { display: none; }
+
+/* Pico gives form controls 15px of padding top and bottom. With a fixed 40px
+ * border-box height that leaves a 10px content box for a 27px line, and
+ * `overflow: clip` then hides the text entirely — the control looks empty.
+ * Zeroing the block padding is what makes the fixed height safe, and stays
+ * necessary for as long as Pico is loaded.
+ *
+ * 16px rather than the old 0.9rem, which at Pico's 20px desktop root was 18px
+ * and at its smallest was 14.4 — under the size at which iOS zooms a focused
+ * field (#77). --pico-font-size is set to match because Pico computes the
+ * control's height from it. */
+#tab-analytics .an-field input,
+#tab-analytics .an-field select {
+  margin: 0;
+  height: 40px;
+  padding-block: 0;
+  line-height: var(--leading-tight);
+  font-size: var(--text-base);
+  --pico-font-size: var(--text-base);
+}
+
+#tab-analytics .an-actions button {
+  height: 40px;
+  width: auto;
+  margin: 0;
+  padding: 0 calc(var(--spacing) * 4);
+  font-size: var(--text-ui);
+  line-height: var(--leading-tight);
+}
+
+/* A faint arrow on hover says the header is a control, without putting eight
+ * arrows on screen at once. */
+#tab-analytics .an-sortable:not(.an-sorted)::after {
+  content: " \25BE";
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
+#tab-analytics .an-sortable:not(.an-sorted):hover::after { opacity: 0.55; }
