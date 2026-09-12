@@ -1,43 +1,11 @@
-/* Header — Pico gives body>header 1rem of padding top and bottom, and nav li
-   another 1rem each, which costs roughly 80px before any content appears. This
-   is a dense tool, so the chrome is pulled in tight and the space handed to the
-   results window instead. */
-body > header {
-    padding-block: 0.3rem;
-}
+/* Screen-specific rules, being migrated onto the design tokens in
+   web/src/app.css one screen at a time (docs/ui-redesign-plan.md). The shell —
+   header, tabs, badges, footer — has moved; what remains below belongs to
+   Search, Add Result, Analytics and Admin.
 
-body > header nav {
-    font-size: 0.9em;
-}
-
-body > header nav li {
-    padding: 0.1rem 0.4rem;
-}
-
-body > header nav strong {
-    font-size: 0.95em;
-}
-
-body > main {
-    padding-block: 0.4rem 0.5rem;
-}
-
-/* Result badges */
-.badge {
-    display: inline-block;
-    padding: 0.15em 0.5em;
-    border-radius: 4px;
-    font-size: 0.8em;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.badge-pass    { background: #2d9e2d; color: #fff; }
-.badge-fail    { background: #d32f2f; color: #fff; }
-.badge-error   { background: #e67e22; color: #fff; }
-.badge-skipped { background: #888;    color: #fff; }
-.badge-tag     { background: #e0e0e0; color: #333; font-weight: 400; }
+   A rule here beats a Tailwind utility, because this file is unlayered and
+   Tailwind's utilities are not. So a screen's rules must be deleted in the same
+   change that migrates it, or the new styles will appear not to work. */
 
 /* Regex hint */
 .regex-hint {
@@ -594,41 +562,6 @@ body > main {
     border-radius: 50%;
     margin-right: 0.3em;
     vertical-align: middle;
-}
-
-.health-ok   { background: #2d9e2d; }
-.health-fail { background: #d32f2f; }
-
-/* Nav tabs */
-.nav-tab {
-    font-weight: 400;
-    opacity: 0.6;
-}
-
-/* A tab this caller cannot use. Visible, so they know the store has the
-   feature and who to ask for it; plainly inert, so they do not try. */
-.nav-tab.unavailable {
-    opacity: 0.3;
-    cursor: not-allowed;
-    text-decoration: line-through;
-}
-
-/* Who is signed in. Quiet: it answers a question nobody asks twice. */
-.auth-identity {
-    font-size: 0.8em;
-    opacity: 0.7;
-    white-space: nowrap;
-}
-
-.auth-identity .auth-roles {
-    opacity: 0.75;
-}
-
-.nav-tab.active {
-    font-weight: 600;
-    opacity: 1;
-    text-decoration: underline;
-    text-underline-offset: 4px;
 }
 
 /* Add form */
@@ -1639,17 +1572,6 @@ body > main {
 
 /* Loud on purpose. Records waiting here exist nowhere else until they sync,
    so this is the one counter in the header worth interrupting for. */
-.outbox-status {
-    font-size: 0.8em;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 0.15rem 0.5rem;
-    border-radius: 1rem;
-    background: #e67e22;
-    color: #fff;
-}
-.outbox-status:hover { background: #d35400; color: #fff; }
-
 .outbox-explainer { font-size: 0.85em; color: var(--pico-muted-color); }
 
 .outbox-entry {
@@ -1698,15 +1620,6 @@ body > main {
 
 .outbox-explainer-warn { color: #e67e22; }
 .outbox-explainer-alarm { color: #d32f2f; font-weight: 600; }
-
-/* Which build is answering. Quiet on purpose: read when something else has
-   already gone wrong, ignored the rest of the time. */
-.app-footer {
-    padding-top: 0;
-    padding-bottom: 1.5rem;
-    color: var(--pico-muted-color);
-}
-.app-footer #server-version { font-variant-numeric: tabular-nums; }
 
 /* A newer build has been fetched; the page is still running the old one. */
 #update-notice {
