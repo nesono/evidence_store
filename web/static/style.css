@@ -121,95 +121,6 @@
     overflow: auto;
 }
 
-/* Test log — rendered markdown, in the record dialog and in the add form's
-   preview. Pico styles headings and lists for a page; inside a dialog those
-   sizes turn a five-line log into something that has to be scrolled, so the
-   whole block is scaled down and its vertical rhythm tightened. */
-.test-log {
-    font-size: 0.9em;
-    margin-top: 0.4em;
-    padding: 0.6em 0.8em;
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: 4px;
-    max-height: 420px;
-    overflow: auto;
-    overflow-wrap: anywhere;
-}
-
-.test-log > :first-child { margin-top: 0; }
-.test-log > :last-child  { margin-bottom: 0; }
-
-.test-log p,
-.test-log ul,
-.test-log ol,
-.test-log blockquote,
-.test-log pre {
-    margin-block: 0.5em;
-}
-
-.test-log h1, .test-log h2, .test-log h3,
-.test-log h4, .test-log h5, .test-log h6 {
-    margin-block: 0.8em 0.3em;
-    line-height: 1.3;
-}
-
-.test-log h1 { font-size: 1.25em; }
-.test-log h2 { font-size: 1.15em; }
-.test-log h3 { font-size: 1.05em; }
-.test-log h4,
-.test-log h5,
-.test-log h6 { font-size: 1em; }
-
-.test-log ul,
-.test-log ol {
-    padding-left: 1.4em;
-}
-
-.test-log li { margin-block: 0.15em; }
-
-.test-log pre {
-    font-size: 0.9em;
-    padding: 0.5em 0.6em;
-    overflow-x: auto;
-}
-
-.test-log blockquote {
-    padding: 0.1em 0.8em;
-    border-left: 3px solid var(--pico-muted-border-color);
-    color: var(--pico-muted-color);
-}
-
-.test-log hr {
-    margin-block: 0.8em;
-}
-
-.test-log-empty {
-    color: var(--pico-muted-color);
-    font-style: italic;
-}
-
-/* An image in a log is evidence, not decoration: it gets room, but never more
-   width than the log it sits in, and never enough height to push the steps
-   around it off the screen. */
-.test-log img {
-    display: block;
-    max-width: 100%;
-    max-height: 320px;
-    width: auto;
-    margin-block: 0.5em;
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: 4px;
-}
-
-/* A swept image, or one the reader's key cannot fetch. The log still reads. */
-.test-log-image-missing {
-    display: inline-block;
-    padding: 0.1em 0.4em;
-    color: var(--pico-muted-color);
-    font-size: 0.9em;
-    font-style: italic;
-}
-
 /* Feedback while a file is over the log field, so a drop that is about to be
    accepted looks different from one the browser is about to navigate to. */
 .drop-active {
@@ -237,44 +148,6 @@
     vertical-align: middle;
 }
 
-/* Add form */
-#add-form label small {
-    color: var(--pico-muted-color);
-}
-
-#add-form textarea {
-    font-size: 0.85em;
-    padding: 0.4em 0.5em;
-}
-
-#add-form fieldset {
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-
-#add-form fieldset legend {
-    font-size: 0.8em;
-    font-weight: 600;
-    margin-bottom: 0.15em;
-}
-
-#add-form fieldset label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3em;
-    margin-right: 0.6em;
-    font-size: 0.8em;
-}
-
-#add-form fieldset input[type="radio"] {
-    -webkit-appearance: radio;
-    appearance: radio;
-    margin: 0;
-    width: 0.9em !important;
-    height: 0.9em !important;
-}
-
 /* Input with inline button */
 .input-with-button {
     display: flex;
@@ -293,20 +166,6 @@
     white-space: nowrap;
     width: auto;
     margin-bottom: 0 !important;
-}
-
-/* Location. Every other field in the form is spaced by its own input's bottom
-   margin, which .input-with-button zeroes to sit the button beside the box — so
-   this label carries the gap to Notes itself. Written against #add-form because
-   that is what zeroes label margins above. */
-#add-form .location-field,
-#add-form .weather-field {
-    margin-bottom: var(--pico-spacing, 1rem);
-}
-
-/* What the Locate button has to say for itself, under the field */
-.location-status:empty {
-    display: none;
 }
 
 .location-status {
@@ -337,37 +196,6 @@
     display: inline-block;
 }
 
-/* Custom metadata fields */
-.custom-fields {
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: 4px;
-    padding: 0.5em 0.8em;
-}
-
-.custom-fields legend {
-    font-size: 0.8em;
-    font-weight: 600;
-}
-
-.custom-field-row {
-    grid-template-columns: 1fr 2fr auto;
-    gap: 0.4em;
-    margin-bottom: 0.3em;
-    align-items: center;
-}
-
-.custom-field-row input {
-    margin-bottom: 0 !important;
-}
-
-.cf-remove {
-    padding: 0.2em 0.5em !important;
-    font-size: 1em;
-    line-height: 1;
-    width: auto !important;
-    border: none !important;
-}
-
 #add-custom-field {
     font-size: 0.8em;
     padding: 0.2em 0.6em;
@@ -383,26 +211,6 @@
 .feedback-error {
     color: #d32f2f;
     font-size: 0.9em;
-}
-
-/* Only the After/Before labels carry a preview, so reserving a line for an empty
-   one made the middle row of the advanced grid taller than its neighbours. It
-   takes no space until it has something to report. */
-.utc-preview:empty {
-    display: none;
-}
-
-.utc-preview {
-    display: block;
-    min-height: 1.2em;
-    margin-top: 0.15em;
-    color: var(--pico-muted-color);
-    font-variant-numeric: tabular-nums;
-    font-size: 0.8em;
-}
-
-.utc-preview-error {
-    color: var(--pico-del-color, #c0392b);
 }
 
 /* Finished-at range: two boxes and the calendar that fills them */

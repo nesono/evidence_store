@@ -802,3 +802,276 @@ body > main {
   cursor: pointer;
   color: var(--color-ink-muted);
 }
+
+/* --- Add Result ----------------------------------------------------------
+ * The longest form in the store, and the markdown preview beside it.
+ *
+ * Phase 4 of docs/ui-redesign-plan.md. Same rule as Search: every Pico
+ * variable these borrowed is now a token, and their old rules leave style.css
+ * in this change, because an unlayered leftover would beat what is here.
+ */
+
+#add-form label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  margin-bottom: 0;
+}
+
+#add-form label small {
+  color: var(--color-ink-muted);
+}
+
+/* 16px in every field. A phone zooms the page for anything smaller and does
+ * not zoom back (#77), and this is the form somebody fills in on a phone
+ * standing next to a rig — the one screen where that matters most. */
+#add-form input,
+#add-form select,
+#add-form textarea {
+  padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 2);
+  font-size: var(--text-base);
+  height: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-ground);
+  color: var(--color-ink);
+}
+
+#add-form input:focus-visible,
+#add-form select:focus-visible,
+#add-form textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+/* An identifier, not prose: a commit or a procedure reference reads better
+ * fixed-width, and a mistyped character is easier to spot. */
+#add-form input[name="rcs_ref"],
+#add-form input[name="procedure_ref"],
+#add-form input[name="branch"],
+#add-form input[name="repo"] {
+  font-family: var(--font-mono);
+}
+
+#add-form textarea {
+  font-family: var(--font-mono);
+  line-height: var(--leading-normal);
+}
+
+#add-form .grid {
+  gap: calc(var(--spacing) * 2);
+  margin-bottom: calc(var(--spacing) * 1.5);
+}
+
+#add-form fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+#add-form fieldset legend {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  margin-bottom: calc(var(--spacing) * 0.5);
+}
+
+#add-form fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1.5);
+  margin-right: calc(var(--spacing) * 2.5);
+  font-size: var(--text-ui);
+  color: var(--color-ink);
+}
+
+/* The verdict radios. Sized in em against their own label so they track it. */
+#add-form fieldset input[type="radio"] {
+  -webkit-appearance: radio;
+  appearance: radio;
+  margin: 0;
+  width: 0.9em !important;
+  height: 0.9em !important;
+  accent-color: var(--color-accent);
+}
+
+/* Location and weather carry their own bottom gap, because the labels above
+ * have theirs zeroed and something has to separate them from Notes. */
+#add-form .location-field,
+#add-form .weather-field {
+  margin-bottom: calc(var(--spacing) * 4);
+}
+
+.location-status:empty {
+  display: none;
+}
+
+/* --- Custom metadata rows --- */
+
+.custom-fields {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+}
+
+.custom-fields legend {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.custom-field-row {
+  grid-template-columns: 1fr 2fr auto;
+  gap: calc(var(--spacing) * 1.5);
+  margin-bottom: calc(var(--spacing) * 1.5);
+  align-items: center;
+}
+
+.custom-field-row input {
+  margin-bottom: 0 !important;
+}
+
+.cf-remove {
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2) !important;
+  font-size: var(--text-ui);
+  line-height: 1;
+  width: auto !important;
+  border: none !important;
+  background: transparent;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+}
+
+.cf-remove:hover {
+  color: var(--color-fail);
+}
+
+/* --- The UTC preview under a timestamp ---
+ * What the store will actually record, shown while somebody types a local
+ * time: the difference between the two is the whole reason it is there. */
+.utc-preview:empty {
+  display: none;
+}
+
+.utc-preview {
+  display: block;
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--color-ink-muted);
+}
+
+.utc-preview-error {
+  color: var(--color-fail);
+}
+
+/* The keys the editor answers to, named under the log field. Pico paints kbd
+ * as a dark filled block, which in a line of eight of them reads as a row of
+ * buttons rather than as a hint. Quieter: an outline, the mono face, and the
+ * same small step as the label above it. */
+.test-log-hint kbd,
+#add-form label kbd {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-ground-sunken);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+/* --- The rendered log ---
+ * A tester's own account of the run, and the one place in this store that is
+ * prose rather than fields. So it reads at the body size with room between its
+ * paragraphs, unlike everything around it. */
+.test-log {
+  font-size: var(--text-ui);
+  line-height: var(--leading-normal);
+  margin-top: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-ground-sunken);
+  color: var(--color-ink);
+  max-height: 420px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.test-log > :first-child { margin-top: 0; }
+.test-log > :last-child  { margin-bottom: 0; }
+
+.test-log p,
+.test-log ul,
+.test-log ol,
+.test-log blockquote,
+.test-log pre {
+  margin-block: 0.5em;
+}
+
+.test-log h1, .test-log h2, .test-log h3,
+.test-log h4, .test-log h5, .test-log h6 {
+  margin-block: 0.8em 0.3em;
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+}
+
+.test-log h1 { font-size: 1.25em; }
+.test-log h2 { font-size: 1.15em; }
+.test-log h3 { font-size: 1.05em; }
+.test-log h4,
+.test-log h5,
+.test-log h6 { font-size: 1em; }
+
+.test-log ul,
+.test-log ol {
+  padding-left: 1.4em;
+}
+
+.test-log li { margin-block: 0.15em; }
+
+/* A pasted error, which is why the log supports fences at all. */
+.test-log pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.5);
+  background: var(--color-ground);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.test-log code {
+  font-family: var(--font-mono);
+}
+
+.test-log blockquote {
+  padding: 0.1em 0.8em;
+  border-left: 3px solid var(--color-line);
+  color: var(--color-ink-muted);
+}
+
+.test-log hr {
+  margin-block: 0.8em;
+  border: none;
+  border-top: 1px solid var(--color-line);
+}
+
+.test-log-empty {
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
+.test-log img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+/* A photo this store does not hold. Said plainly, because the alternative is a
+ * broken image icon that looks like the store losing evidence. */
+.test-log-image-missing {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  color: var(--color-ink-muted);
+  font-size: 0.9em;
+  font-style: italic;
+}
