@@ -27,7 +27,23 @@
  * migration will look like the utilities silently not working.
  */
 
-@import "tailwindcss";
+/* `source(none)`: Tailwind generates no utility classes on its own.
+ *
+ * Without it, v4 scans the whole repository for words that look like class
+ * names and emits a utility for each — including docs/. That shipped 24 of
+ * them nobody asked for: `.grid`, `.container`, `.flex`, `.hidden`, `.table`,
+ * `.outline`, and so on, harvested from prose and markup. Pico's rules
+ * outranked most of them, so little looked wrong, but they were a trap set for
+ * phase 6b: take Pico away and Tailwind's meaning of `.grid` and `.container`
+ * would silently apply to elements written for Pico's meaning. It also made
+ * the build depend on documentation. Editing the plan to say form fields
+ * "shrink" added a `.shrink` utility, and CI's check that the committed
+ * stylesheet matches its source failed on that alone.
+ *
+ * Nothing in this project uses utility classes in markup yet; everything is
+ * written against the tokens. When something does, name its files with
+ * `@source` rather than turning scanning back on for everything. */
+@import "tailwindcss" source(none);
 
 /* `static` so every token is emitted whether or not a utility class uses it
  * yet. v4 tree-shakes an unused theme value, which is right once the migration
