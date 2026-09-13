@@ -17,7 +17,7 @@ import { renderMarkdown } from "./markdown.js";
 import { fitTagCells } from "./tagfit.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { EVIDENCE_TYPES, evidenceTypeLabel } from "./evidencetype.js";
-import { formatCoordinates, parseCoordinates } from "./location.js";
+import { formatAccuracy, formatCoordinates, mapURL, parseCoordinates } from "./location.js";
 import { OFFLINE, connectionState } from "./offline.js";
 
 // The DOM handles the wiring keeps hold of, assigned in mountSearch.
