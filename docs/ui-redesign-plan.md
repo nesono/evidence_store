@@ -110,6 +110,21 @@ Each is a PR that leaves the store working and looking deliberate.
    than a hardcoded attribute, and delete the phone rules that exist only to
    undo desktop assumptions.
 
+   Split into three when it began, because the inventory showed more than this
+   line assumed. `style.css` still held 93 top-level rules for components no
+   screen phase owned — the datepicker, the outbox, the record-detail dialog,
+   the advanced filters — and turning Pico off in the browser showed what it
+   still carries: without it the header nav stacks vertically, Add Result's
+   `.grid` collapses to one column, form fields shrink to their content, and
+   every button nobody restyled goes flat.
+
+   - **6a** moves those 93 rules onto tokens, with no visual change.
+   - **6b** replaces what Pico provides — `nav`, `.container`, `.grid`, form
+     field widths, `.secondary` and `.outline` buttons, `dialog`, `details` —
+     and removes it.
+   - **6c** makes dark mode real, and settles px against rem once this project
+     controls the root font size.
+
 ## Not in scope
 
 - **Layout changes.** Noted for #162 and #163 instead.
