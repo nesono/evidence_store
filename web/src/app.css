@@ -1542,16 +1542,22 @@ body > main {
  * two lines. A column width should not depend on the size of the word above it.
  * The values are what the old em widths came to at the size the table rendered
  * at before. */
+/* Tags gets a width of its own (#167). It used to have none: it took whatever
+ * the fixed columns and four percentages left, which was 118px at 1440 and
+ * nothing at all below about 1200px, where those added up to more than the
+ * table. Procedure is now the column that takes what is left, because it is
+ * the one that most often has more to say; the narrower screens hide Type and
+ * then Source to leave it room (see "Narrow screens"). */
 #results-table .col-result    { width: 88px; }
-#results-table .col-procedure { width: 20%; }
-#results-table .col-repo      { width: 13%; }
-#results-table .col-branch    { width: 10%; }
+#results-table .col-repo      { width: 12%; }
+#results-table .col-branch    { width: 9%; }
 #results-table .col-commit    { width: 112px; }
 /* Wide enough for "Demonstration": a type truncated to "Demonst…" is a column
  * that has stopped answering the question it is there for. */
 #results-table .col-type      { width: 128px; }
-#results-table .col-source    { width: 12%; }
+#results-table .col-source    { width: 11%; }
 #results-table .col-finished  { width: 152px; }
+#results-table .col-tags      { width: 160px; }
 
 #results-table thead th {
   position: sticky;
@@ -1570,6 +1576,35 @@ body > main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Tags on one line: as many as fit, then "+N" (see tagfit.js, #167). The
+   first tag may shrink and truncate so that a single long one still names
+   something; while the widths are measured, nothing shrinks. */
+.tag-list {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tag-list > .badge { flex: none; }
+
+.tag-list > .badge-tag:first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tags-measuring .tag-list > .badge { flex: none; }
+
+.badge-more {
+  border: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-ink-muted);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* A commit, a ref: fixed-width digits so a column of them can be compared by
@@ -2961,6 +2996,25 @@ label > .input-with-button {
  * to keep the place in the cascade that lets them override the rules above at
  * narrow widths.
  */
+
+/* Between a wide screen and a tablet the table has more columns than room,
+   and Procedure, which takes what the others leave, is the one that pays.
+   Columns go in order of how rarely they tell a tester something the search
+   did not already say — Type, then Source, then Repo — and all three are in
+   the record dialog. Measured: without these, Procedure was left 105px at
+   1200px and 57px at 800px; with them it keeps 118px or more all the way down
+   to the 768px layout, and Tags keeps its 160px. */
+@media (max-width: 1279px) {
+    #results-table .col-type { display: none; }
+}
+
+@media (max-width: 1099px) {
+    #results-table .col-source { display: none; }
+}
+
+@media (max-width: 899px) {
+    #results-table .col-repo { display: none; }
+}
 
 /* Responsive */
 @media (max-width: 768px) {
