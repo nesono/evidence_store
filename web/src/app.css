@@ -125,6 +125,12 @@
   --color-ink-muted-dark: #a2a8ad;
   --color-line-dark: #34383c;
 
+  /* Text on a filled colour: a button, a verdict badge, a selected day. White
+   * on the light palette; on the dark one the fills are lighter, and white on
+   * them fell to 2.1:1, so the text goes dark instead. */
+  --color-on-fill: #ffffff;
+  --color-on-fill-dark: #16181a;
+
   /* The one accent. A tool with two accent colours has none. */
   --color-accent: #1f6feb;
   --color-accent-dark: #4c8dff;
@@ -159,9 +165,9 @@
  * counterparts. Screens therefore reference `--color-ink` and get the right one
  * in either theme, which is what stops dark mode becoming a second stylesheet.
  *
- * Following the system for now; whether a toggle is wanted is a phase 6
- * question, and adding one later means setting [data-theme] instead of relying
- * on the media query. The selector is written to allow both.
+ * Following the system: the page has no switch of its own (phase 6c). A toggle
+ * would only have to set [data-theme] on the root; the selectors already honour
+ * it in both directions, and index.html no longer pins it to light.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -179,10 +185,14 @@
     --color-line: var(--color-line-dark);
     --color-accent: var(--color-accent-dark);
     --color-inherited: var(--color-inherited-dark);
+    --color-on-fill: var(--color-on-fill-dark);
   }
 }
 
+:root[data-theme="light"] { color-scheme: light; }
+
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --color-metric-flip: var(--color-metric-flip-dark);
   --color-metric-cover: var(--color-metric-cover-dark);
   --color-pass: var(--color-pass-dark);
@@ -197,6 +207,7 @@
   --color-line: var(--color-line-dark);
   --color-accent: var(--color-accent-dark);
   --color-inherited: var(--color-inherited-dark);
+  --color-on-fill: var(--color-on-fill-dark);
 }
 
 /* --- Base ----------------------------------------------------------------
@@ -234,7 +245,9 @@
   --icon-time: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(136, 145, 164)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E");
   --icon-loading: url("data:image/svg+xml,%3Csvg fill='none' height='24' width='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' %3E%3Cstyle%3E g %7B animation: rotate 2s linear infinite; transform-origin: center center; %7D circle %7B stroke-dasharray: 75,100; stroke-dashoffset: -5; animation: dash 1.5s ease-in-out infinite; stroke-linecap: round; %7D @keyframes rotate %7B 0%25 %7B transform: rotate(0deg); %7D 100%25 %7B transform: rotate(360deg); %7D %7D @keyframes dash %7B 0%25 %7B stroke-dasharray: 1,100; stroke-dashoffset: 0; %7D 50%25 %7B stroke-dasharray: 44.5,100; stroke-dashoffset: -17.5; %7D 100%25 %7B stroke-dasharray: 44.5,100; stroke-dashoffset: -62; %7D %7D %3C/style%3E%3Cg%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='rgb(136, 145, 164)' stroke-width='4' /%3E%3C/g%3E%3C/svg%3E");
 
-  color-scheme: light;
+  /* Native parts — scrollbars, the date and time pickers, autofill — follow
+   * the theme too. */
+  color-scheme: light dark;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -520,7 +533,7 @@ button, [type="button"], [type="submit"] {
 button, [type="button"], [type="submit"], [role="button"] {
   --btn-ground: var(--color-accent);
   --btn-line: var(--color-accent);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
   --btn-shadow: 0 0 0 rgba(0, 0, 0, 0);
   padding: var(--control-pad-block) var(--control-pad-inline);
   border: 0.0625rem solid var(--btn-line);
@@ -544,7 +557,7 @@ button:is(:hover, :active, :focus), [type="button"]:is(:hover, :active, :focus),
 [type="submit"]:is(:hover, :active, :focus), [role="button"]:is(:hover, :active, :focus) {
   --btn-ground: color-mix(in oklab, var(--color-accent) 88%, black);
   --btn-line: color-mix(in oklab, var(--color-accent) 88%, black);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
 }
 
 button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focus {
@@ -556,14 +569,14 @@ button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focu
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary {
   --btn-ground: var(--color-ink-muted);
   --btn-line: var(--color-ink-muted);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
   cursor: pointer;
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:is(:hover, :active, :focus) {
   --btn-ground: color-mix(in oklab, var(--color-ink-muted) 80%, black);
   --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:focus {
@@ -1136,7 +1149,7 @@ body > main {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .badge-pass    { background: var(--color-pass); }
@@ -1168,12 +1181,12 @@ body > main {
   padding: 0.15rem 0.5rem;
   border-radius: 1rem;
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .outbox-status:hover {
   background: color-mix(in oklab, var(--color-error) 85%, black);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 /* --- Footer ---
@@ -1224,7 +1237,7 @@ body > main {
 .btn-primary {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .btn-primary:hover {
@@ -1475,7 +1488,7 @@ body > main {
 #filter-bar .fb-actions button[type="submit"] {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 #filter-bar .fb-actions button[type="submit"]:hover {
@@ -2017,7 +2030,7 @@ body > main {
     padding: 0.7rem 0.9rem;
     margin-bottom: 1rem;
     border-left: 3px solid var(--color-fail);
-    background: #fdf0f0;
+    background: color-mix(in oklab, var(--color-fail) 10%, var(--color-ground));
     font-size: 0.9rem;
 }
 
@@ -2110,7 +2123,7 @@ body > main {
 .an-seg-label {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--color-on-fill);
     white-space: nowrap;
     padding: 0 0.3rem;
 }
@@ -2250,7 +2263,7 @@ body > main {
 
 .an-table tbody tr[data-procedure] { cursor: pointer; }
 
-.an-table tbody tr[data-procedure]:hover { background: rgba(0, 0, 0, 0.03); }
+.an-table tbody tr[data-procedure]:hover { background: color-mix(in oklab, var(--color-ink) 5%, transparent); }
 
 /* The test name takes whatever the fixed columns leave. Rate columns keep one
    width whether or not they currently hold a meter, so sorting never reflows
@@ -2290,15 +2303,17 @@ body > main {
     white-space: nowrap;
 }
 
-.an-chip-stable         { background: #e3f3e3; color: #1d661d; }
+/* Each chip is its measure's colour, tinted into the ground for the fill and
+   pulled towards the ink for the text, so it reads in either theme. */
+.an-chip-stable         { background: color-mix(in oklab, var(--color-pass) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-pass) 62%, var(--color-ink)); }
 
-.an-chip-always_failing { background: #fbe3e3; color: #9c2020; }
+.an-chip-always_failing { background: color-mix(in oklab, var(--color-fail) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-fail) 62%, var(--color-ink)); }
 
-.an-chip-flaky          { background: #ede9fb; color: #4a3aa7; }
+.an-chip-flaky          { background: color-mix(in oklab, var(--color-metric-flip) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-metric-flip) 62%, var(--color-ink)); }
 
-.an-chip-infra_heavy    { background: #fdeede; color: #9a5410; }
+.an-chip-infra_heavy    { background: color-mix(in oklab, var(--color-error) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-error) 62%, var(--color-ink)); }
 
-.an-chip-sparse         { background: #ececea; color: #56554f; }
+.an-chip-sparse         { background: color-mix(in oklab, var(--color-skipped) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-skipped) 62%, var(--color-ink)); }
 
 /* Clusters */
 .an-cluster-controls {
@@ -2414,11 +2429,11 @@ body > main {
     font-size: 0.85rem;
 }
 
-.access-warning { background: #fdf3e0; color: #8a5a00; }
+.access-warning { background: color-mix(in oklab, var(--color-error) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-error) 62%, var(--color-ink)); }
 
-.access-error   { background: #fdecea; color: #a32219; }
+.access-error   { background: color-mix(in oklab, var(--color-fail) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-fail) 62%, var(--color-ink)); }
 
-.access-ok      { color: #2d9e2d; font-size: 0.85rem; }
+.access-ok      { color: var(--color-pass); font-size: 0.85rem; }
 
 /* The key is readable once. Make it look like the thing to copy. */
 #access-key-value {
@@ -2892,7 +2907,7 @@ body > main {
 .dt-day-end,
 .dt-day-end:hover {
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-fill);
     opacity: 1;
 }
 

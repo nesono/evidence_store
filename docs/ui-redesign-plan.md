@@ -127,7 +127,14 @@ Each is a PR that leaves the store working and looking deliberate.
      in 15 UI states at five widths with Pico and without. Then those values
      move onto the tokens, which is the step that visibly changes anything.
    - **6c** makes dark mode real, and settles px against rem once this project
-     controls the root font size.
+     controls the root font size. Done as: `style.css` folded into `app.css`
+     (verified with no visual change); a fixed 16px root with the type scale in
+     rem and a fluid page up to 1600px; and dark mode following the system,
+     with every literal colour left on a token and white-on-fill text replaced
+     by an `--color-on-fill` token after an audit found it at 2.1:1 on the dark
+     palette. The same audit now finds no text under WCAG AA in dark mode in
+     any of ten UI states. There is no toggle; `[data-theme]` on the root is
+     already honoured if one is wanted.
 
 ## Not in scope
 
