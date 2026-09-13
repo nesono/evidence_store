@@ -1110,20 +1110,11 @@ honours the same `EVIDENCE_BLOB_*` variables as `cmd/server` — set them to mat
 if you want the images visible through a server pointed at S3/MinIO rather than
 the local `fs` default.
 
-### Refreshing the vendored stylesheet
+### Adding a file to the page
 
-`web/static/pico.min.css` is [Pico CSS](https://picocss.com) (MIT), vendored
-rather than loaded from a CDN: the deployments that most need the offline UI
-are behind a firewall or on a proving ground with no route out, and a
-stylesheet that does not arrive leaves an unreadable page.
-
-To move to a new version, fetch it and check what you got before committing it:
-
-```bash
-curl -sL "https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css" -o web/static/pico.min.css
-```
-
-The current file is v2.1.1, 83,319 bytes, `sha256:fbc9a63fc9fc9f72d12fd7fc9806e11fa9f77ae4f9cad146b27003a1119ba3db`.
+Nothing the page loads comes from a CDN: the deployments that most need the
+offline UI are behind a firewall or on a proving ground with no route out, and
+a stylesheet or script that does not arrive leaves an unusable page.
 
 Adding any file to `web/static/` also means adding it to `embedsrcs` in
 `web/BUILD.bazel` and, if the page loads it, to the shell list in

@@ -121,7 +121,11 @@ Each is a PR that leaves the store working and looking deliberate.
    - **6a** moves those 93 rules onto tokens, with no visual change.
    - **6b** replaces what Pico provides — `nav`, `.container`, `.grid`, form
      field widths, `.secondary` and `.outline` buttons, `dialog`, `details` —
-     and removes it.
+     and removes it. Done in two steps. First a base section in `app.css`
+     reproduces the Pico rules that still matched anything, with Pico's
+     values, checked by diffing the computed style of every rendered element
+     in 15 UI states at five widths with Pico and without. Then those values
+     move onto the tokens, which is the step that visibly changes anything.
    - **6c** makes dark mode real, and settles px against rem once this project
      controls the root font size.
 
