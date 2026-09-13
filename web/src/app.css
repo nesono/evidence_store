@@ -1898,6 +1898,11 @@ body > main {
 
 .test-log li { margin-block: 0.15em; }
 
+/* Tailwind's reset takes the markers off every list. Bullets came back through
+ * the base `ul li` rule; numbers never did, so a numbered log read as a column
+ * of unlabelled lines — and the numbers are the point of writing steps down. */
+.test-log ol > li { list-style: decimal; }
+
 /* A pasted error, which is why the log supports fences at all. */
 .test-log pre {
   font-family: var(--font-mono);
