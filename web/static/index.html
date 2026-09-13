@@ -4,14 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evidence Store</title>
-    <!-- Vendored rather than fetched from a CDN: the deployments that most need
-         this page are behind a firewall or on a proving ground with no route
-         out, and a stylesheet that does not arrive leaves an unreadable page.
-         See "Refreshing the vendored stylesheet" in the README. -->
-    <link rel="stylesheet" href="pico.min.css">
-    <!-- The design tokens, built from web/src/app.css. Loaded before style.css
-         so the rules being migrated can reach for a token while both are here;
-         phase 6 of docs/ui-redesign-plan.md removes the two above it. -->
+    <!-- Built from web/src/app.css and served from here, never a CDN: the
+         deployments that most need this page are behind a firewall or on a
+         proving ground with no route out, and a stylesheet that does not
+         arrive leaves an unreadable page. style.css holds the last of the
+         narrow-screen rules until phase 6c of docs/ui-redesign-plan.md. -->
     <link rel="stylesheet" href="app.css">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.webmanifest">

@@ -17,7 +17,7 @@
         width: 100%;
     }
 
-    /* Pico stacks its grids on a narrow screen. The three-column override has to
+    /* Grids stack on a narrow screen (see .grid). The three-column override has to
        give way with them, or the two boxes and the trigger stay jammed into a
        row too narrow to hold them. */
     #finished-range {
@@ -63,7 +63,7 @@
    The cause was the header, one unwrapping row of tabs, status, identity and
    three buttons. Everything below deals with what that measurement found. */
 @media (max-width: 480px) {
-    /* The header wraps instead of running off the side. Pico lays its nav out
+    /* The header wraps instead of running off the side. The base lays the nav out
        as a row that will not break, so the break has to be asked for. */
     body > header nav {
         flex-wrap: wrap;
