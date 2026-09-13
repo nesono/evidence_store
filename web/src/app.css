@@ -2540,6 +2540,13 @@ body > main {
     align-items: center;
 }
 
+/* The same gap under the label as a field that is not wrapped, which gets it
+   from `label > input`. Without it a wrapped field (Finished at, Location,
+   Weather) sat 4px higher than the plain one beside it in the same row. */
+label > .input-with-button {
+    margin-top: calc(var(--flow-space) * 0.25);
+}
+
 .input-with-button input {
     flex: 1;
     margin-bottom: 0 !important;
