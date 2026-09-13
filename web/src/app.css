@@ -59,31 +59,25 @@
    * tables of evidence, not an article: the scale above the body size exists to
    * label sections rather than to be admired.
    *
-   * Stated in px, and that is a decision rather than laziness. The root font
-   * size scales by viewport (see Base), 100% to 131.25%, so a rem-based scale is
-   * multiplied by up to 1.31 depending on how wide the window is: at 1440px
-   * the root is 20px, which turned `--text-base` into 20px and made the filter
-   * inputs and the rows-per-page selector visibly larger than they had ever
-   * been. Measured, in phase 3, by diffing the computed styles before and
-   * after — which is exactly what that diff is for.
+   * Stated in rem, against a root that is always the browser's default (see
+   * Base). That was not possible while Pico owned the root: it scaled it by
+   * viewport, up to 131.25%, and a rem scale followed — at 1440px the filter
+   * inputs rendered at 20px — so phases 3 to 6b wrote this scale in px. With
+   * the root fixed, rem and px agree at the default of 16px, and the rem
+   * version also follows a reader who has raised their browser's font size,
+   * which px silently ignored.
    *
-   * px also makes the floor mean something. Anything a phone can focus must
-   * render at 16px or iOS zooms the page and does not zoom back (#77), and
-   * `--text-base: 16px` is that, at every viewport, rather than "16px if the
-   * root happens to be 16".
-   *
-   * The cost is that a reader who raises their browser's default font size no
-   * longer scales this UI with it. Phase 6c revisits that: the responsive root
-   * is this project's own now rather than Pico's, so what rem means is a
-   * choice again.
+   * The values are the px ones divided by 16, so nothing moved at the
+   * default. `--text-base` is still the floor for anything focusable: under
+   * 16px, iOS zooms the page on focus and does not zoom back (#77).
    */
-  --text-2xs: 12px;   /* badges, counters, dense timestamps */
-  --text-xs: 13px;    /* secondary labels, help text */
-  --text-ui: 15px;    /* the store's body size, and the results table */
-  --text-base: 16px;  /* form fields, and nothing smaller — the iOS floor */
-  --text-lg: 18px;
-  --text-xl: 22px;
-  --text-2xl: 28px;
+  --text-2xs: 0.75rem;    /* 12px: badges, counters, dense timestamps */
+  --text-xs: 0.8125rem;   /* 13px: secondary labels, help text */
+  --text-ui: 0.9375rem;   /* 15px: the store's body size, and the results table */
+  --text-base: 1rem;      /* 16px: form fields, and nothing smaller — the iOS floor */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.375rem;    /* 22px */
+  --text-2xl: 1.75rem;    /* 28px */
 
   --leading-tight: 1.25;
   --leading-normal: 1.45;
@@ -256,14 +250,11 @@
   tab-size: 4;
 }
 
-/* The root grows with the viewport, 16px on a phone to 21px on a wide screen,
- * so everything sized in rem does too. Kept as Pico had it for now: whether a
- * desktop should get a larger rem than a phone is phase 6c's question. */
-@media (min-width: 576px)  { :root { font-size: 106.25%; } }
-@media (min-width: 768px)  { :root { font-size: 112.5%; } }
-@media (min-width: 1024px) { :root { font-size: 118.75%; } }
-@media (min-width: 1280px) { :root { font-size: 125%; } }
-@media (min-width: 1536px) { :root { font-size: 131.25%; } }
+/* The root is the browser's default at every width, rather than growing with
+ * the window as it did under Pico (16px on a phone, 21px on a wide screen). A
+ * desktop does not need bigger text than a phone to be read at arm's length
+ * rather than hand's length, it needs more of the table; and a fixed root is
+ * what lets a reader's own font-size setting reach the page. */
 
 *, ::before, ::after {
   box-sizing: border-box;
@@ -308,17 +299,16 @@ body > header, body > main, body > footer { padding-block: 1rem; }
 
 section { margin-bottom: 1rem; }
 
+/* Fluid rather than stepped. Pico capped the page at 1200px on a 1440px screen
+ * and snapped between five widths; the results table is the widest thing here
+ * and was the one squeezed. Now the page takes the window less a margin that
+ * grows with it, up to a line length still readable on a very wide monitor. */
 .container {
   width: 100%;
+  max-width: 1600px;
   margin-inline: auto;
-  padding-inline: var(--flow-space);
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
 }
-
-@media (min-width: 576px)  { .container { max-width: 510px; padding-inline: 0; } }
-@media (min-width: 768px)  { .container { max-width: 700px; } }
-@media (min-width: 1024px) { .container { max-width: 950px; } }
-@media (min-width: 1280px) { .container { max-width: 1200px; } }
-@media (min-width: 1536px) { .container { max-width: 1450px; } }
 
 /* One column on a phone; from a tablet up, as many equal columns as children. */
 .grid {
@@ -1195,6 +1185,8 @@ body > main {
   font-size: var(--text-xs);
   color: var(--color-ink-muted);
 }
+
+.app-footer small { font-size: inherit; }
 
 .app-footer #server-version {
   font-family: var(--font-mono);
@@ -2487,33 +2479,43 @@ body > main {
  * cascade they had: style.css loaded after this file, so these rules used to win
  * against anything above them, and at the end of this file they still do.
  *
- * Colours, Pico variables and radii became tokens. Font sizes did not, and that
- * is deliberate. They are `em`, relative to the parent, so they behave
- * identically wherever the rule lives; converting them to the px scale is a
- * context-by-context judgement, and doing it blind is exactly what produced
- * three regressions when Search was migrated. They are left for phase 6c.
+ * Colours, Pico variables and radii became tokens. Font sizes did not, and in
+ * 6c they stayed that way on purpose. They are `em`, relative to the
+ * component around them — a datepicker's day labels are a fraction of the
+ * datepicker — and now that the root no longer moves with the window, that is
+ * exactly the behaviour wanted. Pinning them to the scale would make each one
+ * a separate guess, which is what produced three regressions in phase 3.
  *
  * The narrow-screen media queries that override these rules come after them,
  * at the end of this file (see "Narrow screens"), for the same cascade reason.
  */
 
-/* Compact forms.
-   The filter bar sizes itself (see #filter-bar) — applying the 0.8em here too
-   would compound against it, so only the advanced panel is covered. */
-#filter-advanced label,
-#add-form label {
-    font-size: 0.8em;
+/* Compact forms: the advanced filters.
+   The filter bar sizes itself (see #filter-bar), and so does Add Result (see
+   "Add Result"). This rule used to list #add-form as well, and being later in
+   the file it quietly beat that section: its 16px fields rendered at 0.85em.
+   Hidden while Pico's root was 20px on a desktop, and exposed at 10.9px once
+   the root stopped moving — so both forms now take their sizes from the scale
+   rather than from whatever surrounds them. */
+#filter-advanced label {
+    font-size: var(--text-xs);
     margin-bottom: 0;
 }
 
 #filter-advanced input,
-#filter-advanced select,
-#add-form input,
-#add-form select,
-#add-form textarea {
+#filter-advanced select {
     padding: 0.25em 0.5em;
-    font-size: 0.85em;
+    font-size: var(--text-base);
     height: auto;
+}
+
+/* "(required)", "(UTC)", a key's display name and the like. The reset makes
+   small 80% of its parent, which under 13px text is a size nobody reads. */
+#filter-advanced label small,
+#add-form label small,
+#add-form legend small,
+#tab-access small {
+    font-size: var(--text-xs);
 }
 
 #filter-form .grid,
@@ -2576,7 +2578,7 @@ body > main {
 }
 
 .commit-ref {
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
 }
 
@@ -2659,7 +2661,7 @@ body > main {
 
 .input-with-button button {
     padding: 0.3em 0.6em;
-    font-size: 0.8em;
+    font-size: var(--text-xs);
     white-space: nowrap;
     width: auto;
     margin-bottom: 0 !important;
@@ -2669,7 +2671,7 @@ body > main {
     display: block;
     margin-top: 0.15em;
     color: var(--color-ink-muted);
-    font-size: 0.8em;
+    font-size: var(--text-2xs);
 }
 
 .location-status-error {
@@ -2687,6 +2689,7 @@ body > main {
    rule split this note as "readi / ng for", so it wraps as one unit instead. */
 .weather-observed {
     color: var(--color-ink-muted);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     word-break: normal;
@@ -3178,7 +3181,7 @@ body > main {
     #filter-bar .fb-field input, #filter-bar .fb-dropdown > summary,
     #window-size, #window-size-label,
     #an-bar .an-field input, #an-bar .an-field select {
-        font-size: 16px;
+        font-size: var(--text-base);
     }
 
     /* Something to hit with a thumb. 44px is Apple's floor and Android's is
