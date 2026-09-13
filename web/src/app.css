@@ -1622,3 +1622,596 @@ body > main {
 }
 
 #tab-analytics .an-sortable:not(.an-sorted):hover::after { opacity: 0.55; }
+
+/* --- Shared components -----------------------------------------------------
+ * Phase 6a of docs/ui-redesign-plan.md: the 93 top-level rules no screen phase
+ * owned, because they are shared across screens — the datepicker, the outbox,
+ * the record-detail dialog, the advanced filters, the weather composer.
+ *
+ * Moved by substitution, and appended at the end so they keep the place in the
+ * cascade they had: style.css loaded after this file, so these rules used to win
+ * against anything above them, and at the end of this file they still do.
+ *
+ * Colours, Pico variables and radii became tokens. Font sizes did not, and that
+ * is deliberate. They are `em`, relative to the parent, so they behave
+ * identically wherever the rule lives; converting them to the px scale is a
+ * context-by-context judgement, and doing it blind is exactly what produced
+ * three regressions when Search was migrated. They are left for phase 6c.
+ *
+ * The media queries stay in style.css until 6c, for the same cascade reason in
+ * reverse: they override these base rules at narrow widths because they come
+ * later, and here they still do.
+ */
+
+/* Compact forms.
+   The filter bar sizes itself (see #filter-bar) — applying the 0.8em here too
+   would compound against it, so only the advanced panel is covered. */
+#filter-advanced label,
+#add-form label {
+    font-size: 0.8em;
+    margin-bottom: 0;
+}
+
+#filter-advanced input,
+#filter-advanced select,
+#add-form input,
+#add-form select,
+#add-form textarea {
+    padding: 0.25em 0.5em;
+    font-size: 0.85em;
+    height: auto;
+}
+
+#filter-form .grid,
+#add-form .grid {
+    gap: 0.5em;
+    margin-bottom: 0.3em;
+}
+
+#filter-form input[type="checkbox"] {
+    -webkit-appearance: checkbox;
+    appearance: checkbox;
+    margin: 0;
+    width: 0.9em !important;
+    height: 0.9em !important;
+    aspect-ratio: 1;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5em;
+}
+
+.filter-actions button {
+    width: auto;
+    padding: 0.3em 1em;
+    font-size: 0.85em;
+}
+
+/* Compress Pico's form rhythm for the whole search view. Its defaults are sized
+   for prose-width forms; this view is a dense data table. */
+#tab-search {
+    --pico-form-element-spacing-vertical: 0.3em;
+    --pico-form-element-spacing-horizontal: 0.5em;
+    --pico-spacing: 0.5rem;
+}
+
+#filter-advanced .grid {
+    gap: 0.3em 0.6em;
+    margin-bottom: 0.25em;
+}
+
+#filter-advanced label {
+    margin-bottom: 0;
+}
+
+#filter-advanced .fa-checkbox {
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+}
+
+/* Window bar — range readout, size selector and window navigation */
+#window-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+}
+
+.commit-ref {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+#inherited-table {
+    font-size: 0.875em;
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* Detail dialog */
+#detail-dialog article {
+    max-width: 700px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4em 1em;
+    font-size: 0.9em;
+}
+
+.detail-grid dt {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.detail-grid dd {
+    margin: 0;
+    word-break: break-all;
+}
+
+.metadata-block {
+    margin-top: 1em;
+}
+
+.metadata-block pre {
+    font-size: 0.85em;
+    max-height: 300px;
+    overflow: auto;
+}
+
+/* Feedback while a file is over the log field, so a drop that is about to be
+   accepted looks different from one the browser is about to navigate to. */
+.drop-active {
+    outline: 2px dashed var(--color-accent);
+    outline-offset: -2px;
+}
+
+.test-log-tools {
+    margin-block: -0.3em 0.2em;
+}
+
+.test-log-tools button {
+    font-size: 0.8em;
+    padding: 0.2em 0.7em;
+    width: auto;
+}
+
+/* Health indicator */
+.health-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.3em;
+    vertical-align: middle;
+}
+
+/* Input with inline button */
+.input-with-button {
+    display: flex;
+    gap: 0.3em;
+    align-items: center;
+}
+
+.input-with-button input {
+    flex: 1;
+    margin-bottom: 0 !important;
+}
+
+.input-with-button button {
+    padding: 0.3em 0.6em;
+    font-size: 0.8em;
+    white-space: nowrap;
+    width: auto;
+    margin-bottom: 0 !important;
+}
+
+.location-status {
+    display: block;
+    margin-top: 0.15em;
+    color: var(--color-ink-muted);
+    font-size: 0.8em;
+}
+
+.location-status-error {
+    color: var(--color-fail);
+}
+
+/* The margin of a fix, next to the point it qualifies in the record dialog */
+.location-accuracy {
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The hour a weather reading was for, next to the line it qualifies. The
+   dialog's dd breaks anywhere so that a long id or URL cannot widen it; that
+   rule split this note as "readi / ng for", so it wraps as one unit instead. */
+.weather-observed {
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    word-break: normal;
+    display: inline-block;
+}
+
+#add-custom-field {
+    font-size: 0.8em;
+    padding: 0.2em 0.6em;
+    width: auto;
+    margin-top: 0.3em;
+}
+
+.feedback-ok {
+    color: var(--color-pass);
+    font-size: 0.9em;
+}
+
+.feedback-error {
+    color: var(--color-fail);
+    font-size: 0.9em;
+}
+
+/* Finished-at range: two boxes and the calendar that fills them */
+#finished-range {
+    /* The two fields keep the width they had as a plain two-column grid; the
+       trigger takes only what its label needs, so the row does not shift when
+       the advanced panel opens. */
+    grid-template-columns: 1fr 1fr auto;
+    align-items: start;
+}
+
+.dt-open-wrap {
+    position: relative;
+}
+
+/* Each box sits under a label line and above a UTC preview that only appears
+   once there is something to preview. Aligning the trigger to the bottom of its
+   cell therefore dropped it the moment a date was entered. It gets a blank line
+   of the same size as the label text above it instead, so it starts where the
+   boxes start and stays there whatever appears below them. */
+.dt-open-wrap::before {
+    content: "";
+    display: block;
+    font-size: 0.8em;
+    height: 1lh;
+}
+
+.dt-open-wrap > button {
+    width: auto;
+    padding: 0.25em 0.9em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Pico reassigns --pico-color inside its button rules to the inverse used on a
+   filled button, so every bare button here takes its colour from the panel it
+   sits in instead — the same reason the result dropdown's summary does. */
+.dt-field-clear {
+    width: auto;
+    padding: 0 0.45em;
+    font-size: 1.1em;
+    line-height: 1;
+    margin-bottom: 0 !important;
+    border: none;
+    background: none;
+    color: var(--color-ink-muted);
+}
+
+.dt-field-clear:hover {
+    background: none;
+    color: inherit;
+}
+
+/* The popup hangs off the trigger's right edge: the trigger is the last thing
+   in the row, so opening leftwards is the only direction with room. */
+.dt-popup {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.25em);
+    right: 0;
+    width: max-content;
+    padding: 0.6em 0.8em;
+    background: var(--color-ground);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* Arrows, label, arrows — twice, year over month, with the jump-to-today button
+   across the foot of it. Three columns rather than a flex row so the year and
+   month labels centre on the same axis and the arrows line up in a column. */
+.dt-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    row-gap: 0.1em;
+    margin-bottom: 0.4em;
+    text-align: center;
+}
+
+.dt-head .dt-year,
+.dt-head .dt-month {
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.dt-head .dt-year {
+    font-variant-numeric: tabular-nums;
+}
+
+.dt-today {
+    grid-column: 1 / -1;
+    width: auto;
+    justify-self: center;
+    padding: 0.1em 0.5em;
+    margin: 0.15em 0 0;
+    border: none;
+    background: none;
+    color: var(--color-ink-muted);
+    font-size: 0.7em;
+    text-decoration: underline;
+}
+
+.dt-today:hover {
+    background: none;
+    color: inherit;
+}
+
+.dt-nav {
+    width: auto;
+    padding: 0 0.5em;
+    margin-bottom: 0 !important;
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.dt-nav:hover {
+    background: var(--color-line);
+}
+
+.dt-grid {
+    margin: 0;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.dt-grid th,
+.dt-grid td {
+    padding: 0;
+    border: none;
+    text-align: center;
+}
+
+.dt-grid th {
+    padding-bottom: 0.2em;
+    font-size: 0.7em;
+    font-weight: normal;
+    color: var(--color-ink-muted);
+}
+
+.dt-day {
+    width: 2.2em;
+    height: 2.2em;
+    padding: 0;
+    margin-bottom: 0 !important;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font-size: 0.8em;
+    line-height: 1;
+}
+
+.dt-day:hover {
+    background: var(--color-line);
+}
+
+/* Days from the neighbouring months are shown so the weeks are whole, and are
+   pickable — a range often starts a few days before the month you opened on —
+   but they are dimmed so the month on show is still readable at a glance. */
+.dt-day-outside {
+    color: var(--color-ink-muted);
+    opacity: 0.55;
+}
+
+.dt-day-today {
+    outline: 1px solid var(--color-line);
+}
+
+.dt-day-in-range {
+    background: var(--color-line);
+    border-radius: 0;
+}
+
+.dt-day-end,
+.dt-day-end:hover {
+    background: var(--color-accent);
+    color: #fff;
+    opacity: 1;
+}
+
+.dt-ends {
+    margin-top: 0.6em;
+    padding-top: 0.5em;
+    border-top: 1px solid var(--color-line);
+}
+
+.dt-end {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+    font-size: 0.8em;
+}
+
+.dt-end-label {
+    /* Both labels reserve the width of the longer one, so the day and time line
+       up between the two rows. */
+    min-width: 4em;
+    color: var(--color-ink-muted);
+}
+
+.dt-end-day {
+    min-width: 9ch;
+    font-variant-numeric: tabular-nums;
+}
+
+.dt-end-unset .dt-end-day {
+    color: var(--color-ink-muted);
+    font-style: italic;
+}
+
+/* Pico paints a clock into every time field as a 1rem background image inset
+   0.75rem from the right, and reserves the room for it with padding-inline-end.
+   The compact padding here took that room back, so the picture ended up on top
+   of the end of the value — over the AM/PM in a twelve-hour locale. It is the
+   same collision #window-size has with Pico's select chevron, and it goes the
+   same way: drop the image and keep the padding.
+
+   Pico's own selector is `input:not(...)[type=time]`, which outranks a pair of
+   classes, so these rules are scoped through the popup to outrank it in turn.
+
+   What Pico hides behind that image is the browser's real picker button —
+   transparent, and pulled out of the layout by a negative margin so it overlays
+   the painting. Giving it back its width and its opacity puts a control where
+   the picture was: it sits inside the field rather than over it, so it cannot
+   collide, and max-content then sizes the box to the value plus the button —
+   which is also how the box grows for a locale that spells the time out longer
+   than `00:00`. */
+.dt-popup .dt-end input.dt-time {
+    width: max-content;
+    padding: 0.1em 0.3em;
+    padding-inline-end: 0.3em;
+    margin-bottom: 0 !important;
+    font-size: 1em;
+    height: auto;
+    background-image: none;
+}
+
+.dt-popup .dt-end input.dt-time::-webkit-calendar-picker-indicator {
+    width: 1em;
+    margin: 0 0 0 0.3em;
+    opacity: 0.5;
+}
+
+.dt-popup .dt-end input.dt-time::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+.dt-end-clear {
+    width: auto;
+    padding: 0.1em 0.5em;
+    margin-bottom: 0 !important;
+    font-size: 0.9em;
+}
+
+.dt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4em;
+    margin-top: 0.5em;
+}
+
+.dt-actions button {
+    width: auto;
+    padding: 0.2em 0.8em;
+    font-size: 0.8em;
+    margin-bottom: 0;
+}
+
+.dt-hint {
+    display: block;
+    margin-top: 0.4em;
+    color: var(--color-ink-muted);
+    font-size: 0.7em;
+}
+
+/* One button per configured provider, stacked: the labels are sentences, not
+   words, and side by side they read as one confusing line. */
+#login-choice-list button {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+/* --- The outbox --- */
+/* Loud on purpose. Records waiting here exist nowhere else until they sync,
+   so this is the one counter in the header worth interrupting for. */
+.outbox-explainer { font-size: 0.85em; color: var(--color-ink-muted); }
+
+.outbox-entry {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--color-line);
+}
+
+.outbox-entry:last-child { border-bottom: none; }
+
+.outbox-entry-head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+
+.outbox-entry-procedure { font-weight: 600; word-break: break-all; }
+
+.outbox-entry-meta { font-size: 0.8em; color: var(--color-ink-muted); }
+
+.outbox-entry-actions { display: flex; gap: 0.4rem; margin-top: 0.4rem; }
+
+.outbox-entry-actions button { width: auto; padding: 0.2rem 0.6rem; font-size: 0.8em; margin: 0; }
+
+/* The server's own words about why a record was refused. */
+.outbox-entry-error {
+    font-size: 0.85em;
+    color: var(--color-fail);
+    margin-top: 0.25rem;
+}
+
+.outbox-entry-held {
+    font-size: 0.85em;
+    color: var(--color-error);
+    margin-top: 0.25rem;
+}
+
+#outbox-progress { margin-bottom: 0.5rem; }
+
+#outbox-progress progress { margin-bottom: 0.2rem; }
+
+.outbox-progress-label { color: var(--color-ink-muted); }
+
+/* A photo attached to a queued record, shown from the device's own copy. */
+.outbox-entry-photos { display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap; }
+
+.outbox-entry-photos img {
+    width: 44px; height: 44px; object-fit: cover;
+    border-radius: var(--radius-md); border: 1px solid var(--color-line);
+}
+
+/* Writing the weather down, for when there is nobody to ask. */
+.weather-compose { margin-top: 0.4rem; }
+
+.weather-compose .grid { gap: 0.4rem; }
+
+.weather-compose input { margin-bottom: 0.3rem; font-size: 0.9em; }
+
+.weather-compose-preview { color: var(--color-ink-muted); font-style: italic; }
+
+/* A queue nobody has emptied for a month. */
+.outbox-status-urgent { background: var(--color-fail); }
+
+.outbox-status-urgent:hover { background: color-mix(in oklab, var(--color-fail) 75%, black); }
+
+.outbox-explainer-warn { color: var(--color-error); }
+
+.outbox-explainer-alarm { color: var(--color-fail); font-weight: 600; }
+
+/* A newer build has been fetched; the page is still running the old one. */
+#update-notice {
+    padding-top: 0.5rem;
+    color: var(--color-ink-muted);
+}
