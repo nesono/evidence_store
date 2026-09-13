@@ -215,10 +215,11 @@
  * tooltips, dropdown menus, validation colours, a dark theme this page never
  * enabled) matched nothing and did not come across.
  *
- * Values are Pico's, resolved, so removing it changes no pixel; the next
- * commit moves them onto the tokens. Selectors keep Pico's specificity where a
- * later rule in this file was written to beat it (or to lose to it), which is
- * why a few read more elaborately than they need to.
+ * Sizes and spacing are Pico's, resolved, so taking it away moved nothing.
+ * Colours are the tokens', so this section follows the theme like the rest.
+ * Selectors keep Pico's specificity where a later rule in this file was
+ * written to beat it (or to lose to it), which is why a few read more
+ * elaborately than they need to.
  *
  * Unlayered, like everything else hand-written here, and first, so every rule
  * below wins against these exactly as it won against Pico. Tailwind's own
@@ -226,14 +227,6 @@
  */
 
 :root {
-  /* The two type stacks, as used by the rules below. */
-  --font-ui: system-ui, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, Helvetica,
-    Arial, "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol", "Noto Color Emoji";
-  --font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol", "Noto Color Emoji";
-
   /* The rhythm a form keeps, and the room inside a control. Variables because
    * Search compresses them for its whole view (see #tab-search). */
   --flow-space: 1rem;
@@ -251,9 +244,9 @@
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  background-color: #fff;
-  color: #373c44;
-  font-family: var(--font-ui);
+  background-color: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   font-size: 100%;
   font-weight: 400;
   line-height: 1.5;
@@ -282,7 +275,7 @@
   vertical-align: inherit;
 }
 
-::selection { background-color: rgba(2, 154, 232, 0.25); }
+::selection { background-color: color-mix(in oklab, var(--color-accent) 25%, transparent); }
 
 [hidden], template { display: none !important; }
 
@@ -384,7 +377,7 @@ nav li :where(a):not(:hover) { text-decoration: none; }
 p, ul, ol, dl, pre, table, blockquote, address {
   margin-top: 0;
   margin-bottom: 1rem;
-  color: #373c44;
+  color: var(--color-ink);
   font-style: normal;
   font-weight: 400;
 }
@@ -392,16 +385,16 @@ p, ul, ol, dl, pre, table, blockquote, address {
 h1, h2, h3, h4, h5, h6 {
   margin-top: 0;
   margin-bottom: 1rem;
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   font-weight: 700;
 }
 
-h1 { font-size: 2rem;     line-height: 1.125; color: #2d3138; }
-h2 { font-size: 1.75rem;  line-height: 1.15;  color: #373c44; }
-h3 { font-size: 1.5rem;   line-height: 1.175; color: #424751; }
-h4 { font-size: 1.25rem;  line-height: 1.2;   color: #4d535e; }
-h5 { font-size: 1.125rem; line-height: 1.225; color: #5c6370; }
-h6 { font-size: 1rem;     line-height: 1.25;  color: #646b79; }
+h1 { font-size: 2rem;     line-height: 1.125; color: var(--color-ink); }
+h2 { font-size: 1.75rem;  line-height: 1.15;  color: var(--color-ink); }
+h3 { font-size: 1.5rem;   line-height: 1.175; color: var(--color-ink); }
+h4 { font-size: 1.25rem;  line-height: 1.2;   color: var(--color-ink); }
+h5 { font-size: 1.125rem; line-height: 1.225; color: var(--color-ink); }
+h6 { font-size: 1rem;     line-height: 1.25;  color: var(--color-ink-muted); }
 
 /* More room above a heading that follows running text than above one that
  * opens a block. */
@@ -430,7 +423,7 @@ blockquote {
   display: block;
   margin: 1rem 0;
   padding: var(--flow-space);
-  border-inline-start: 0.25rem solid rgb(231 234 239.5);
+  border-inline-start: 0.25rem solid var(--color-line);
   border-inline-end: none;
 }
 
@@ -438,7 +431,7 @@ hr {
   height: 0;
   margin: 1rem 0;
   border: 0;
-  border-top: 1px solid rgb(231 234 239.5);
+  border-top: 1px solid var(--color-line);
   color: inherit;
 }
 
@@ -450,9 +443,9 @@ img {
 
 code, kbd, pre, samp {
   border-radius: 0.25rem;
-  background: rgb(243 244.5 246.75);
-  color: #646b79;
-  font-family: var(--font-code);
+  background: var(--color-ground-sunken);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
   font-size: 0.875em;
   font-weight: 400;
   line-height: initial;
@@ -464,8 +457,8 @@ code, kbd, samp {
 }
 
 kbd {
-  background-color: #373c44;
-  color: #fff;
+  background-color: var(--color-ink);
+  color: var(--color-ground);
   font-weight: bolder;
   vertical-align: baseline;
 }
@@ -486,8 +479,8 @@ pre code, pre samp {
 
 /* --- Links --- */
 :where(a:not([role="button"])) {
-  --link-ink: #0172ad;
-  --link-underline: rgba(1, 114, 173, 0.5);
+  --link-ink: var(--color-accent);
+  --link-underline: color-mix(in oklab, var(--color-accent) 50%, transparent);
   outline: 0;
   background-color: transparent;
   color: var(--link-ink);
@@ -499,22 +492,22 @@ pre code, pre samp {
 }
 
 :where(a:not([role="button"])):is([aria-current]:not([aria-current="false"]), :hover, :active, :focus) {
-  --link-ink: #015887;
-  --link-underline: #015887;
+  --link-ink: color-mix(in oklab, var(--color-accent) 88%, black);
+  --link-underline: color-mix(in oklab, var(--color-accent) 88%, black);
 }
 
 :where(a:not([role="button"])):focus-visible {
-  box-shadow: 0 0 0 0.125rem rgba(2, 154, 232, 0.5);
+  box-shadow: 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
 :where(a:not([role="button"])).secondary {
-  --link-ink: #5d6b89;
-  --link-underline: rgba(93, 107, 137, 0.5);
+  --link-ink: var(--color-ink-muted);
+  --link-underline: color-mix(in oklab, var(--color-ink-muted) 50%, transparent);
 }
 
 :where(a:not([role="button"])).secondary:is([aria-current]:not([aria-current="false"]), :hover, :active, :focus) {
-  --link-ink: #48536b;
-  --link-underline: #48536b;
+  --link-ink: color-mix(in oklab, var(--color-ink-muted) 80%, black);
+  --link-underline: color-mix(in oklab, var(--color-ink-muted) 80%, black);
 }
 
 /* --- Buttons ---
@@ -535,8 +528,8 @@ button, [type="button"], [type="submit"] {
 }
 
 button, [type="button"], [type="submit"], [role="button"] {
-  --btn-ground: #0172ad;
-  --btn-line: #0172ad;
+  --btn-ground: var(--color-accent);
+  --btn-line: var(--color-accent);
   --btn-ink: #fff;
   --btn-shadow: 0 0 0 rgba(0, 0, 0, 0);
   padding: var(--control-pad-block) var(--control-pad-inline);
@@ -559,54 +552,54 @@ button, [type="button"], [type="submit"], [role="button"] {
 
 button:is(:hover, :active, :focus), [type="button"]:is(:hover, :active, :focus),
 [type="submit"]:is(:hover, :active, :focus), [role="button"]:is(:hover, :active, :focus) {
-  --btn-ground: #02659a;
-  --btn-line: #02659a;
+  --btn-ground: color-mix(in oklab, var(--color-accent) 88%, black);
+  --btn-line: color-mix(in oklab, var(--color-accent) 88%, black);
   --btn-ink: #fff;
 }
 
 button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focus {
-  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem rgba(2, 154, 232, 0.5);
+  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
 [type="button"], [type="submit"] { margin-bottom: var(--flow-space); }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary {
-  --btn-ground: #525f7a;
-  --btn-line: #525f7a;
+  --btn-ground: var(--color-ink-muted);
+  --btn-line: var(--color-ink-muted);
   --btn-ink: #fff;
   cursor: pointer;
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:is(:hover, :active, :focus) {
-  --btn-ground: #48536b;
-  --btn-line: #48536b;
+  --btn-ground: color-mix(in oklab, var(--color-ink-muted) 80%, black);
+  --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
   --btn-ink: #fff;
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:focus {
-  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem rgba(93, 107, 137, 0.25);
+  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem color-mix(in oklab, var(--color-ink-muted) 25%, transparent);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline {
   --btn-ground: transparent;
-  --btn-line: #0172ad;
-  --btn-ink: #0172ad;
+  --btn-line: var(--color-accent);
+  --btn-ink: var(--color-accent);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline:is(:hover, :active, :focus) {
   --btn-ground: transparent;
-  --btn-line: #015887;
-  --btn-ink: #015887;
+  --btn-line: color-mix(in oklab, var(--color-accent) 88%, black);
+  --btn-ink: color-mix(in oklab, var(--color-accent) 88%, black);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline.secondary {
-  --btn-line: #5d6b89;
-  --btn-ink: #5d6b89;
+  --btn-line: var(--color-ink-muted);
+  --btn-ink: var(--color-ink-muted);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline.secondary:is(:hover, :active, :focus) {
-  --btn-line: #48536b;
-  --btn-ink: #48536b;
+  --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
+  --btn-ink: color-mix(in oklab, var(--color-ink-muted) 80%, black);
 }
 
 :where(button, [type="submit"], [type="button"], [role="button"])[disabled] {
@@ -672,22 +665,22 @@ legend {
 fieldset legend, label {
   display: block;
   margin-bottom: calc(var(--flow-space) * 0.375);
-  color: #373c44;
+  color: var(--color-ink);
   font-weight: 400;
 }
 
 fieldset legend { margin-bottom: calc(var(--flow-space) * 0.5); }
 
 input, select, textarea {
-  --field-ground: rgb(251 251.5 252.25);
-  --field-line: #cfd5e2;
+  --field-ground: var(--color-ground);
+  --field-line: var(--color-line);
   --field-shadow: none;
   border: 0.0625rem solid var(--field-line);
   border-radius: 0.25rem;
   outline: 0;
   background-color: var(--field-ground);
   box-shadow: var(--field-shadow);
-  color: #23262c;
+  color: var(--color-ink);
   font-weight: 400;
   transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out,
     color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -695,17 +688,17 @@ input, select, textarea {
 
 :where(select, textarea):not([readonly]):is(:active, :focus),
 input:not([type="submit"], [type="button"], [type="reset"], [type="checkbox"], [type="radio"], [readonly]):is(:active, :focus) {
-  --field-ground: #fff;
-  --field-line: #0172ad;
+  --field-ground: var(--color-ground);
+  --field-line: var(--color-accent);
 }
 
 :where(select, textarea):not([readonly]):focus,
 input:not([type="submit"], [type="button"], [type="reset"], [type="range"], [type="file"], [readonly]):focus {
-  --field-shadow: 0 0 0 0.0625rem #0172ad;
+  --field-shadow: 0 0 0 0.0625rem var(--color-accent);
 }
 
 input:is([type="checkbox"], [type="radio"]):not([readonly]):focus {
-  --field-shadow: 0 0 0 0.125rem rgba(2, 154, 232, 0.5);
+  --field-shadow: 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
 button[type="submit"], input:not([type="checkbox"], [type="radio"]), select, textarea {
@@ -727,7 +720,7 @@ input:not([type="checkbox"], [type="radio"]), select, textarea {
 }
 
 input::placeholder, textarea::placeholder, select:invalid {
-  color: #646b79;
+  color: var(--color-ink-muted);
   opacity: 1;
 }
 
@@ -749,7 +742,7 @@ select:not([multiple], [size]) {
   width: 100%;
   margin-top: calc(var(--flow-space) * -0.75);
   margin-bottom: var(--flow-space);
-  color: #646b79;
+  color: var(--color-ink-muted);
 }
 
 label > :where(input, select, textarea) {
@@ -774,13 +767,13 @@ label:has([type="checkbox"], [type="radio"]) {
   cursor: pointer;
 }
 
-[type="checkbox"], [type="radio"], progress { accent-color: #0172ad; }
+[type="checkbox"], [type="radio"], progress { accent-color: var(--color-accent); }
 
 [type="radio"] { border-radius: 50%; }
 
 [type="checkbox"]:checked, [type="radio"]:checked {
-  --field-ground: #0172ad;
-  --field-line: #0172ad;
+  --field-ground: var(--color-accent);
+  --field-line: var(--color-accent);
   background-image: var(--icon-check);
   background-position: center;
   background-size: 0.75em auto;
@@ -788,7 +781,7 @@ label:has([type="checkbox"], [type="radio"]) {
 }
 
 [type="radio"]:checked {
-  --field-ground: #fff;
+  --field-ground: var(--color-ground);
   border-width: 0.35em;
   background-image: none;
 }
@@ -825,8 +818,8 @@ progress {
   overflow: hidden;
   border: 0;
   border-radius: 0.25rem;
-  background-color: #dfe3eb;
-  color: #0172ad;
+  background-color: var(--color-line);
+  color: var(--color-accent);
   vertical-align: baseline;
 }
 
@@ -836,11 +829,11 @@ progress::-webkit-progress-bar {
 }
 
 progress[value]::-webkit-progress-value {
-  background-color: #0172ad;
+  background-color: var(--color-accent);
   transition: inline-size 0.2s ease-in-out;
 }
 
-progress::-moz-progress-bar { background-color: #0172ad; }
+progress::-moz-progress-bar { background-color: var(--color-accent); }
 
 /* A row of controls joined into one: the result dropdown's checkboxes. */
 [role="group"] {
@@ -855,7 +848,7 @@ progress::-moz-progress-bar { background-color: #0172ad; }
 }
 
 [role="group"]:has(input:not([type="submit"], [type="button"]):focus, select:focus) {
-  box-shadow: 0 0 0 0.0625rem #cfd5e2;
+  box-shadow: 0 0 0 0.0625rem var(--color-line);
 }
 
 [role="group"] input:not([type="checkbox"], [type="radio"]), [role="group"] select, [role="group"] > * {
@@ -889,9 +882,9 @@ progress::-moz-progress-bar { background-color: #0172ad; }
 
 td, th {
   padding: calc(var(--flow-space) / 2) var(--flow-space);
-  border-bottom: 0.0625rem solid rgb(231 234 239.5);
-  background-color: #fff;
-  color: #373c44;
+  border-bottom: 0.0625rem solid var(--color-line);
+  background-color: var(--color-ground);
+  color: var(--color-ink);
   font-weight: 400;
   text-align: start;
 }
@@ -914,7 +907,7 @@ details summary {
   transition: color 0.2s ease-in-out;
 }
 
-details summary:not([role]) { color: #373c44; }
+details summary:not([role]) { color: var(--color-ink); }
 
 details summary::-webkit-details-marker,
 details summary::marker { display: none; }
@@ -936,17 +929,17 @@ details summary::after {
 }
 
 details summary:focus { outline: 0; }
-details summary:focus:not([role]) { color: #015887; }
+details summary:focus:not([role]) { color: color-mix(in oklab, var(--color-accent) 88%, black); }
 
 details summary:focus-visible:not([role]) {
-  outline: 0.125rem solid rgba(2, 154, 232, 0.5);
+  outline: 0.125rem solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   outline-offset: calc(var(--flow-space, 1rem) * 0.5);
-  color: #0172ad;
+  color: var(--color-accent);
 }
 
 details[open] > summary { margin-bottom: var(--flow-space); }
 details[open] > summary::after { transform: rotate(0deg); }
-details[open] > summary:not([role]):not(:focus) { color: #646b79; }
+details[open] > summary:not([role]):not(:focus) { color: var(--color-ink-muted); }
 
 details summary[role="button"] {
   width: 100%;
@@ -963,7 +956,7 @@ article {
   margin-bottom: 1rem;
   padding: 1rem;
   border-radius: 0.25rem;
-  background: #fff;
+  background: var(--color-ground-raised);
   box-shadow:
     0.0145rem 0.029rem 0.174rem rgba(129, 145, 181, 0.01698),
     0.0335rem 0.067rem 0.402rem rgba(129, 145, 181, 0.024),
@@ -977,13 +970,13 @@ article {
 article > header, article > footer {
   margin-inline: -1rem;
   padding: 0.66rem 1rem;
-  background-color: rgb(251 251.5 252.25);
+  background-color: var(--color-ground-sunken);
 }
 
 article > header {
   margin-top: -1rem;
   margin-bottom: 1rem;
-  border-bottom: 0.0625rem solid rgb(231 234 239.5);
+  border-bottom: 0.0625rem solid var(--color-line);
   border-top-left-radius: 0.25rem;
   border-top-right-radius: 0.25rem;
 }
@@ -991,7 +984,7 @@ article > header {
 article > footer {
   margin-top: 1rem;
   margin-bottom: -1rem;
-  border-top: 0.0625rem solid rgb(231 234 239.5);
+  border-top: 0.0625rem solid var(--color-line);
   border-bottom-left-radius: 0.25rem;
   border-bottom-right-radius: 0.25rem;
 }
@@ -1012,8 +1005,8 @@ dialog {
   border: 0;
   -webkit-backdrop-filter: blur(0.375rem);
   backdrop-filter: blur(0.375rem);
-  background-color: rgba(232, 234, 237, 0.75);
-  color: #373c44;
+  background-color: color-mix(in oklab, var(--color-ground-sunken) 75%, transparent);
+  color: var(--color-ink);
 }
 
 dialog:not([open]), dialog[open="false"] { display: none; }
@@ -2019,8 +2012,8 @@ body > main {
 }
 
 #an-views button.active {
-    color: #0172ad;
-    border-bottom-color: #0172ad;
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
 }
 
 .an-error {
@@ -2254,9 +2247,9 @@ body > main {
 
 .an-sortable { cursor: pointer; user-select: none; }
 
-.an-sortable:hover { color: #0172ad; }
+.an-sortable:hover { color: var(--color-accent); }
 
-.an-sorted { color: #0172ad; }
+.an-sorted { color: var(--color-accent); }
 
 .an-table tbody tr[data-procedure] { cursor: pointer; }
 
@@ -2277,7 +2270,7 @@ body > main {
 
 .an-test-name {
     display: block;
-    font-family: var(--font-code);
+    font-family: var(--font-mono);
     font-size: 0.82rem;
     overflow-wrap: anywhere;
 }
@@ -2366,7 +2359,7 @@ body > main {
 }
 
 .an-cluster-members li {
-    font-family: var(--font-code);
+    font-family: var(--font-mono);
     font-size: 0.78rem;
     list-style: none;
 }
@@ -2432,7 +2425,7 @@ body > main {
 
 /* The key is readable once. Make it look like the thing to copy. */
 #access-key-value {
-    font-family: var(--font-code);
+    font-family: var(--font-mono);
     font-size: 0.9rem;
 }
 
