@@ -8,9 +8,16 @@
          deployments that most need this page are behind a firewall or on a
          proving ground with no route out, and a stylesheet that does not
          arrive leaves an unreadable page. style.css holds the last of the
-         narrow-screen rules until phase 6c of docs/ui-redesign-plan.md. -->
-    <link rel="stylesheet" href="app.css">
-    <link rel="stylesheet" href="style.css">
+         narrow-screen rules until phase 6c of docs/ui-redesign-plan.md.
+
+         The ?v= is for the service worker. It fetches this page from the
+         network but answers stylesheets from its cache first, so a returning
+         visitor gets a new page with the previous deploy's stylesheet, and a
+         change that needs both halves renders half-built until they reload.
+         A new query is a new cache key: bump it (and SHELL and VERSION in
+         sw.js) whenever this page and a stylesheet change together. -->
+    <link rel="stylesheet" href="app.css?v=2">
+    <link rel="stylesheet" href="style.css?v=2">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is

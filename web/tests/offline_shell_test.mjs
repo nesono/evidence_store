@@ -45,7 +45,7 @@ function referencedAssets() {
 // A path in the shell list, as a file on disk. "/" is the same document as
 // "/index.html" — a tester who opens the bare origin has to get the page too.
 function shellPathToFile(path) {
-  const rel = path === "/" ? "index.html" : path.replace(/^\//, "");
+  const rel = path === "/" ? "index.html" : path.replace(/^\//, "").replace(/\?.*$/, "");
   return join(staticDir, rel);
 }
 
@@ -65,6 +65,20 @@ test("every asset index.html loads is in the shell", () => {
     const path = ref.startsWith("/") ? ref : `/${ref}`;
     assert.ok(shell.has(path),
       `index.html loads ${ref}, which sw.js does not precache — the page would be broken offline`);
+  }
+});
+
+// The page comes from the network and its stylesheets from the worker's cache,
+// so an unversioned stylesheet URL pairs a new page with the last deploy's
+// styles. Removing Pico did exactly that: the new page stopped loading Pico,
+// the cached app.css did not yet replace it, and every returning visitor got
+// one load with no layout at all.
+test("every stylesheet index.html loads is versioned", () => {
+  const sheets = [...indexHTML.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(sheets.length > 0, "index.html should load a stylesheet");
+  for (const href of sheets) {
+    assert.match(href, /\?v=[\w.-]+$/,
+      `${href} has no ?v= — a returning visitor's service worker would answer it with a stale copy`);
   }
 });
 
