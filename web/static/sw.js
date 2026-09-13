@@ -48,6 +48,7 @@ const SHELL = [
   "/outbox.js",
   "/outboxview.js",
   "/search.js",
+  "/tagfit.js",
   "/sync.js",
   "/utcpreview.js",
   "/weather.js",

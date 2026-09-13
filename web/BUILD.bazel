@@ -35,6 +35,7 @@ go_library(
         "static/search.js",
         "static/app.css",
         "static/sw.js",
+        "static/tagfit.js",
         "static/sync.js",
         "static/utcpreview.js",
         "static/weather.js",

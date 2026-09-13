@@ -14,6 +14,7 @@ import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
 import { updateUtcPreview } from "./utcpreview.js";
 import { renderMarkdown } from "./markdown.js";
+import { fitTagCells } from "./tagfit.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { EVIDENCE_TYPES, evidenceTypeLabel } from "./evidencetype.js";
 import { formatCoordinates, parseCoordinates } from "./location.js";
@@ -334,9 +335,15 @@ export async function fetchEvidenceById(id) {
 // dropdown, so there is nothing to complete from what the store happens to hold.
 // --- Rendering ---
 
+// Every tag is in the markup; fitTagCells hides the ones a cell has no room for
+// and adds the "+N" counter, and the cell title lists them all (#167).
 function renderTags(metadata) {
   if (!metadata || !metadata.tags || metadata.tags.length === 0) return "";
-  return metadata.tags.map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(" ");
+  return `<span class="tag-list">${metadata.tags.map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join("")}</span>`;
+}
+
+function tagsTitle(metadata) {
+  return metadata && Array.isArray(metadata.tags) ? metadata.tags.join(", ") : "";
 }
 
 function rowHTML(r) {
@@ -351,7 +358,7 @@ function rowHTML(r) {
       <td class="col-type">${esc(evidenceTypeLabel(r.evidence_type))}</td>
       <td class="col-source" title="${esc(r.source)}">${esc(r.source)}</td>
       <td class="col-finished">${formatTime(r.finished_at)}</td>
-      <td class="col-tags">${renderTags(r.metadata)}</td>
+      <td class="col-tags" title="${esc(tagsTitle(r.metadata))}">${renderTags(r.metadata)}</td>
     </tr>`;
 }
 
@@ -362,6 +369,7 @@ function renderTable(records) {
     return;
   }
   tbody.innerHTML = records.map(rowHTML).join("");
+  fitTagCells(document.getElementById("results-table"));
   // Each window starts at its own top rather than inheriting the previous scroll.
   document.getElementById("results-window").scrollTop = 0;
 }
@@ -378,6 +386,7 @@ function renderInherited(records) {
   panel.hidden = false;
   document.getElementById("inherited-count").textContent = records.length.toLocaleString();
   document.getElementById("inherited-body").innerHTML = records.map(rowHTML).join("");
+  fitTagCells(document.getElementById("inherited-table"));
 }
 
 function renderRange(count) {
@@ -728,6 +737,20 @@ export function mountSearch() {
     }
     e.preventDefault();
   });
+
+  // Which tags fit changes with the column: a resized window, a phone turned
+  // on its side, the inherited panel opening for the first time.
+  const refitTags = () => {
+    fitTagCells(document.getElementById("results-table"));
+    fitTagCells(document.getElementById("inherited-table"));
+  };
+  let refitQueued = false;
+  new ResizeObserver(() => {
+    if (refitQueued) return;
+    refitQueued = true;
+    requestAnimationFrame(() => { refitQueued = false; refitTags(); });
+  }).observe(document.getElementById("results-window"));
+  document.getElementById("inherited-panel").addEventListener("toggle", refitTags);
 
   document.getElementById("results-body").addEventListener("click", (e) => {
     const row = e.target.closest("tr[data-id]");
