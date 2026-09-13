@@ -14,10 +14,10 @@
 // being imported. web/tests/offline_shell_test.mjs reads the list back out of
 // this file to check it against what the page actually loads.
 
-// v2: the stylesheets moved to versioned URLs when Pico was removed. A new
-// cache name makes activation delete v1's, rather than keeping main's
-// unversioned app.css around indefinitely.
-const VERSION = "v2";
+// Bumped with the stylesheet version in index.html, so activation deletes the
+// previous cache rather than keeping an old stylesheet around indefinitely.
+// v3: style.css folded into app.css.
+const VERSION = "v3";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -28,8 +28,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=2",
-  "/style.css?v=2",
+  "/app.css?v=3",
   "/app.js",
   "/blobref.js",
   "/access.js",

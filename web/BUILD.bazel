@@ -34,7 +34,6 @@ go_library(
         "static/outboxview.js",
         "static/search.js",
         "static/app.css",
-        "static/style.css",
         "static/sw.js",
         "static/sync.js",
         "static/utcpreview.js",

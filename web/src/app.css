@@ -12,9 +12,9 @@
  * One rule about the cascade governs everything below. Tailwind emits its own
  * output — its reset included — inside `@layer base`, `@layer components` and
  * `@layer utilities`, and unlayered CSS beats layered CSS whatever order it
- * loads in. Every hand-written rule in this file is unlayered, and so is
- * style.css. A Tailwind utility in the markup therefore loses to any of them
- * that touches the same property: moving something onto utilities means
+ * loads in. Every hand-written rule in this file is unlayered, so a Tailwind
+ * utility in the markup loses to any of them that touches the same property:
+ * moving something onto utilities means
  * deleting the rule it replaces in the same change, or the utility will
  * silently not work.
  */
@@ -59,31 +59,25 @@
    * tables of evidence, not an article: the scale above the body size exists to
    * label sections rather than to be admired.
    *
-   * Stated in px, and that is a decision rather than laziness. The root font
-   * size scales by viewport (see Base), 100% to 131.25%, so a rem-based scale is
-   * multiplied by up to 1.31 depending on how wide the window is: at 1440px
-   * the root is 20px, which turned `--text-base` into 20px and made the filter
-   * inputs and the rows-per-page selector visibly larger than they had ever
-   * been. Measured, in phase 3, by diffing the computed styles before and
-   * after — which is exactly what that diff is for.
+   * Stated in rem, against a root that is always the browser's default (see
+   * Base). That was not possible while Pico owned the root: it scaled it by
+   * viewport, up to 131.25%, and a rem scale followed — at 1440px the filter
+   * inputs rendered at 20px — so phases 3 to 6b wrote this scale in px. With
+   * the root fixed, rem and px agree at the default of 16px, and the rem
+   * version also follows a reader who has raised their browser's font size,
+   * which px silently ignored.
    *
-   * px also makes the floor mean something. Anything a phone can focus must
-   * render at 16px or iOS zooms the page and does not zoom back (#77), and
-   * `--text-base: 16px` is that, at every viewport, rather than "16px if the
-   * root happens to be 16".
-   *
-   * The cost is that a reader who raises their browser's default font size no
-   * longer scales this UI with it. Phase 6c revisits that: the responsive root
-   * is this project's own now rather than Pico's, so what rem means is a
-   * choice again.
+   * The values are the px ones divided by 16, so nothing moved at the
+   * default. `--text-base` is still the floor for anything focusable: under
+   * 16px, iOS zooms the page on focus and does not zoom back (#77).
    */
-  --text-2xs: 12px;   /* badges, counters, dense timestamps */
-  --text-xs: 13px;    /* secondary labels, help text */
-  --text-ui: 15px;    /* the store's body size, and the results table */
-  --text-base: 16px;  /* form fields, and nothing smaller — the iOS floor */
-  --text-lg: 18px;
-  --text-xl: 22px;
-  --text-2xl: 28px;
+  --text-2xs: 0.75rem;    /* 12px: badges, counters, dense timestamps */
+  --text-xs: 0.8125rem;   /* 13px: secondary labels, help text */
+  --text-ui: 0.9375rem;   /* 15px: the store's body size, and the results table */
+  --text-base: 1rem;      /* 16px: form fields, and nothing smaller — the iOS floor */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.375rem;    /* 22px */
+  --text-2xl: 1.75rem;    /* 28px */
 
   --leading-tight: 1.25;
   --leading-normal: 1.45;
@@ -131,6 +125,12 @@
   --color-ink-muted-dark: #a2a8ad;
   --color-line-dark: #34383c;
 
+  /* Text on a filled colour: a button, a verdict badge, a selected day. White
+   * on the light palette; on the dark one the fills are lighter, and white on
+   * them fell to 2.1:1, so the text goes dark instead. */
+  --color-on-fill: #ffffff;
+  --color-on-fill-dark: #16181a;
+
   /* The one accent. A tool with two accent colours has none. */
   --color-accent: #1f6feb;
   --color-accent-dark: #4c8dff;
@@ -165,9 +165,9 @@
  * counterparts. Screens therefore reference `--color-ink` and get the right one
  * in either theme, which is what stops dark mode becoming a second stylesheet.
  *
- * Following the system for now; whether a toggle is wanted is a phase 6
- * question, and adding one later means setting [data-theme] instead of relying
- * on the media query. The selector is written to allow both.
+ * Following the system: the page has no switch of its own (phase 6c). A toggle
+ * would only have to set [data-theme] on the root; the selectors already honour
+ * it in both directions, and index.html no longer pins it to light.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -185,10 +185,14 @@
     --color-line: var(--color-line-dark);
     --color-accent: var(--color-accent-dark);
     --color-inherited: var(--color-inherited-dark);
+    --color-on-fill: var(--color-on-fill-dark);
   }
 }
 
+:root[data-theme="light"] { color-scheme: light; }
+
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --color-metric-flip: var(--color-metric-flip-dark);
   --color-metric-cover: var(--color-metric-cover-dark);
   --color-pass: var(--color-pass-dark);
@@ -203,6 +207,7 @@
   --color-line: var(--color-line-dark);
   --color-accent: var(--color-accent-dark);
   --color-inherited: var(--color-inherited-dark);
+  --color-on-fill: var(--color-on-fill-dark);
 }
 
 /* --- Base ----------------------------------------------------------------
@@ -240,7 +245,9 @@
   --icon-time: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(136, 145, 164)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E");
   --icon-loading: url("data:image/svg+xml,%3Csvg fill='none' height='24' width='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' %3E%3Cstyle%3E g %7B animation: rotate 2s linear infinite; transform-origin: center center; %7D circle %7B stroke-dasharray: 75,100; stroke-dashoffset: -5; animation: dash 1.5s ease-in-out infinite; stroke-linecap: round; %7D @keyframes rotate %7B 0%25 %7B transform: rotate(0deg); %7D 100%25 %7B transform: rotate(360deg); %7D %7D @keyframes dash %7B 0%25 %7B stroke-dasharray: 1,100; stroke-dashoffset: 0; %7D 50%25 %7B stroke-dasharray: 44.5,100; stroke-dashoffset: -17.5; %7D 100%25 %7B stroke-dasharray: 44.5,100; stroke-dashoffset: -62; %7D %7D %3C/style%3E%3Cg%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='rgb(136, 145, 164)' stroke-width='4' /%3E%3C/g%3E%3C/svg%3E");
 
-  color-scheme: light;
+  /* Native parts — scrollbars, the date and time pickers, autofill — follow
+   * the theme too. */
+  color-scheme: light dark;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -256,14 +263,11 @@
   tab-size: 4;
 }
 
-/* The root grows with the viewport, 16px on a phone to 21px on a wide screen,
- * so everything sized in rem does too. Kept as Pico had it for now: whether a
- * desktop should get a larger rem than a phone is phase 6c's question. */
-@media (min-width: 576px)  { :root { font-size: 106.25%; } }
-@media (min-width: 768px)  { :root { font-size: 112.5%; } }
-@media (min-width: 1024px) { :root { font-size: 118.75%; } }
-@media (min-width: 1280px) { :root { font-size: 125%; } }
-@media (min-width: 1536px) { :root { font-size: 131.25%; } }
+/* The root is the browser's default at every width, rather than growing with
+ * the window as it did under Pico (16px on a phone, 21px on a wide screen). A
+ * desktop does not need bigger text than a phone to be read at arm's length
+ * rather than hand's length, it needs more of the table; and a fixed root is
+ * what lets a reader's own font-size setting reach the page. */
 
 *, ::before, ::after {
   box-sizing: border-box;
@@ -308,17 +312,16 @@ body > header, body > main, body > footer { padding-block: 1rem; }
 
 section { margin-bottom: 1rem; }
 
+/* Fluid rather than stepped. Pico capped the page at 1200px on a 1440px screen
+ * and snapped between five widths; the results table is the widest thing here
+ * and was the one squeezed. Now the page takes the window less a margin that
+ * grows with it, up to a line length still readable on a very wide monitor. */
 .container {
   width: 100%;
+  max-width: 1600px;
   margin-inline: auto;
-  padding-inline: var(--flow-space);
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
 }
-
-@media (min-width: 576px)  { .container { max-width: 510px; padding-inline: 0; } }
-@media (min-width: 768px)  { .container { max-width: 700px; } }
-@media (min-width: 1024px) { .container { max-width: 950px; } }
-@media (min-width: 1280px) { .container { max-width: 1200px; } }
-@media (min-width: 1536px) { .container { max-width: 1450px; } }
 
 /* One column on a phone; from a tablet up, as many equal columns as children. */
 .grid {
@@ -530,7 +533,7 @@ button, [type="button"], [type="submit"] {
 button, [type="button"], [type="submit"], [role="button"] {
   --btn-ground: var(--color-accent);
   --btn-line: var(--color-accent);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
   --btn-shadow: 0 0 0 rgba(0, 0, 0, 0);
   padding: var(--control-pad-block) var(--control-pad-inline);
   border: 0.0625rem solid var(--btn-line);
@@ -554,7 +557,7 @@ button:is(:hover, :active, :focus), [type="button"]:is(:hover, :active, :focus),
 [type="submit"]:is(:hover, :active, :focus), [role="button"]:is(:hover, :active, :focus) {
   --btn-ground: color-mix(in oklab, var(--color-accent) 88%, black);
   --btn-line: color-mix(in oklab, var(--color-accent) 88%, black);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
 }
 
 button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focus {
@@ -566,14 +569,14 @@ button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focu
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary {
   --btn-ground: var(--color-ink-muted);
   --btn-line: var(--color-ink-muted);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
   cursor: pointer;
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:is(:hover, :active, :focus) {
   --btn-ground: color-mix(in oklab, var(--color-ink-muted) 80%, black);
   --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
-  --btn-ink: #fff;
+  --btn-ink: var(--color-on-fill);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:focus {
@@ -1146,7 +1149,7 @@ body > main {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .badge-pass    { background: var(--color-pass); }
@@ -1178,12 +1181,12 @@ body > main {
   padding: 0.15rem 0.5rem;
   border-radius: 1rem;
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .outbox-status:hover {
   background: color-mix(in oklab, var(--color-error) 85%, black);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 /* --- Footer ---
@@ -1195,6 +1198,8 @@ body > main {
   font-size: var(--text-xs);
   color: var(--color-ink-muted);
 }
+
+.app-footer small { font-size: inherit; }
 
 .app-footer #server-version {
   font-family: var(--font-mono);
@@ -1232,7 +1237,7 @@ body > main {
 .btn-primary {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .btn-primary:hover {
@@ -1483,7 +1488,7 @@ body > main {
 #filter-bar .fb-actions button[type="submit"] {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 #filter-bar .fb-actions button[type="submit"]:hover {
@@ -2025,7 +2030,7 @@ body > main {
     padding: 0.7rem 0.9rem;
     margin-bottom: 1rem;
     border-left: 3px solid var(--color-fail);
-    background: #fdf0f0;
+    background: color-mix(in oklab, var(--color-fail) 10%, var(--color-ground));
     font-size: 0.9rem;
 }
 
@@ -2118,7 +2123,7 @@ body > main {
 .an-seg-label {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--color-on-fill);
     white-space: nowrap;
     padding: 0 0.3rem;
 }
@@ -2258,7 +2263,7 @@ body > main {
 
 .an-table tbody tr[data-procedure] { cursor: pointer; }
 
-.an-table tbody tr[data-procedure]:hover { background: rgba(0, 0, 0, 0.03); }
+.an-table tbody tr[data-procedure]:hover { background: color-mix(in oklab, var(--color-ink) 5%, transparent); }
 
 /* The test name takes whatever the fixed columns leave. Rate columns keep one
    width whether or not they currently hold a meter, so sorting never reflows
@@ -2298,15 +2303,17 @@ body > main {
     white-space: nowrap;
 }
 
-.an-chip-stable         { background: #e3f3e3; color: #1d661d; }
+/* Each chip is its measure's colour, tinted into the ground for the fill and
+   pulled towards the ink for the text, so it reads in either theme. */
+.an-chip-stable         { background: color-mix(in oklab, var(--color-pass) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-pass) 62%, var(--color-ink)); }
 
-.an-chip-always_failing { background: #fbe3e3; color: #9c2020; }
+.an-chip-always_failing { background: color-mix(in oklab, var(--color-fail) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-fail) 62%, var(--color-ink)); }
 
-.an-chip-flaky          { background: #ede9fb; color: #4a3aa7; }
+.an-chip-flaky          { background: color-mix(in oklab, var(--color-metric-flip) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-metric-flip) 62%, var(--color-ink)); }
 
-.an-chip-infra_heavy    { background: #fdeede; color: #9a5410; }
+.an-chip-infra_heavy    { background: color-mix(in oklab, var(--color-error) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-error) 62%, var(--color-ink)); }
 
-.an-chip-sparse         { background: #ececea; color: #56554f; }
+.an-chip-sparse         { background: color-mix(in oklab, var(--color-skipped) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-skipped) 62%, var(--color-ink)); }
 
 /* Clusters */
 .an-cluster-controls {
@@ -2422,11 +2429,11 @@ body > main {
     font-size: 0.85rem;
 }
 
-.access-warning { background: #fdf3e0; color: #8a5a00; }
+.access-warning { background: color-mix(in oklab, var(--color-error) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-error) 62%, var(--color-ink)); }
 
-.access-error   { background: #fdecea; color: #a32219; }
+.access-error   { background: color-mix(in oklab, var(--color-fail) 14%, var(--color-ground)); color: color-mix(in oklab, var(--color-fail) 62%, var(--color-ink)); }
 
-.access-ok      { color: #2d9e2d; font-size: 0.85rem; }
+.access-ok      { color: var(--color-pass); font-size: 0.85rem; }
 
 /* The key is readable once. Make it look like the thing to copy. */
 #access-key-value {
@@ -2487,34 +2494,43 @@ body > main {
  * cascade they had: style.css loaded after this file, so these rules used to win
  * against anything above them, and at the end of this file they still do.
  *
- * Colours, Pico variables and radii became tokens. Font sizes did not, and that
- * is deliberate. They are `em`, relative to the parent, so they behave
- * identically wherever the rule lives; converting them to the px scale is a
- * context-by-context judgement, and doing it blind is exactly what produced
- * three regressions when Search was migrated. They are left for phase 6c.
+ * Colours, Pico variables and radii became tokens. Font sizes did not, and in
+ * 6c they stayed that way on purpose. They are `em`, relative to the
+ * component around them — a datepicker's day labels are a fraction of the
+ * datepicker — and now that the root no longer moves with the window, that is
+ * exactly the behaviour wanted. Pinning them to the scale would make each one
+ * a separate guess, which is what produced three regressions in phase 3.
  *
- * The media queries stay in style.css until 6c, for the same cascade reason in
- * reverse: they override these base rules at narrow widths because they come
- * later, and here they still do.
+ * The narrow-screen media queries that override these rules come after them,
+ * at the end of this file (see "Narrow screens"), for the same cascade reason.
  */
 
-/* Compact forms.
-   The filter bar sizes itself (see #filter-bar) — applying the 0.8em here too
-   would compound against it, so only the advanced panel is covered. */
-#filter-advanced label,
-#add-form label {
-    font-size: 0.8em;
+/* Compact forms: the advanced filters.
+   The filter bar sizes itself (see #filter-bar), and so does Add Result (see
+   "Add Result"). This rule used to list #add-form as well, and being later in
+   the file it quietly beat that section: its 16px fields rendered at 0.85em.
+   Hidden while Pico's root was 20px on a desktop, and exposed at 10.9px once
+   the root stopped moving — so both forms now take their sizes from the scale
+   rather than from whatever surrounds them. */
+#filter-advanced label {
+    font-size: var(--text-xs);
     margin-bottom: 0;
 }
 
 #filter-advanced input,
-#filter-advanced select,
-#add-form input,
-#add-form select,
-#add-form textarea {
+#filter-advanced select {
     padding: 0.25em 0.5em;
-    font-size: 0.85em;
+    font-size: var(--text-base);
     height: auto;
+}
+
+/* "(required)", "(UTC)", a key's display name and the like. The reset makes
+   small 80% of its parent, which under 13px text is a size nobody reads. */
+#filter-advanced label small,
+#add-form label small,
+#add-form legend small,
+#tab-access small {
+    font-size: var(--text-xs);
 }
 
 #filter-form .grid,
@@ -2577,7 +2593,7 @@ body > main {
 }
 
 .commit-ref {
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
 }
 
@@ -2660,7 +2676,7 @@ body > main {
 
 .input-with-button button {
     padding: 0.3em 0.6em;
-    font-size: 0.8em;
+    font-size: var(--text-xs);
     white-space: nowrap;
     width: auto;
     margin-bottom: 0 !important;
@@ -2670,7 +2686,7 @@ body > main {
     display: block;
     margin-top: 0.15em;
     color: var(--color-ink-muted);
-    font-size: 0.8em;
+    font-size: var(--text-2xs);
 }
 
 .location-status-error {
@@ -2688,6 +2704,7 @@ body > main {
    rule split this note as "readi / ng for", so it wraps as one unit instead. */
 .weather-observed {
     color: var(--color-ink-muted);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     word-break: normal;
@@ -2890,7 +2907,7 @@ body > main {
 .dt-day-end,
 .dt-day-end:hover {
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-fill);
     opacity: 1;
 }
 
@@ -3069,4 +3086,174 @@ body > main {
 #update-notice {
     padding-top: 0.5rem;
     color: var(--color-ink-muted);
+}
+
+/* --- Narrow screens ----------------------------------------------------------
+ * Phase 6c of docs/ui-redesign-plan.md: what was left of style.css, moved here
+ * whole. That file loaded after this one, so these rules sit at the very end
+ * to keep the place in the cascade that lets them override the rules above at
+ * narrow widths.
+ */
+
+/* Responsive */
+@media (max-width: 768px) {
+    /* Keyed off column classes rather than position, so the columns that survive
+       stay correct regardless of what else is hidden. */
+    #results-table .col-commit,
+    #results-table .col-type,
+    #results-table .col-source,
+    #results-table .col-finished,
+    #results-table .col-tags {
+        display: none;
+    }
+
+    #filter-bar .fb-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    /* Grids stack on a narrow screen (see .grid). The three-column override has to
+       give way with them, or the two boxes and the trigger stay jammed into a
+       row too narrow to hold them. */
+    #finished-range {
+        grid-template-columns: 1fr;
+    }
+
+    /* Stacked, there is no row of boxes to line the trigger up with, so the
+       blank line that does the lining up is just a gap. */
+    .dt-open-wrap::before {
+        display: none;
+    }
+
+    #window-bar .wb-controls {
+        margin-left: 0;
+    }
+
+    #results-window {
+        max-height: calc(100vh - 14em);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Analytics
+
+   Marks are HTML/CSS: a flex row for the part-to-whole bar, a width for each
+   meter. Result colours reuse the badge palette so one page never shows two
+   greens, and they are always accompanied by a written value — status hues are
+   red/green by nature and cannot carry meaning unaided.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+    #an-bar .an-field input,
+    #an-bar .an-field:nth-child(n+3) input { width: 100%; }
+    .an-field { flex: 1 1 12rem; }
+    .an-col-labels, .an-col-time { display: none; }
+}
+
+/* --- Phones ---------------------------------------------------------------
+   Measured at 390px rather than guessed: every tab panned sideways by 272px,
+   which is the failure that makes a page feel broken rather than cramped —
+   the whole layout slides under the thumb and taps land slightly wrong.
+
+   The cause was the header, one unwrapping row of tabs, status, identity and
+   three buttons. Everything below deals with what that measurement found. */
+@media (max-width: 480px) {
+    /* The header wraps instead of running off the side. The base lays the nav out
+       as a row that will not break, so the break has to be asked for. */
+    body > header nav {
+        flex-wrap: wrap;
+        row-gap: 0.2rem;
+    }
+
+    body > header nav ul {
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+
+    body > header nav li {
+        padding: 0.1rem 0.3rem;
+    }
+
+    /* The store's name is the one thing on the header a tester never needs:
+       they know which application they opened. The tabs do need the room. */
+    body > header nav strong {
+        display: none;
+    }
+
+    /* Who is signed in matters on a shared bench, but the roles beside it are
+       reference rather than news, and they are what pushes the row over. */
+    .auth-identity .auth-roles {
+        display: none;
+    }
+
+    /* Text in a form field under 16px makes iOS zoom the page when it is
+       focused, and it does not zoom back — the tester is left panning a form
+       they were halfway through. Every input was between 10 and 14px.
+       Spelt out at the same specificity as the rules that set those sizes,
+       since a shorter selector loses to them however late it appears. */
+    input, select, textarea,
+    #add-form input, #add-form select, #add-form textarea,
+    #filter-bar .fb-field input, #filter-bar .fb-dropdown > summary,
+    #window-size, #window-size-label,
+    #an-bar .an-field input, #an-bar .an-field select {
+        font-size: var(--text-base);
+    }
+
+    /* Something to hit with a thumb. 44px is Apple's floor and Android's is
+       48; the measured buttons were 23 to 31px tall. */
+    button, .fa-actions button, #add-form button,
+    #filter-bar button, #window-nav button, .an-page-nav button {
+        min-height: 44px;
+    }
+
+    /* Except the ones that sit inline in a line of fields, where a 44px box
+       would break the line it belongs to. These get width instead. */
+    .fill-button, .fb-actions button {
+        min-height: 36px;
+        padding-inline: 0.8rem;
+    }
+
+    /* One field per line. Two columns at this width leaves neither usable. */
+    #filter-bar .fb-field,
+    #add-form .grid > label,
+    .an-field {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    /* The label goes above its box rather than beside it. The filter inputs are
+       sized in `ch` — 40 of them, the width of a commit hash — which is wider
+       than the screen before the label is counted, and a label like "Branch,
+       tag or commit" beside it leaves nothing. */
+    #filter-bar .fb-field {
+        flex-direction: column;
+        align-items: stretch;
+        white-space: normal;
+    }
+
+    #filter-bar .fb-field input,
+    #add-form .grid > label input {
+        flex: 1 1 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* The results table keeps only what identifies a record at a glance; the
+       768px rules already drop five columns, and at this width the repo goes
+       too, since a tester on a rig is looking at one repo anyway. */
+    #results-table .col-repo {
+        display: none;
+    }
+
+    /* A table is the one thing here that legitimately exceeds the width — the
+       Admin one lists a credential and four things to do to it — so it scrolls
+       inside its own tab rather than taking the page with it. */
+    #tab-access {
+        overflow-x: auto;
+    }
+
+    /* Paging arrows were 28px wide. Square them off so a thumb can hit them. */
+    #window-nav button {
+        min-width: 44px;
+    }
 }
