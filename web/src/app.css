@@ -232,11 +232,20 @@
  */
 
 :root {
-  /* The rhythm a form keeps, and the room inside a control. Variables because
-   * Search compresses them for its whole view (see #tab-search). */
+  /* The rhythm a form keeps. A variable because Search compresses it for its
+   * whole view (see #tab-search). */
   --flow-space: 1rem;
-  --control-pad-block: 0.75rem;
-  --control-pad-inline: 1rem;
+
+  /* One height for every control, and one a size down for the controls that
+   * sit inside a row of something else — a table's actions, the pager, the
+   * datepicker's buttons. Buttons and fields share it, so a field and the
+   * button beside it line up without either knowing about the other. A context
+   * that wants the small size sets --control-h rather than restating padding
+   * and font size (see "Small controls"). */
+  --control-h: 2.25rem;         /* 36px */
+  --control-h-sm: 1.75rem;      /* 28px */
+  --control-pad-inline: 0.75rem;
+  --control-font: var(--text-ui);
 
   --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(136, 145, 164)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   --icon-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(136, 145, 164)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
@@ -514,6 +523,12 @@ pre code, pre samp {
 }
 
 /* --- Buttons ---
+ * Three kinds, and every button in the store is one of them:
+ *
+ *   button               primary: the one action a form or bar exists for
+ *   button.secondary     an ordinary action: Clear, Cancel, Copy, Issue a key
+ *   .secondary.outline   a lesser one: Preview, Now, Export CSV, a row's Roles
+ *
  * Colour comes through variables that each variant sets, rather than from
  * the variant setting `background` itself. That keeps every variant at the
  * specificity of plain `button`, so a rule further down that gives one
@@ -535,16 +550,21 @@ button, [type="button"], [type="submit"], [role="button"] {
   --btn-line: var(--color-accent);
   --btn-ink: var(--color-on-fill);
   --btn-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  padding: var(--control-pad-block) var(--control-pad-inline);
-  border: 0.0625rem solid var(--btn-line);
-  border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: var(--control-h);
+  padding: 0 var(--control-pad-inline);
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius-md);
   outline: 0;
   background-color: var(--btn-ground);
   box-shadow: var(--btn-shadow);
   color: var(--btn-ink);
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.5;
+  font-size: var(--control-font);
+  font-weight: 500;
+  line-height: var(--leading-tight);
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -564,23 +584,21 @@ button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focu
   --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
-[type="button"], [type="submit"] { margin-bottom: var(--flow-space); }
-
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary {
-  --btn-ground: var(--color-ink-muted);
-  --btn-line: var(--color-ink-muted);
-  --btn-ink: var(--color-on-fill);
+  --btn-ground: var(--color-ground);
+  --btn-line: var(--color-line);
+  --btn-ink: var(--color-ink);
   cursor: pointer;
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:is(:hover, :active, :focus) {
-  --btn-ground: color-mix(in oklab, var(--color-ink-muted) 80%, black);
-  --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
-  --btn-ink: var(--color-on-fill);
+  --btn-ground: var(--color-ground-sunken);
+  --btn-line: color-mix(in oklab, var(--color-line) 70%, var(--color-ink));
+  --btn-ink: var(--color-ink);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).secondary:focus {
-  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem color-mix(in oklab, var(--color-ink-muted) 25%, transparent);
+  --btn-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline {
@@ -596,18 +614,48 @@ button:focus, [type="button"]:focus, [type="submit"]:focus, [role="button"]:focu
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline.secondary {
-  --btn-line: var(--color-ink-muted);
+  --btn-ground: transparent;
+  --btn-line: var(--color-line);
   --btn-ink: var(--color-ink-muted);
 }
 
 :is(button, [type="submit"], [type="button"], [role="button"]).outline.secondary:is(:hover, :active, :focus) {
-  --btn-line: color-mix(in oklab, var(--color-ink-muted) 80%, black);
-  --btn-ink: color-mix(in oklab, var(--color-ink-muted) 80%, black);
+  --btn-ground: var(--color-ground-sunken);
+  --btn-line: color-mix(in oklab, var(--color-line) 70%, var(--color-ink));
+  --btn-ink: var(--color-ink);
 }
 
 :where(button, [type="submit"], [type="button"], [role="button"])[disabled] {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* Buttons that are not controls in this sense size themselves: a day in the
+ * calendar, its arrows, a field's clear cross, Analytics' view tabs, a
+ * dialog's close icon. */
+.dt-day, .dt-nav, .dt-today, .dt-field-clear, #an-views [role="tab"],
+dialog > article :is(a, button)[rel="prev"] {
+  min-height: 0;
+}
+
+.dt-day, .dt-nav, .dt-today, .dt-field-clear { font-weight: inherit; }
+
+/* --- Small controls ---
+ * The same buttons and fields a size down, for controls inside a row of other
+ * content rather than in a form or bar of their own. */
+#access-table button,
+#window-nav button,
+#window-size,
+.an-page-nav button,
+.test-log-tools button,
+#add-custom-field,
+.cf-remove,
+.dt-actions button,
+.dt-end-clear,
+.outbox-entry-actions button {
+  --control-h: var(--control-h-sm);
+  --control-pad-inline: 0.625rem;
+  --control-font: var(--text-xs);
 }
 
 [aria-controls] { cursor: pointer; }
@@ -704,18 +752,27 @@ input:is([type="checkbox"], [type="radio"]):not([readonly]):focus {
   --field-shadow: 0 0 0 0.125rem color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 
-button[type="submit"], input:not([type="checkbox"], [type="radio"]), select, textarea {
+input:not([type="checkbox"], [type="radio"]), select, textarea {
   width: 100%;
 }
 
+/* 16px in every field, whatever surrounds it: under that, iOS zooms the page
+ * when one is focused and does not zoom back (#77). */
 input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea {
   -webkit-appearance: none;
   appearance: none;
-  padding: var(--control-pad-block) var(--control-pad-inline);
+  padding: 0 0.625rem;
+  font-size: var(--text-base);
 }
 
-input:not([type="checkbox"], [type="radio"], [type="range"]) {
-  height: calc(1rem * 1.5 + var(--control-pad-block) * 2 + 0.0625rem * 2);
+input:not([type="checkbox"], [type="radio"], [type="range"]), select:not([multiple], [size]) {
+  height: var(--control-h);
+  line-height: var(--leading-tight);
+}
+
+textarea {
+  padding-block: 0.5rem;
+  line-height: var(--leading-normal);
 }
 
 input:not([type="checkbox"], [type="radio"]), select, textarea {
@@ -733,9 +790,9 @@ textarea {
 }
 
 select:not([multiple], [size]) {
-  padding-inline: var(--control-pad-inline) calc(var(--control-pad-inline) + 1.5rem);
+  padding-inline: 0.625rem 2rem;
   background-image: var(--icon-chevron);
-  background-position: right 0.75rem center;
+  background-position: right 0.625rem center;
   background-size: 1rem auto;
   background-repeat: no-repeat;
 }
@@ -944,15 +1001,12 @@ details[open] > summary { margin-bottom: var(--flow-space); }
 details[open] > summary::after { transform: rotate(0deg); }
 details[open] > summary:not([role]):not(:focus) { color: var(--color-ink-muted); }
 
-details summary[role="button"] {
-  width: 100%;
-  text-align: left;
-}
+details summary[role="button"] { width: fit-content; }
 
-details summary[role="button"]::after { height: calc(1rem * 1.5); }
+details summary[role="button"]::after { margin-inline-start: 0.25rem; }
 
 /* White on a filled button. */
-details summary[role="button"]:not(.outline)::after { filter: brightness(0) invert(1); }
+details summary[role="button"]:not(.outline, .secondary)::after { filter: brightness(0) invert(1); }
 
 /* --- Cards and dialogs --- */
 article {
@@ -1206,88 +1260,6 @@ body > main {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- The control vocabulary ---------------------------------------------
- * Defined here so every screen migrated after this one reaches for the same
- * button and the same field, rather than each phase inventing its own.
- *
- * Not applied to `button` and `input` globally. The base rules style those on
- * every screen, and swapping these in would restyle Search, Add Result,
- * Analytics and Admin all at once, which deserves a change of its own.
- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(var(--spacing) * 1.5);
-  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-ground);
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: 500;
-  line-height: var(--leading-tight);
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: var(--color-ground-sunken);
-}
-
-.btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-on-fill);
-}
-
-.btn-primary:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, black);
-}
-
-/* A button that reads as text, for the fill-in helpers beside a field. */
-.btn-quiet {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-accent);
-  padding-inline: calc(var(--spacing) * 1.5);
-}
-
-.btn-quiet:hover {
-  background: var(--color-ground-sunken);
-}
-
-/* 16px, not the dense 14, and this is the rule that matters most on a phone:
- * text under 16px in a focusable field makes iOS zoom the page and not zoom
- * back, leaving a tester panning a form they were halfway through (#77). */
-.field {
-  width: 100%;
-  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-ground);
-  color: var(--color-ink);
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
-}
-
-.field:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
-}
-
-/* An identifier — a commit, a ref, a digest — where a fixed-width digit is the
- * whole point. */
-.field-mono {
-  font-family: var(--font-mono);
-}
-
-.label {
-  display: block;
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--color-ink-muted);
-}
-
 /* --- Search --------------------------------------------------------------
  * The filter bar and the results table: the densest thing in the store and the
  * screen it exists for.
@@ -1319,11 +1291,8 @@ body > main {
 /* --- The filter bar --- */
 
 #filter-bar {
-  /* One height for every control in the bar. The base rules size inputs with an
-   * absolute 1rem that ignores this bar's smaller font, which made them taller
-   * than the dropdown beside them; now that these rules paint the controls
-   * themselves, the height is simply stated once. */
-  --fb-control-height: 35px;
+  /* The shared control height, named once for the bar's inputs and dropdown. */
+  --fb-control-height: var(--control-h);
 
   display: flex;
   flex-wrap: wrap;
@@ -1467,32 +1436,8 @@ body > main {
 
 #filter-bar .fb-actions button {
   width: auto;
-  height: var(--fb-control-height);
-  padding: 0 calc(var(--spacing) * 4);
   margin-bottom: 0;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-ground);
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: 500;
   white-space: nowrap;
-  cursor: pointer;
-}
-
-#filter-bar .fb-actions button:hover {
-  background: var(--color-ground-sunken);
-}
-
-/* The one action that is the point of the bar. */
-#filter-bar .fb-actions button[type="submit"] {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-on-fill);
-}
-
-#filter-bar .fb-actions button[type="submit"]:hover {
-  background: color-mix(in oklab, var(--color-accent) 88%, black);
 }
 
 #filter-advanced {
@@ -1532,15 +1477,8 @@ body > main {
  * the digits. The value is self-explanatory without it. */
 #window-size {
   width: auto;
-  height: auto;
-  padding: calc(var(--spacing) * 0.75) calc(var(--spacing) * 2);
-  padding-inline-end: calc(var(--spacing) * 2);
+  padding-inline-end: 0.625rem;
   background-image: none;
-  background-color: var(--color-ground);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink);
-  font-size: var(--text-base);
   margin-bottom: 0;
   text-align: center;
 }
@@ -1552,19 +1490,8 @@ body > main {
 
 #window-nav button {
   width: auto;
-  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
   margin-bottom: 0;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-ground);
-  color: var(--color-ink);
-  font-size: var(--text-xs);
   white-space: nowrap;
-  cursor: pointer;
-}
-
-#window-nav button:hover:not(:disabled) {
-  background: var(--color-ground-sunken);
 }
 
 #window-nav button:disabled {
@@ -1695,21 +1622,6 @@ body > main {
   color: var(--color-ink-muted);
 }
 
-/* 16px in every field. A phone zooms the page for anything smaller and does
- * not zoom back (#77), and this is the form somebody fills in on a phone
- * standing next to a rig — the one screen where that matters most. */
-#add-form input,
-#add-form select,
-#add-form textarea {
-  padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 2);
-  font-size: var(--text-base);
-  height: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-ground);
-  color: var(--color-ink);
-}
-
 #add-form input:focus-visible,
 #add-form select:focus-visible,
 #add-form textarea:focus-visible {
@@ -1728,7 +1640,6 @@ body > main {
 
 #add-form textarea {
   font-family: var(--font-mono);
-  line-height: var(--leading-normal);
 }
 
 #add-form .grid {
@@ -2235,8 +2146,6 @@ body > main {
 
 .an-page-nav button {
     margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
     width: auto;
 }
 
@@ -2403,11 +2312,8 @@ body > main {
 #access-table .col-actions { width: 16em; text-align: right; }
 
 #access-table .col-actions button {
-    padding: 0.15rem 0.5rem;
-    font-size: 0.78rem;
     margin: 0 0 0 0.25rem;
     width: auto;
-    display: inline-block;
 }
 
 /* One role per line, because the description is the point: an admin choosing
@@ -2438,7 +2344,6 @@ body > main {
 /* The key is readable once. Make it look like the thing to copy. */
 #access-key-value {
     font-family: var(--font-mono);
-    font-size: 0.9rem;
 }
 
 /* The five rules the first pass of this phase missed. Its selector pattern
@@ -2449,30 +2354,14 @@ body > main {
 
 #tab-analytics [hidden] { display: none; }
 
-/* The base form controls have 15px of padding top and bottom. With a fixed
- * 40px border-box height that leaves a 10px content box for a 27px line, and
- * `overflow: clip` then hides the text entirely — the control looks empty.
- * Zeroing the block padding is what makes the fixed height safe.
- *
- * 16px rather than the old 0.9rem, which at the 20px desktop root was 18px
- * and at its smallest was 14.4 — under the size at which iOS zooms a focused
- * field (#77). */
 #tab-analytics .an-field input,
 #tab-analytics .an-field select {
   margin: 0;
-  height: 40px;
-  padding-block: 0;
-  line-height: var(--leading-tight);
-  font-size: var(--text-base);
 }
 
 #tab-analytics .an-actions button {
-  height: 40px;
   width: auto;
   margin: 0;
-  padding: 0 calc(var(--spacing) * 4);
-  font-size: var(--text-ui);
-  line-height: var(--leading-tight);
 }
 
 /* A faint arrow on hover says the header is a control, without putting eight
@@ -2505,23 +2394,11 @@ body > main {
  * at the end of this file (see "Narrow screens"), for the same cascade reason.
  */
 
-/* Compact forms: the advanced filters.
-   The filter bar sizes itself (see #filter-bar), and so does Add Result (see
-   "Add Result"). This rule used to list #add-form as well, and being later in
-   the file it quietly beat that section: its 16px fields rendered at 0.85em.
-   Hidden while Pico's root was 20px on a desktop, and exposed at 10.9px once
-   the root stopped moving — so both forms now take their sizes from the scale
-   rather than from whatever surrounds them. */
+/* Compact forms: the advanced filters' labels. The fields in it are the base
+   ones, like every other field. */
 #filter-advanced label {
     font-size: var(--text-xs);
     margin-bottom: 0;
-}
-
-#filter-advanced input,
-#filter-advanced select {
-    padding: 0.25em 0.5em;
-    font-size: var(--text-base);
-    height: auto;
 }
 
 /* "(required)", "(UTC)", a key's display name and the like. The reset makes
@@ -2555,15 +2432,11 @@ body > main {
 
 .filter-actions button {
     width: auto;
-    padding: 0.3em 1em;
-    font-size: 0.85em;
 }
 
 /* Compress the form rhythm for the whole search view. The base is sized for
    prose-width forms; this view is a dense data table. */
 #tab-search {
-    --control-pad-block: 0.3em;
-    --control-pad-inline: 0.5em;
     --flow-space: 0.5rem;
 }
 
@@ -2647,8 +2520,6 @@ body > main {
 }
 
 .test-log-tools button {
-    font-size: 0.8em;
-    padding: 0.2em 0.7em;
     width: auto;
 }
 
@@ -2675,8 +2546,6 @@ body > main {
 }
 
 .input-with-button button {
-    padding: 0.3em 0.6em;
-    font-size: var(--text-xs);
     white-space: nowrap;
     width: auto;
     margin-bottom: 0 !important;
@@ -2712,8 +2581,6 @@ body > main {
 }
 
 #add-custom-field {
-    font-size: 0.8em;
-    padding: 0.2em 0.6em;
     width: auto;
     margin-top: 0.3em;
 }
@@ -2755,8 +2622,6 @@ body > main {
 
 .dt-open-wrap > button {
     width: auto;
-    padding: 0.25em 0.9em;
-    font-size: 0.8em;
     margin-bottom: 0;
     white-space: nowrap;
 }
@@ -2981,9 +2846,7 @@ body > main {
 
 .dt-end-clear {
     width: auto;
-    padding: 0.1em 0.5em;
     margin-bottom: 0 !important;
-    font-size: 0.9em;
 }
 
 .dt-actions {
@@ -2995,8 +2858,6 @@ body > main {
 
 .dt-actions button {
     width: auto;
-    padding: 0.2em 0.8em;
-    font-size: 0.8em;
     margin-bottom: 0;
 }
 
@@ -3035,7 +2896,7 @@ body > main {
 
 .outbox-entry-actions { display: flex; gap: 0.4rem; margin-top: 0.4rem; }
 
-.outbox-entry-actions button { width: auto; padding: 0.2rem 0.6rem; font-size: 0.8em; margin: 0; }
+.outbox-entry-actions button { width: auto; margin: 0; }
 
 /* The server's own words about why a record was refused. */
 .outbox-entry-error {
@@ -3069,7 +2930,7 @@ body > main {
 
 .weather-compose .grid { gap: 0.4rem; }
 
-.weather-compose input { margin-bottom: 0.3rem; font-size: 0.9em; }
+.weather-compose input { margin-bottom: 0.3rem; }
 
 .weather-compose-preview { color: var(--color-ink-muted); font-style: italic; }
 
@@ -3200,17 +3061,12 @@ body > main {
     }
 
     /* Something to hit with a thumb. 44px is Apple's floor and Android's is
-       48; the measured buttons were 23 to 31px tall. */
-    button, .fa-actions button, #add-form button,
-    #filter-bar button, #window-nav button, .an-page-nav button {
-        min-height: 44px;
-    }
-
-    /* Except the ones that sit inline in a line of fields, where a 44px box
-       would break the line it belongs to. These get width instead. */
-    .fill-button, .fb-actions button {
-        min-height: 36px;
-        padding-inline: 0.8rem;
+       48; the measured buttons were 23 to 31px tall. Every button and field
+       takes it through the one height they share, and the small controls a
+       row's worth of them keep their step below. */
+    :root {
+        --control-h: 2.75rem;
+        --control-h-sm: 2.25rem;
     }
 
     /* One field per line. Two columns at this width leaves neither usable. */
