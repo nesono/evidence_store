@@ -775,6 +775,15 @@ textarea {
   line-height: var(--leading-normal);
 }
 
+/* Identifiers are typed in the mono face wherever a form asks for one: a
+ * repo, a branch, tag or commit, a procedure reference. A mistyped character
+ * is easier to spot at a fixed width, and the same value should not change
+ * face between Search, Add Result and Analytics. */
+:is(#filter-form, #add-form, #analytics-filter)
+  :is([name="repo"], [name="ref"], [name="branch"], [name="rcs_ref"], [name="procedure_ref"]) {
+  font-family: var(--font-mono);
+}
+
 input:not([type="checkbox"], [type="radio"]), select, textarea {
   margin-bottom: var(--flow-space);
 }
@@ -1332,7 +1341,6 @@ body > main {
   /* 16px, and the one size in this bar that is not the dense step: anything a
    * phone can focus has to be 16px or iOS zooms the page (#77). */
   font-size: var(--text-base);
-  font-family: var(--font-mono);
 }
 
 #filter-bar .fb-field input:focus-visible {
@@ -1627,15 +1635,6 @@ body > main {
 #add-form textarea:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -1px;
-}
-
-/* An identifier, not prose: a commit or a procedure reference reads better
- * fixed-width, and a mistyped character is easier to spot. */
-#add-form input[name="rcs_ref"],
-#add-form input[name="procedure_ref"],
-#add-form input[name="branch"],
-#add-form input[name="repo"] {
-  font-family: var(--font-mono);
 }
 
 #add-form textarea {
