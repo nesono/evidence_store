@@ -99,10 +99,15 @@
    * Lightness is tuned per theme rather than reused: #2d9e2d on a dark ground
    * is legible but muddy, and a badge that says PASS has to read at a glance.
    */
-  --color-pass: #2d9e2d;
+  /* Dark enough in the light theme for the white text a badge puts on them
+   * (WCAG AA, 4.5:1): the originals, #2d9e2d, #e67e22 and #888888, gave PASS
+   * 3.5, ERROR 2.9 and SKIPPED 3.5. Each is its old hue with only OKLab
+   * lightness lowered, stopping at the first value that passes, so a chart
+   * still reads the same. Fail already passed at 5.0. */
+  --color-pass: #04880e;
   --color-fail: #d32f2f;
-  --color-error: #e67e22;
-  --color-skipped: #888888;
+  --color-error: #bb5700;
+  --color-skipped: #757575;
 
   --color-pass-dark: #4ec24e;
   --color-fail-dark: #ef5350;
@@ -713,10 +718,15 @@ legend {
   white-space: normal;
 }
 
+/* A field's label, and a group's legend, look the same on every screen:
+ * small and quiet, so the value in the field is what reads. They were 13px and
+ * muted on Search and Add Result, 12.8px on Analytics, and 16px in full ink on
+ * Admin. */
 fieldset legend, label {
   display: block;
   margin-bottom: calc(var(--flow-space) * 0.375);
-  color: var(--color-ink);
+  color: var(--color-ink-muted);
+  font-size: var(--text-xs);
   font-weight: 400;
 }
 
@@ -818,8 +828,12 @@ label > :where(input, select, textarea) {
   margin-top: calc(var(--flow-space) * 0.25);
 }
 
+/* A label wrapped round a checkbox or radio is not naming a field, it is the
+ * option itself, and reads as body text. */
 label:has([type="checkbox"], [type="radio"]) {
   width: fit-content;
+  color: var(--color-ink);
+  font-size: var(--text-ui);
   cursor: pointer;
 }
 
@@ -1431,7 +1445,6 @@ body > main {
   margin: 0;
   white-space: nowrap;
   cursor: pointer;
-  color: var(--color-ink);
 }
 
 /* --- Actions --- */
@@ -1656,8 +1669,6 @@ body > main {
  */
 
 #add-form label {
-  font-size: var(--text-xs);
-  color: var(--color-ink-muted);
   margin-bottom: 0;
 }
 
@@ -1688,9 +1699,6 @@ body > main {
 }
 
 #add-form fieldset legend {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-ink-muted);
   margin-bottom: calc(var(--spacing) * 0.5);
 }
 
@@ -1699,8 +1707,6 @@ body > main {
   align-items: center;
   gap: calc(var(--spacing) * 1.5);
   margin-right: calc(var(--spacing) * 2.5);
-  font-size: var(--text-ui);
-  color: var(--color-ink);
 }
 
 /* The verdict radios. Sized in em against their own label so they track it. */
@@ -1732,11 +1738,6 @@ body > main {
   padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
 }
 
-.custom-fields legend {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-ink-muted);
-}
 
 .custom-field-row {
   grid-template-columns: 1fr 2fr auto;
@@ -1930,8 +1931,6 @@ body > main {
     flex-direction: column;
     gap: 0.15rem;
     margin: 0;
-    font-size: 0.8rem;
-    color: var(--color-ink-muted);
 }
 
 #an-bar .an-field input { width: 13rem; }
@@ -2215,7 +2214,7 @@ body > main {
 
 .an-col-rate { width: 6.5rem; text-align: right; }
 
-.an-col-time { width: 8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.an-col-time { width: 10rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .an-col-labels { width: 7.5rem; }
 
@@ -2276,7 +2275,6 @@ body > main {
     align-items: center;
     gap: 0.4rem;
     margin: 0 0 0.5rem;
-    font-size: 0.85rem;
 }
 
 .an-checkbox input { margin: 0; }
@@ -2355,7 +2353,6 @@ body > main {
 .access-role {
     display: block;
     margin-bottom: 0.2rem;
-    font-size: 0.85rem;
 }
 
 .access-role small { color: var(--color-ink-muted); }
@@ -2431,7 +2428,6 @@ body > main {
 /* Compact forms: the advanced filters' labels. The fields in it are the base
    ones, like every other field. */
 #filter-advanced label {
-    font-size: var(--text-xs);
     margin-bottom: 0;
 }
 
