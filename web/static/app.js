@@ -7,14 +7,15 @@ import { mount as mountAccess, showAccess } from "./access.js";
 import { wireUtcPreviews } from "./utcpreview.js";
 import {
   announceUpdates, followHashChanges, offerInstall, openTabFromHash,
-  registerServiceWorker, startConnectionIndicator,
+  registerServiceWorker, startConnectionIndicator, tabFromHash,
 } from "./offline.js";
 import {
   applyURLState, doSearch, fetchEvidenceById, mountSearch, readStateFromURL, renderDetail,
 } from "./search.js";
 import { beginCorrection, mountAddForm, pinSourceToCaller } from "./addform.js";
-import { mountOutbox, runSync } from "./outboxview.js";
 import { mountMarkdownEditor } from "./markdownedit.js";
+import { PHONE_QUERY, mountPhoneNav, phoneStartTab } from "./phonenav.js";
+import { mountOutbox, openOutbox, runSync } from "./outboxview.js";
 
 // Who is signed in. Learned from /me at startup and handed to the two views
 // that need it, so the answer has one home rather than a copy in each.
@@ -252,6 +253,7 @@ async function loadIdentity() {
   markUnavailableTabs(me);
   showIdentity(me);
   pinSourceToCaller(me);
+  mountPhoneNav({ openOutbox });
   // The installed app's Add Result shortcut opens "/#add". Done after Access is
   // mounted, so a fragment naming a tab this caller does not have selects
   // nothing rather than a tab that is not there.
@@ -276,6 +278,16 @@ async function loadIdentity() {
 
   const { filters, detail } = readStateFromURL();
   applyURLState(filters);
+
+  // A phone opens on Add Result, unless the address says where to go (#162).
+  // Through the header tab, so a caller who may not file results stays on
+  // Search rather than landing on a form they cannot submit.
+  const startTab = phoneStartTab({
+    hashTab: tabFromHash(window.location.hash),
+    hasLinkState: Object.keys(filters).length > 0 || !!detail,
+    isPhone: window.matchMedia(PHONE_QUERY).matches,
+  });
+  if (startTab) openTabFromHash(`#${startTab}`);
   wireUtcPreviews();
 
   // Always search. The window is a view onto the whole result set, so an empty

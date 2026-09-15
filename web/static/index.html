@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- viewport-fit=cover lets the phone bar reach under the home indicator,
+         and env(safe-area-inset-*) in app.css keeps its buttons clear of it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Evidence Store</title>
     <!-- Built from web/src/app.css and served from here, never a CDN: the
          deployments that most need this page are behind a firewall or on a
@@ -15,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=3">
+    <link rel="stylesheet" href="app.css?v=4">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -544,6 +546,52 @@
     <footer class="container app-footer">
         <small>Evidence Store <span id="server-version"></span></small>
     </footer>
+
+    <!-- The phone's navigation (#162), shown only below 768px. Each tab here
+         acts through the header's own tab, so what a caller may use is decided
+         in one place. Capture comes first: on a phone that is the job. -->
+    <nav id="phone-nav" class="phone-nav" aria-label="Main">
+        <button type="button" class="phone-tab" data-tab="add">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+            <span>Add</span>
+        </button>
+        <button type="button" class="phone-tab" data-tab="search">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span>Search</span>
+        </button>
+        <button type="button" class="phone-tab" data-phone="outbox">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M4 13 6.5 5h11L20 13v6H4z"/></svg>
+            <span>Outbox</span>
+            <span id="phone-outbox-count" class="phone-tab-count" hidden></span>
+        </button>
+        <button type="button" class="phone-tab" data-phone="more">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <!-- What the header holds and the phone bar has no room for. The items
+         mirror the header's: shown, hidden and labelled as it would be. -->
+    <dialog id="more-sheet" aria-labelledby="more-sheet-title">
+        <article>
+            <header>
+                <button aria-label="Close" rel="prev" id="close-more"></button>
+                <h3 id="more-sheet-title">More</h3>
+            </header>
+            <p class="more-status">
+                <span data-mirror="health-status"></span>
+                <span data-mirror="auth-identity"></span>
+            </p>
+            <ul class="more-list">
+                <li><button type="button" class="secondary" data-tab="analytics">Analytics</button></li>
+                <li><button type="button" class="secondary" data-tab="access">Admin</button></li>
+                <li><button type="button" class="secondary" data-proxy="install-app">Install the app</button></li>
+                <li><button type="button" class="secondary" data-proxy="auth-login" data-mirror-text>Log in</button></li>
+                <li><button type="button" class="secondary" data-proxy="auth-switch" data-mirror-text>Switch user</button></li>
+                <li><button type="button" class="secondary" data-proxy="auth-logout" data-mirror-text>Log out</button></li>
+            </ul>
+        </article>
+    </dialog>
 
     <datalist id="repos-list"></datalist>
     <datalist id="sources-list"></datalist>

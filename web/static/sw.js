@@ -16,8 +16,8 @@
 
 // Bumped with the stylesheet version in index.html, so activation deletes the
 // previous cache rather than keeping an old stylesheet around indefinitely.
-// v3: style.css folded into app.css.
-const VERSION = "v3";
+// v3: style.css folded into app.css. v4: the phone shell (#162).
+const VERSION = "v4";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -28,7 +28,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=3",
+  "/app.css?v=4",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -47,6 +47,7 @@ const SHELL = [
   "/offline.js",
   "/outbox.js",
   "/outboxview.js",
+  "/phonenav.js",
   "/search.js",
   "/tagfit.js",
   "/sync.js",

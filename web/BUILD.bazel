@@ -32,6 +32,7 @@ go_library(
         "static/offline.js",
         "static/outbox.js",
         "static/outboxview.js",
+        "static/phonenav.js",
         "static/search.js",
         "static/app.css",
         "static/sw.js",

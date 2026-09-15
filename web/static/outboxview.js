@@ -72,6 +72,13 @@ export async function refreshOutboxCount() {
   if (!outbox || !el) return;
   const entries = await outbox.list();
   el.hidden = entries.length === 0;
+  // The phone bar's Outbox tab carries the count as a number (#162).
+  const badge = document.getElementById("phone-outbox-count");
+  if (badge) {
+    badge.hidden = entries.length === 0;
+    badge.textContent = entries.length ? String(entries.length) : "";
+    badge.classList.toggle("phone-tab-count-urgent", entries.length > 0 && staleness(entries).level === "urgent");
+  }
   if (entries.length === 0) {
     // Cleared, not just hidden. Leaving "3 unsent for 45 days" behind an empty
     // queue means it reappears the moment one record is queued again, saying
@@ -117,6 +124,8 @@ async function renderOutbox() {
   const list = document.getElementById("outbox-list");
   const explainer = document.getElementById("outbox-explainer");
   const entries = await outbox.list();
+  // Nothing to send is not something to press.
+  document.getElementById("outbox-send").disabled = entries.length === 0;
 
   if (entries.length === 0) {
     explainer.textContent = "";
