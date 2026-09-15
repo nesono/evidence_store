@@ -21,6 +21,7 @@ import { newEntry } from "./outbox.js";
 import { setValue } from "./editing.js";
 import { updateUtcPreview } from "./utcpreview.js";
 import { refreshDatalists } from "./datalists.js";
+import { refreshMissing, showMissing } from "./formcheck.js";
 import { durabilityLevel, dropQueued, openOutbox, queueRecord } from "./outboxview.js";
 
 // Who is filing, supplied at mount.
@@ -32,7 +33,7 @@ async function submitEvidence(andAnother) {
   const form = document.getElementById("add-form");
   const feedback = document.getElementById("add-feedback");
 
-  if (!form.checkValidity()) { form.reportValidity(); return; }
+  if (showMissing(form, feedback)) return;
 
   let finishedAt;
   const rawFinished = form.finished_at.value.trim();
@@ -521,6 +522,14 @@ export function mountAddForm({ subject = () => null } = {}) {
     status.textContent = "";
     status.classList.remove("location-status-error");
   });
+
+  // Once Submit has named what is missing, the list shrinks as each field is
+  // filled in, and goes when nothing is.
+  for (const type of ["input", "change"]) {
+    document.getElementById("add-form").addEventListener(type, () => {
+      refreshMissing(document.getElementById("add-form"), document.getElementById("add-feedback"));
+    });
+  }
 
   document.getElementById("add-form").addEventListener("submit", (e) => {
     e.preventDefault();

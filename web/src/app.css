@@ -2632,6 +2632,47 @@ label > .input-with-button {
     font-size: 0.9em;
 }
 
+/* What Submit found missing (formcheck.js): each field outlined until it is
+   filled in, and named under the buttons, where the person who pressed one is
+   looking. */
+#add-form :is(input, select, textarea)[aria-invalid="true"] {
+    --field-line: var(--color-fail);
+}
+
+#add-form fieldset.field-missing legend {
+    color: var(--color-fail);
+}
+
+/* The result buttons are the browser's own radios, which cannot be recoloured
+   one by one (they ignore border-color and draw a ring as a square), so the
+   group is outlined as a whole, the way a single field is. */
+#add-form fieldset.field-missing {
+    outline: 1px solid var(--color-fail);
+    outline-offset: 0.375rem;
+    border-radius: var(--radius-md);
+}
+
+.missing-summary {
+    margin-top: 0.5rem;
+    font-size: var(--text-ui);
+}
+
+/* Each name is a way to that field: a link in the sentence, not a button. */
+#add-feedback .missing-field {
+    --btn-ground: transparent;
+    --btn-line: transparent;
+    --btn-ink: var(--color-fail);
+    --btn-shadow: none;
+    display: inline;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
 /* Finished-at range: two boxes and the calendar that fills them */
 #finished-range {
     /* The two fields keep the width they had as a plain two-column grid; the

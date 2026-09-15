@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=4">
+    <link rel="stylesheet" href="app.css?v=5">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -75,7 +75,12 @@
     <main class="container">
         <section id="tab-add" class="tab-content" hidden>
             <h4>Add Manual Test Result</h4>
-            <form id="add-form">
+            <!-- novalidate: the form checks itself (formcheck.js) and names every
+                 missing field under its buttons. The browser's own check stopped
+                 at the first, scrolled away from Submit, and on a phone showed a
+                 hint small enough to miss. The required attributes stay: they
+                 are what that check reads. -->
+            <form id="add-form" novalidate>
                 <div class="grid">
                     <label>Repo <small>(required)</small>
                         <input type="text" name="repo" placeholder="org/repo" list="repos-list" required autocapitalize="off" autocorrect="off" spellcheck="false">
