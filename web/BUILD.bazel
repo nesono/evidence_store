@@ -25,6 +25,7 @@ go_library(
         "static/icon-512.png",
         "static/icon.svg",
         "static/images.js",
+        "static/lastrun.js",
         "static/index.html",
         "static/location.js",
         "static/manifest.webmanifest",
