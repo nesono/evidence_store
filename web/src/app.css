@@ -3330,7 +3330,11 @@ label > .input-with-button {
 /* --- Add Result on a phone (#162) ---------------------------------------------
  * One column, in the order a test is filed standing at the rig: what happened,
  * to which procedure, on which build, what was seen. Everything else is behind
- * More details. The markup stays in its desktop order; `display: contents` on
+ * More details — except a required field, which is always shown unless the
+ * page filled it in itself: Source, once the signed-in account is pinned
+ * into it (read-only), moves down with the details; without sign-in it stays
+ * up here to be typed. Evidence type is required too, but preset to Manual
+ * Test, which is what this form is for, so it lives with the details. The markup stays in its desktop order; `display: contents` on
  * the grid rows lets every field be placed with `order`.
  */
 .add-details-toggle { display: none; }
@@ -3348,22 +3352,23 @@ label > .input-with-button {
     #add-form label:has(> [name="procedure_ref"])       { order: 2; }
     #add-form label:has(> [name="repo"])                { order: 3; }
     #add-form label:has(> [name="rcs_ref"])             { order: 4; }
-    #add-form label:has(> [name="observations"])        { order: 5; }
-    #add-form .test-log-tools                           { order: 6; }
-    #add-form .test-log                                 { order: 7; }
-    #add-form .add-details-toggle                       { order: 8; }
-    #add-form label:has(> [name="branch"])              { order: 9; }
-    #add-form label:has(> [name="evidence_type"])       { order: 10; }
-    #add-form label:has(> [name="source"])              { order: 11; }
-    #add-form label:has([name="finished_at"])           { order: 12; }
-    #add-form label:has(> [name="tags"])                { order: 13; }
-    #add-form .location-field                           { order: 14; }
-    #add-form .weather-field                            { order: 15; }
-    #add-form label:has(> [name="notes"])               { order: 16; }
-    #add-form .custom-fields                            { order: 17; }
-    #add-form .filter-actions                           { order: 18; }
+    #add-form label:has(> [name="source"])              { order: 5; }
+    #add-form label:has(> [name="observations"])        { order: 6; }
+    #add-form .test-log-tools                           { order: 7; }
+    #add-form .test-log                                 { order: 8; }
+    #add-form .add-details-toggle                       { order: 9; }
+    #add-form label:has(> [name="branch"])              { order: 10; }
+    #add-form label:has(> [name="evidence_type"])       { order: 11; }
+    #add-form label:has(> [name="source"][readonly])    { order: 12; }
+    #add-form label:has([name="finished_at"])           { order: 13; }
+    #add-form label:has(> [name="tags"])                { order: 14; }
+    #add-form .location-field                           { order: 15; }
+    #add-form .weather-field                            { order: 16; }
+    #add-form label:has(> [name="notes"])               { order: 17; }
+    #add-form .custom-fields                            { order: 18; }
+    #add-form .filter-actions                           { order: 19; }
 
-    #add-form:not(.details-open) .add-detail { display: none; }
+    #add-form:not(.details-open) :is(.add-detail, label:has(> [name="source"][readonly])) { display: none; }
 
     #add-form .location-field,
     #add-form .weather-field { margin-bottom: 0; }
