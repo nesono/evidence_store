@@ -191,6 +191,58 @@ async function sendPhotos({ outbox, putBlob, ready, summary, onProgress }) {
   return true;
 }
 
+// uploadStashedPhotos sends the store the photos among `digests` that this
+// device holds and the store has not been given yet.
+//
+// For a record filed straight away rather than through the queue. images.js
+// keeps every attached photo on the device first, so a log is finished whether
+// or not there is a connection; the queue sends a waiting record's photos
+// before the record (sendPhotos above), and this is the same thing for a
+// record that is not waiting. Without it a record filed online named an image
+// the store never received.
+//
+// Returns { ok, uploaded } and, on failure, a reason: "network" (the link
+// went), "auth" (the session did) or "refused" (the store would not take them).
+// Whichever it is, the record should wait in the queue rather than go without
+// its photos. `mark: false` uploads without telling the device it may let
+// go of its copy, for photos whose record may not have been filed yet.
+export async function uploadStashedPhotos({ outbox, putBlob, digests, mark = true }) {
+  const wanted = new Set(digests);
+  if (wanted.size === 0) return { ok: true, uploaded: 0 };
+
+  const owed = (await outbox.blobs()).filter(blob => wanted.has(blob.digest) && !blob.uploadedAt);
+  let uploaded = 0;
+  for (const blob of owed) {
+    let response;
+    try {
+      response = await putBlob(blob);
+    } catch {
+      return { ok: false, reason: "network", uploaded };
+    }
+    if (response.status === 401) return { ok: false, reason: "auth", uploaded };
+    if (!response.ok) return { ok: false, reason: "refused", uploaded };
+    if (mark) await outbox.markBlobUploaded(blob.digest);
+    uploaded++;
+  }
+  return { ok: true, uploaded };
+}
+
+// unsentOrphans lists the photos on this device that the store has not been
+// given and that no queued record names. Some belong to a log still being
+// written; before this fix, some belonged to records already filed online,
+// whose logs point at images the store does not have. Uploading them is how
+// those are repaired, and costs nothing for the rest: the store names bytes by
+// their hash, and drops any that no record names after a grace period.
+export async function unsentOrphans(outbox) {
+  const reachable = new Set();
+  for (const entry of await outbox.list()) {
+    for (const digest of digestsInRecord(entry.record)) reachable.add(digest);
+  }
+  return (await outbox.blobs())
+    .filter(blob => !blob.uploadedAt && !reachable.has(blob.digest))
+    .map(blob => blob.digest);
+}
+
 // describeProgress writes the line shown while a sync runs.
 //
 // It names the phase because the two fail differently, and a tester reading a

@@ -466,3 +466,73 @@ test("without a lookup to call, nothing changes", async () => {
   assert.equal(summary.filed, 1);
   assert.equal(summary.weather, 0);
 });
+
+// --- Photos of a record filed straight away (not through the queue) ---
+//
+// images.js keeps every attached photo on the device first, so a log is
+// finished whether or not there is a connection. A record filed online went
+// straight to the store and nothing sent its photos: the log named an image
+// the store never received (404), and the device's copy was swept a day later.
+
+import { unsentOrphans, uploadStashedPhotos } from "../static/sync.js";
+
+test("a record's stashed photos are uploaded and marked", async () => {
+  const outbox = createOutbox(memoryStore());
+  await fakeBlobs(outbox)(PNG, 1024);
+  const sent = [];
+  const putBlob = async blob => { sent.push(blob.digest); return { ok: true, status: 201 }; };
+
+  const result = await uploadStashedPhotos({ outbox, putBlob, digests: [PNG] });
+
+  assert.deepEqual(result, { ok: true, uploaded: 1 });
+  assert.deepEqual(sent, [PNG]);
+  assert.ok((await outbox.blobs())[0].uploadedAt, "the store has them now, so the device may let them go");
+});
+
+test("photos the store already has, or the device never held, are not sent", async () => {
+  const outbox = createOutbox(memoryStore());
+  await fakeBlobs(outbox)(PNG, 1024);
+  await outbox.markBlobUploaded(PNG);
+  const putBlob = async () => { throw new Error("should not be called"); };
+
+  assert.deepEqual(await uploadStashedPhotos({ outbox, putBlob, digests: [PNG, JPG] }), { ok: true, uploaded: 0 });
+  assert.deepEqual(await uploadStashedPhotos({ outbox, putBlob, digests: [] }), { ok: true, uploaded: 0 });
+});
+
+test("an upload that fails says why, so the record can wait instead", async () => {
+  for (const [putBlob, reason] of [
+    [async () => { throw new Error("offline"); }, "network"],
+    [async () => ({ ok: false, status: 401 }), "auth"],
+    [async () => ({ ok: false, status: 500 }), "refused"],
+  ]) {
+    const outbox = createOutbox(memoryStore());
+    await fakeBlobs(outbox)(PNG, 1024);
+    const result = await uploadStashedPhotos({ outbox, putBlob, digests: [PNG] });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, reason);
+    assert.equal((await outbox.blobs())[0].uploadedAt, undefined, "still owed, and still on the device");
+  }
+});
+
+test("uploading without marking leaves the device's copy where it is", async () => {
+  const outbox = createOutbox(memoryStore());
+  await fakeBlobs(outbox)(PNG, 1024);
+  const putBlob = async () => ({ ok: true, status: 201 });
+
+  await uploadStashedPhotos({ outbox, putBlob, digests: [PNG], mark: false });
+
+  assert.equal((await outbox.blobs())[0].uploadedAt, undefined,
+    "a photo in a log still being written must survive until its record is filed");
+});
+
+test("orphans are unsent photos no queued record names", async () => {
+  const outbox = await outboxWith(withPhoto("queued", PNG));
+  await fakeBlobs(outbox)(PNG, 1024);
+  await fakeBlobs(outbox)(JPG, 2048);
+  const other = "sha256:" + "f".repeat(64);
+  await fakeBlobs(outbox)(other, 512);
+  await outbox.markBlobUploaded(other);
+
+  assert.deepEqual(await unsentOrphans(outbox), [JPG],
+    "PNG goes with its queued record; the other is already in the store");
+});

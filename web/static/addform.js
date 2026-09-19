@@ -22,7 +22,7 @@ import { setValue } from "./editing.js";
 import { updateUtcPreview } from "./utcpreview.js";
 import { refreshDatalists } from "./datalists.js";
 import { refreshMissing, showMissing } from "./formcheck.js";
-import { durabilityLevel, dropQueued, openOutbox, queueRecord } from "./outboxview.js";
+import { durabilityLevel, dropQueued, openOutbox, queueRecord, uploadPhotosOf } from "./outboxview.js";
 
 // Who is filing, supplied at mount.
 let subjectOf = () => null;
@@ -111,6 +111,18 @@ async function submitEvidence(andAnother) {
     if (connectionState() === OFFLINE) {
       // Do not spend a timeout finding out what the header already says.
       await queueEntry(entry, feedback, andAnother, form);
+      return;
+    }
+
+    // The log's photos are on this device only (images.js keeps every one
+    // there first), so they go before the record that names them. If they
+    // cannot, the record waits in the outbox with them rather than being
+    // filed pointing at images the store does not have.
+    const photos = await uploadPhotosOf(entry.record);
+    if (!photos.ok) {
+      const why = { network: "the photos could not be uploaded", auth: "the session ended before the photos were uploaded",
+        refused: "the store would not take the photos" }[photos.reason];
+      await queueEntry(entry, feedback, andAnother, form, new Error(why));
       return;
     }
 
