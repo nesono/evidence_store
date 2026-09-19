@@ -226,6 +226,34 @@ export function activeAdvancedCount(filters) {
   return n;
 }
 
+// activeFilterCount counts every filter narrowing the search: the bar's and
+// the ones behind More filters. On a phone the whole filter form folds away
+// behind one button (#162), and that button is then the only place a
+// narrowed search shows.
+export function activeFilterCount(filters) {
+  let n = activeAdvancedCount(filters);
+  for (const f of [...BAR_TEXT_FIELDS, "result"]) if (filters[f]) n++;
+  return n;
+}
+
+// The phone's Filters button: open or closed, and how many are in force.
+function setPhoneFiltersOpen(open) {
+  document.getElementById("tab-search").classList.toggle("phone-filters-open", open);
+  const btn = document.getElementById("phone-filters-toggle");
+  btn.setAttribute("aria-expanded", String(open));
+  refreshPhoneFiltersToggle();
+}
+
+function refreshPhoneFiltersToggle() {
+  const btn = document.getElementById("phone-filters-toggle");
+  if (btn.getAttribute("aria-expanded") === "true") {
+    btn.textContent = "Hide filters";
+    return;
+  }
+  const n = activeFilterCount(readFormFilters());
+  btn.textContent = n > 0 ? `Filters (${n})` : "Filters";
+}
+
 // Initials keep the closed control narrow; the full names go in the tooltip so
 // the abbreviation is never the only way to read the filter.
 const RESULT_INITIALS = { PASS: "P", FAIL: "F", ERROR: "E", SKIPPED: "S" };
@@ -620,6 +648,7 @@ export function applyURLState(filters) {
   // A deep link carrying an advanced filter opens the panel, so the constraint
   // that is shaping the results is never invisible.
   setAdvancedExpanded(activeAdvancedCount(filters) > 0);
+  refreshPhoneFiltersToggle();
 }
 
 // mountSearch wires the tab up. Nothing here runs on import: the module can
@@ -630,7 +659,16 @@ export function mountSearch() {
   document.getElementById("filter-form").addEventListener("submit", (e) => {
     e.preventDefault();
     search();
+    // On a phone the answer is the list, so the filters fold away again.
+    setPhoneFiltersOpen(false);
   });
+
+  document.getElementById("phone-filters-toggle").addEventListener("click", () => {
+    setPhoneFiltersOpen(!document.getElementById("tab-search").classList.contains("phone-filters-open"));
+  });
+  for (const type of ["input", "change"]) {
+    document.getElementById("filter-form").addEventListener(type, refreshPhoneFiltersToggle);
+  }
 
   document.getElementById("clear-filters").addEventListener("click", () => {
     const form = document.getElementById("filter-form");
@@ -640,6 +678,7 @@ export function mountSearch() {
     // An open calendar still showing the range that was just cleared would be
     // reading from a form that no longer says that.
     rangePicker.close({ restoreFocus: false });
+    refreshPhoneFiltersToggle();
     search();
   });
 
