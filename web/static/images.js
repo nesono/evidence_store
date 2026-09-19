@@ -236,7 +236,13 @@ async function prepareForUpload(file) {
     canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close?.();
 
-    const shrunk = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", 0.85));
+    // WebP where the browser can write it. Safari on iOS cannot: asked for
+    // WebP it hands back a PNG, which for a photograph is larger than the
+    // camera's JPEG, so the original was kept — and an iPhone photo above the
+    // store's 5 MB limit was refused. JPEG is what every browser writes.
+    const encode = type => new Promise(resolve => canvas.toBlob(resolve, type, 0.85));
+    let shrunk = await encode("image/webp");
+    if (!shrunk || shrunk.type !== "image/webp") shrunk = await encode("image/jpeg");
     // Re-encoding can make a well-compressed image bigger. Keeping the original
     // in that case is both smaller and closer to what the tester saw.
     return shrunk && shrunk.size < file.size ? shrunk : file;

@@ -13,7 +13,9 @@ import {
   BLOCKED, STALE_URGENT_DAYS, STALE_WARN_DAYS,
   ageInDays, assessDurability, createOutbox, heldFrom, openStore, roomIsTight, staleness,
 } from "./outbox.js";
-import { describeProgress, describeSync, formatBytes, progressFraction, syncOutbox } from "./sync.js";
+import {
+  describeProgress, describeSync, formatBytes, progressFraction, syncOutbox, unsentOrphans, uploadStashedPhotos,
+} from "./sync.js";
 import { digestsInRecord } from "./blobref.js";
 import { parseCoordinates } from "./location.js";
 import { fetchWeather } from "./weather.js";
@@ -44,8 +46,15 @@ export async function mountOutbox({ subject = () => null, onEdit = () => {} } = 
   // Photos attached from now on are named and kept here rather than uploaded,
   // so a log written with no connection is finished when the tester writes it.
   useStash(outbox);
-  // Bytes belonging to logs that were never filed, from some earlier sitting.
-  outbox.sweepBlobs().catch(() => {});
+  // Photos of records filed online before those were uploaded too: their
+  // logs point at images the store never received. Sent now, while this
+  // device still has them, and only then is anything swept — the sweep drops
+  // unsent photos a day after they were taken. Not awaited: a slow link must
+  // not hold the page up.
+  recoverUnsentPhotos()
+    .catch(() => {})
+    // Bytes belonging to logs that were never filed, from some earlier sitting.
+    .finally(() => outbox.sweepBlobs().catch(() => {}));
   await refreshOutboxCount();
 
   document.getElementById("outbox-status").addEventListener("click", event => {
@@ -113,6 +122,36 @@ export async function refreshOutboxCount() {
   } else {
     el.title = "Records written on this device that have not reached the store yet";
   }
+}
+
+// Uploading is a straight replay of bytes that are already named: the store
+// answers with the reference the browser worked out when the photo was
+// attached, and storing the same bytes twice is one object.
+async function putBlob(blob) {
+  const resp = await apiFetchNoRedirect(`${API_BASE}/blobs`, {
+    method: "POST",
+    headers: { "Content-Type": blob.contentType || "application/octet-stream" },
+    body: blob.bytes,
+  });
+  return { ok: resp.ok, status: resp.status };
+}
+
+// uploadPhotosOf sends the photos a record's log names, for a record about to
+// be filed straight away rather than through the queue. On failure the caller
+// queues the record instead, and the next sync sends photos and record
+// together.
+export async function uploadPhotosOf(record) {
+  if (!outbox) return { ok: true, uploaded: 0 };
+  return uploadStashedPhotos({ outbox, putBlob, digests: digestsInRecord(record) });
+}
+
+// Unmarked: an orphan may belong to a log still being written, whose photo
+// has to stay on the device until that record is filed.
+async function recoverUnsentPhotos() {
+  if (connectionState() === OFFLINE) return;
+  const digests = await unsentOrphans(outbox);
+  if (digests.length === 0) return;
+  await uploadStashedPhotos({ outbox, putBlob, digests, mark: false });
 }
 
 export function openOutbox() {
@@ -325,17 +364,7 @@ export async function runSync({ announce = false } = {}) {
         if (!point) return null;
         return fetchWeather(point, finishedAt ? new Date(finishedAt) : null, apiFetchNoRedirect);
       },
-      // Uploading is a straight replay of bytes that are already named: the
-      // store answers with the reference the browser worked out when the photo
-      // was attached, and storing the same bytes twice is one object.
-      putBlob: async blob => {
-        const resp = await apiFetchNoRedirect(`${API_BASE}/blobs`, {
-          method: "POST",
-          headers: { "Content-Type": blob.contentType || "application/octet-stream" },
-          body: blob.bytes,
-        });
-        return { ok: resp.ok, status: resp.status };
-      },
+      putBlob,
       post: async (path, payload) => {
         const resp = await apiFetchNoRedirect(`${API_BASE}${path}`, {
           method: "POST",
