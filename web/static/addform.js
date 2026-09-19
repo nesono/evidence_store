@@ -13,7 +13,8 @@
 import { API_BASE, apiFetch, esc, formatTime } from "./common.js";
 import { parseUserDateTime } from "./datetime.js";
 import { renderMarkdown } from "./markdown.js";
-import { attachImageUploads, hydrateImages } from "./images.js";
+import { attachImageUploads, embedImages, hydrateImages } from "./images.js";
+import { fieldsToRestore, loadLastRun, rememberLastRun } from "./lastrun.js";
 import { formatAccuracy, formatCoordinates, requestPosition } from "./location.js";
 import { composeWeather, describeReading, fetchWeather, weatherPoint } from "./weather.js";
 import { OFFLINE, connectionState } from "./offline.js";
@@ -33,7 +34,17 @@ async function submitEvidence(andAnother) {
   const form = document.getElementById("add-form");
   const feedback = document.getElementById("add-feedback");
 
-  if (showMissing(form, feedback)) return;
+  // A missing field behind More details is opened up first, so the list's
+  // link to it has somewhere to go.
+  if ([...form.elements].some(el => el.willValidate && !el.validity.valid && el.closest(".add-detail"))) {
+    setDetailsOpen(true);
+  }
+  if (showMissing(form, feedback)) {
+    // Under the pinned Submit bar on a phone the message can be below the
+    // fold; bring it up rather than leave a button that seems to do nothing.
+    feedback.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    return;
+  }
 
   let finishedAt;
   const rawFinished = form.finished_at.value.trim();
@@ -94,6 +105,7 @@ async function submitEvidence(andAnother) {
     finished_at: finishedAt,
   };
   if (Object.keys(metadata).length > 0) record.metadata = metadata;
+  rememberLastRun(record);
 
   feedback.innerHTML = "";
   const btn = form.querySelector('button[type="submit"]');
@@ -314,10 +326,23 @@ function clearWeather() {
 export function beginCorrection(entry) {
   editingEntryID = entry.id;
   fillFormFromRecord(entry.record);
+  // Everything the record holds is shown, not left behind More details.
+  setDetailsOpen(true);
   document.querySelector('[data-tab="add"]').click();
   document.getElementById("add-feedback").innerHTML =
     `<p class="feedback-ok">Correcting a record that is waiting to send. ` +
     `Submitting replaces it rather than filing a second copy.</p>`;
+}
+
+// setDetailsOpen shows or hides the fields behind More details. Only a phone
+// hides them (app.css); on a desktop the class changes nothing.
+function setDetailsOpen(open) {
+  const form = document.getElementById("add-form");
+  const toggle = document.getElementById("add-details-toggle");
+  form.classList.toggle("details-open", open);
+  if (!toggle) return;
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.textContent = open ? "Fewer details" : "More details";
 }
 
 function fillFormFromRecord(record) {
@@ -363,6 +388,30 @@ export function mountAddForm({ subject = () => null } = {}) {
   // they have just finished would otherwise type.
   document.querySelector('#add-form [name="finished_at"]').value =
     formatTime(new Date().toISOString());
+
+  // The next record at a rig is nearly always about the same repository,
+  // branch, build and procedure as the last one filed on this device (#162).
+  const form = document.getElementById("add-form");
+  for (const [name, value] of Object.entries(fieldsToRestore(loadLastRun(), {
+    repo: form.repo.value, branch: form.branch.value, rcs_ref: form.rcs_ref.value, procedure_ref: form.procedure_ref.value,
+  }))) {
+    form[name].value = value;
+  }
+
+  document.getElementById("add-details-toggle").addEventListener("click", () => {
+    setDetailsOpen(!form.classList.contains("details-open"));
+  });
+
+  // A photo from the camera or the library, into the log where the caret was.
+  const photoInput = document.getElementById("add-photo-input");
+  document.getElementById("add-photo").addEventListener("click", () => photoInput.click());
+  photoInput.addEventListener("change", () => {
+    embedImages(form.observations, photoInput.files, msg => {
+      document.getElementById("add-feedback").innerHTML = `<p class="feedback-error">${esc(msg)}</p>`;
+    });
+    // Cleared, so choosing the same picture again still counts as a change.
+    photoInput.value = "";
+  });
 
   // --- Custom metadata fields ---
 

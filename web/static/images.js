@@ -132,6 +132,13 @@ export function attachImageUploads(field, onStatus) {
   });
 }
 
+// embedImages attaches files chosen some other way — the phone's camera or
+// photo library, through the Add photo button (#162) — exactly as a pasted or
+// dropped one is: stashed or uploaded, then referenced in the log at the caret.
+export function embedImages(field, files, onStatus) {
+  embedAll(field, [...files].filter(file => file.type.startsWith("image/")), onStatus);
+}
+
 function hasFiles(transfer) {
   return !!transfer && [...(transfer.types || [])].includes("Files");
 }

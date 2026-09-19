@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=5">
+    <link rel="stylesheet" href="app.css?v=6">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -85,7 +85,7 @@
                     <label>Repo <small>(required)</small>
                         <input type="text" name="repo" placeholder="org/repo" list="repos-list" required autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
-                    <label>Branch
+                    <label class="add-detail">Branch
                         <input type="text" name="branch" placeholder="main" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                     <label>Commit <small>(required)</small>
@@ -101,7 +101,7 @@
                          and a box produced `bazel`, `pytest`, `gotest` and
                          `junit` for one of them. Defaults to Manual Test —
                          this page is how a person files what they ran. -->
-                    <label>Evidence type <small>(required)</small>
+                    <label class="add-detail">Evidence type <small>(required)</small>
                         <select name="evidence_type" required>
                             <option value="ci">CI</option>
                             <option value="manual_test" selected>Manual Test</option>
@@ -120,14 +120,14 @@
                         <label><input type="radio" name="result" value="ERROR"> ERROR</label>
                         <label><input type="radio" name="result" value="SKIPPED"> SKIPPED</label>
                     </fieldset>
-                    <label>Finished at <small>(UTC)</small>
+                    <label class="add-detail">Finished at <small>(UTC)</small>
                         <span class="input-with-button">
                             <input type="text" name="finished_at" placeholder="2026-03-30 14:00 (UTC)" data-utc-preview autocapitalize="off" autocorrect="off" spellcheck="false">
                             <button type="button" id="fill-now" class="secondary outline" title="Fill with current time (UTC)">Now</button>
                         </span>
                         <small class="utc-preview" data-preview-for="finished_at"></small>
                     </label>
-                    <label>Tags
+                    <label class="add-detail">Tags
                         <input type="text" name="tags" placeholder="regression,progression" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </label>
                 </div>
@@ -135,7 +135,7 @@
                      and a place name, because a tester at a bench has the one and
                      a tester in a field has the other. Stored as
                      metadata.location. -->
-                <label class="location-field">Location
+                <label class="location-field add-detail">Location
                     <small>(where you ran it &mdash; coordinates or a place name)</small>
                     <span class="input-with-button">
                         <input type="text" name="location" placeholder="52.51631, 13.37771 or Test track, bay 4" autocapitalize="sentences" spellcheck="true">
@@ -148,7 +148,7 @@
                      because a tester standing in a hailstorm the model put two
                      valleys away has to be able to say so. Stored as
                      metadata.weather_conditions. -->
-                <label class="weather-field">Weather
+                <label class="weather-field add-detail">Weather
                     <small>(conditions while you ran it)</small>
                     <span class="input-with-button">
                         <input type="text" name="weather_conditions" placeholder="Overcast, 8 °C, wind 20 km/h, light rain" autocapitalize="sentences" spellcheck="true">
@@ -176,7 +176,7 @@
                         <small class="weather-compose-preview" id="wc-preview"></small>
                     </div>
                 </label>
-                <label>Notes
+                <label class="add-detail">Notes
                     <textarea name="notes" rows="3" placeholder="Optional notes about the test result..." autocapitalize="sentences" spellcheck="true"></textarea>
                 </label>
                 <!-- The tester's running account of the procedure, kept apart from
@@ -184,15 +184,25 @@
                      actually seen, step by step, and is long enough to need room
                      and formatting. Stored as metadata.observations. -->
                 <label>Test log
-                    <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links; paste or drop images to attach them)<br>
-                        Enter continues a list, Tab and Shift-Tab nest it, and <kbd>&#8984;/Ctrl</kbd> with <kbd>B</kbd>, <kbd>I</kbd>, <kbd>K</kbd> or <kbd>E</kbd> (also <kbd>&#8679;E</kbd>, where an extension has taken <kbd>&#8984;E</kbd>) formats the selection.</small>
+                    <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links; paste or drop images, or use Add photo)<br>
+                        <span class="keyboard-hint">Enter continues a list, Tab and Shift-Tab nest it, and <kbd>&#8984;/Ctrl</kbd> with <kbd>B</kbd>, <kbd>I</kbd>, <kbd>K</kbd> or <kbd>E</kbd> (also <kbd>&#8679;E</kbd>, where an extension has taken <kbd>&#8984;E</kbd>) formats the selection.</span></small>
                     <textarea name="observations" rows="10" placeholder="1. Powered on the rig — all lights green&#10;2. Pressed the brake pedal — firm, no travel&#10;&#10;Saw `ERR_42` on screen 2 during step 3." autocapitalize="sentences" spellcheck="true"></textarea>
                 </label>
                 <div class="test-log-tools">
+                    <!-- A phone cannot paste or drop a photo it has not taken yet. accept=image/*
+                     offers the camera or the photo library; the picture goes into
+                     the log exactly as a pasted one does (images.js). -->
+                    <input type="file" id="add-photo-input" accept="image/*" multiple hidden>
+                    <button type="button" class="secondary outline" id="add-photo">Add photo</button>
                     <button type="button" class="secondary outline" id="test-log-preview-toggle" aria-expanded="false" aria-controls="test-log-preview">Preview</button>
                 </div>
                 <div class="test-log" id="test-log-preview" hidden></div>
-                <fieldset class="custom-fields">
+                <!-- Phones only (#162): what a manual test needs is above this
+                     button, and everything else is behind it. Opened by itself
+                     when Submit finds one of those fields missing, and when a
+                     queued record is loaded back in to be corrected. -->
+                <button type="button" class="secondary outline add-details-toggle" id="add-details-toggle" aria-expanded="false">More details</button>
+                <fieldset class="custom-fields add-detail">
                     <legend>Custom metadata</legend>
                     <div id="custom-fields-list"></div>
                     <button type="button" class="secondary outline" id="add-custom-field">+ Add field</button>
