@@ -3457,3 +3457,109 @@ label > .input-with-button {
         scroll-margin-bottom: calc(var(--phone-nav-h) + env(safe-area-inset-bottom) + 1rem);
     }
 }
+
+/* --- Search on a phone (#162) --------------------------------------------------
+ * The results first, as a list of cards: what happened to which procedure and
+ * when, then where (repo, branch, commit), then the tags. Type and Source are
+ * in the record, a tap away. The filters fold away behind one button. The
+ * markup is the desktop's table; each row is laid out as a card, so the tap
+ * that opens a record, tag fitting and the inherited tint are unchanged.
+ */
+.phone-filters-toggle { display: none; }
+
+@media (max-width: 767px) {
+    .phone-filters-toggle {
+        display: inline-flex;
+        margin-bottom: 0.75rem;
+    }
+
+    #tab-search:not(.phone-filters-open) #filter-form { display: none; }
+
+    #filter-bar .fb-actions button { flex: 1; }
+
+    /* The page scrolls, not a window inside it. */
+    #results-window {
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+        border: none;
+    }
+
+    #results-table,
+    #results-table tbody { display: block; }
+
+    #results-table thead { display: none; }
+
+    #results-table tbody tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.25rem 0.5rem;
+        padding: 0.75rem 0.25rem;
+        border-bottom: 1px solid var(--color-line);
+        cursor: pointer;
+    }
+
+    #results-table tbody tr:active { background: var(--color-ground-sunken); }
+
+    /* :is() with the column classes, to outrank the desktop's column widths. */
+    #results-table tbody td:is(.col-result, .col-procedure, .col-repo, .col-branch, .col-commit, .col-finished, .col-tags) {
+        width: auto;
+        min-width: 0;
+        padding: 0;
+        border: none;
+        background: none;
+    }
+
+    /* Every column the narrower tables hid comes back, as part of a card —
+       except Type and Source. */
+    #results-table tbody td.col-type,
+    #results-table tbody td.col-source { display: none; }
+
+    #results-table tbody :is(td.col-repo, td.col-branch, td.col-commit, td.col-finished, td.col-tags) {
+        display: block;
+    }
+
+    /* Line one: the verdict and the procedure, which gets the rest of the line. */
+    #results-table tbody td.col-result    { order: 1; flex: none; }
+    #results-table tbody td.col-procedure { order: 2; flex: 1 1 0; font-weight: 600; }
+
+    /* Line two: where. The pseudo-elements force the line breaks. */
+    #results-table tbody tr::before,
+    #results-table tbody tr::after {
+        content: "";
+        flex-basis: 100%;
+        height: 0;
+    }
+
+    #results-table tbody tr::before { order: 3; }
+
+    #results-table tbody :is(td.col-repo, td.col-branch, td.col-commit, td.col-finished) {
+        color: var(--color-ink-muted);
+        font-size: var(--text-xs);
+    }
+
+    /* Capped, so a long repository or branch name is cut short rather than
+       wrapping the line. */
+    #results-table tbody td.col-repo     { order: 4; flex: 0 1 auto; max-width: 55%; }
+    #results-table tbody td.col-branch   { order: 5; flex: 0 1 auto; max-width: 25%; }
+    #results-table tbody td.col-commit   { order: 6; flex: none; }
+
+
+    #results-table tbody :is(td.col-branch, td.col-commit):not(:empty)::before {
+        content: "· ";
+        font-family: var(--font-sans);
+    }
+
+    /* Line three: when, then the tags in the rest of the line. */
+    #results-table tbody tr::after { order: 8; }
+
+    #results-table tbody td.col-finished { order: 9; flex: none; font-variant-numeric: tabular-nums; }
+
+    #results-table tbody td.col-tags { order: 10; flex: 1 1 0; }
+
+    #results-table tbody td.col-tags:empty { display: none; }
+
+    /* Nothing found is a line of text, not a card. */
+    #results-table tbody td.empty-state { flex: 1 1 100%; }
+}

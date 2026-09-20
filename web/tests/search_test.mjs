@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { activeAdvancedCount, parseSearchState, searchStateToQuery } from "../static/search.js";
+import { activeAdvancedCount, activeFilterCount, parseSearchState, searchStateToQuery } from "../static/search.js";
 
 // --- Reading a link ---
 
@@ -144,4 +144,19 @@ test("inheritance counts only when it has been turned off", () => {
   // On is the default, so it is not a constraint anybody needs warning about.
   assert.equal(activeAdvancedCount({ include_inherited: "true" }), 0);
   assert.equal(activeAdvancedCount({ include_inherited: "false" }), 1);
+});
+
+// --- The phone's Filters button (#162) ---
+//
+// On a phone the filters fold away behind one button so the results come
+// first. Folded, the button is the only sign a search is narrowed, so it
+// counts every filter, the bar's as well as the ones behind More filters.
+
+test("the Filters button counts every filter that narrows the search", () => {
+  assert.equal(activeFilterCount({}), 0);
+  assert.equal(activeFilterCount({ repo: "org/firmware", ref: "main", result: "FAIL" }), 3,
+    "the bar's filters count, unlike on the desktop's More filters badge");
+  assert.equal(activeFilterCount({ repo: "org/firmware", source: "jdoe", finished_after: "2026-01-01" }), 3);
+  assert.equal(activeFilterCount({ include_inherited: "false" }), 1, "leaving inherited records out narrows it too");
+  assert.equal(activeFilterCount({ repo: "" }), 0, "an empty box is not a filter");
 });

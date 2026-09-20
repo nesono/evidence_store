@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=6">
+    <link rel="stylesheet" href="app.css?v=7">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -216,6 +216,11 @@
         </section>
 
         <section id="tab-search" class="tab-content">
+            <!-- Phones only (#162): the filters fold away behind this, so the
+                 results are what a phone shows first. It counts every filter in
+                 force, since folded it is the only sign the list is narrowed. -->
+            <button type="button" class="secondary outline phone-filters-toggle" id="phone-filters-toggle"
+                    aria-expanded="false" aria-controls="filter-form">Filters</button>
             <form id="filter-form">
                 <div id="filter-bar">
                     <label class="fb-field fb-field-repo">Repo
