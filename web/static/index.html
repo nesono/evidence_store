@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=8">
+    <link rel="stylesheet" href="app.css?v=9">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -37,16 +37,16 @@
         <nav>
             <ul><li><strong>Evidence Store</strong></li></ul>
             <ul>
-                <li id="search-tab-item"><a href="#" class="nav-tab active" data-tab="search">Search</a></li>
-                <li id="analytics-tab-item"><a href="#" class="nav-tab" data-tab="analytics">Analytics</a></li>
-                <li id="add-tab-item"><a href="#" class="nav-tab" data-tab="add">Add Result</a></li>
+                <li id="search-tab-item"><a href="#" class="nav-tab active" data-tab="search" data-label="Search">Search</a></li>
+                <li id="analytics-tab-item"><a href="#" class="nav-tab" data-tab="analytics" data-label="Analytics">Analytics</a></li>
+                <li id="add-tab-item"><a href="#" class="nav-tab" data-tab="add" data-label="Add Result">Add Result</a></li>
                 <!-- Hidden rather than greyed, unlike the tabs above it.
                      Those name things an ordinary user might reasonably want
                      and be told to go and ask for; this one is somebody else's
                      job entirely, and showing a locked door to everybody who
                      walks past only suggests they are missing something they
                      are not. access.js unhides it once /me says so. -->
-                <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access">Admin</a></li>
+                <li hidden id="access-tab-item"><a href="#" class="nav-tab" data-tab="access" data-label="Admin">Admin</a></li>
                 <!-- Hidden until there is something waiting. A counter reading
                      zero is furniture; one reading three is the most important
                      thing on the page. -->

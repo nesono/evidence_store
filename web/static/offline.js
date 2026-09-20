@@ -97,10 +97,14 @@ export function startConnectionIndicator(el = document.getElementById("health-st
   let failures = 0;
   let timer;
 
+  // A dot, and the word only on hover or to a screen reader. Written out, the
+  // longest of the three ("Connected") took more room in the header than the
+  // fact deserves: it answers a question nobody asks twice.
   const render = state => {
     if (!el) return;
     const { text, className } = connectionLabel(state);
-    el.innerHTML = `<span class="health-dot ${className}"></span> ${text}`;
+    el.innerHTML = `<span class="health-dot ${className}"></span><span class="sr-only">${text}</span>`;
+    el.title = text;
   };
 
   const tick = async () => {

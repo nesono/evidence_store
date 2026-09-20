@@ -309,6 +309,19 @@
 
 [hidden], template { display: none !important; }
 
+/* Said to a screen reader, and on hover through a title, but not taking room
+ * on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Taps act at once rather than waiting to see whether they are a double tap. */
 [tabindex], a, area, button, input, label, select, summary, textarea {
   touch-action: manipulation;
@@ -1196,6 +1209,19 @@ body > main {
 
 .nav-tab:hover {
   color: var(--color-ink);
+}
+
+/* The tab is always as wide as its own bold version, so selecting one does
+ * not widen it and reflow the row — which pushed "Add Result" onto two lines.
+ * A copy of the label in bold, laid out and not shown. */
+.nav-tab::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  font-weight: 600;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .nav-tab.active {
@@ -3312,6 +3338,15 @@ label > .input-with-button {
         max-height: 88vh;
         padding-bottom: calc(1rem + env(safe-area-inset-bottom));
         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    /* In the sheet there is room for the word, and no hover to reveal it. */
+    .more-status .sr-only {
+        position: static;
+        width: auto;
+        height: auto;
+        margin: 0;
+        clip-path: none;
     }
 
     .more-status {
