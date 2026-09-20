@@ -9,7 +9,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { activeAdvancedCount, activeFilterCount, parseSearchState, searchStateToQuery } from "../static/search.js";
+import {
+  activeAdvancedCount, activeFilterCount, parseSearchState, prefersSplitView, searchStateToQuery,
+} from "../static/search.js";
 
 // --- Reading a link ---
 
@@ -159,4 +161,28 @@ test("the Filters button counts every filter that narrows the search", () => {
   assert.equal(activeFilterCount({ repo: "org/firmware", source: "jdoe", finished_after: "2026-01-01" }), 3);
   assert.equal(activeFilterCount({ include_inherited: "false" }), 1, "leaving inherited records out narrows it too");
   assert.equal(activeFilterCount({ repo: "" }), 0, "an empty box is not a filter");
+});
+
+// --- A tablet in landscape shows the record beside the list (#163) ---
+//
+// The store already has the shape a tablet wants: a list and a record. On a
+// screen with the width for both, the record is a panel rather than a dialog
+// over the list. Decided by input as well as width: a wide screen with a mouse
+// is a desktop, where the dialog is right.
+
+test("a tablet in landscape puts the record beside the list", () => {
+  assert.equal(prefersSplitView({ width: 1180, coarse: true }), true);
+  assert.equal(prefersSplitView({ width: 1366, coarse: true }), true);
+});
+
+test("a tablet in portrait has no room for both", () => {
+  assert.equal(prefersSplitView({ width: 820, coarse: true }), false);
+  assert.equal(prefersSplitView({ width: 1023, coarse: true }), false);
+});
+
+test("a phone and a desktop keep the dialog", () => {
+  assert.equal(prefersSplitView({ width: 390, coarse: true }), false);
+  assert.equal(prefersSplitView({ width: 1440, coarse: false }), false,
+    "a wide screen with a mouse is a desktop, and a dialog is what it has always had");
+  assert.equal(prefersSplitView(), false);
 });

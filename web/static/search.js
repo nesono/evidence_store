@@ -226,6 +226,20 @@ export function activeAdvancedCount(filters) {
   return n;
 }
 
+// A tablet in landscape has room for the list and the record at once, which
+// is the shape the store already has. Decided by input as well as width: a
+// wide screen with a mouse is a desktop, where the record is a dialog over the
+// list, as it has always been.
+export const SPLIT_VIEW_QUERY = "(min-width: 1024px) and (pointer: coarse)";
+
+export function prefersSplitView({ width = 0, coarse = false } = {}) {
+  return coarse && width >= 1024;
+}
+
+function splitView() {
+  return window.matchMedia(SPLIT_VIEW_QUERY).matches;
+}
+
 // activeFilterCount counts every filter narrowing the search: the bar's and
 // the ones behind More filters. On a phone the whole filter form folds away
 // behind one button (#162), and that button is then the only place a
@@ -566,7 +580,13 @@ export function renderDetail(record) {
   // The log's images are fetched once the markup is in the document: the
   // renderer leaves them without a src because reading a blob needs the API key.
   hydrateImages(el);
-  document.getElementById("detail-dialog").showModal();
+  const dialog = document.getElementById("detail-dialog");
+  // Beside the list, a record is part of the page: show() rather than
+  // showModal(), which would put it in the top layer over everything.
+  if (dialog.open) dialog.close();
+  if (splitView()) dialog.show(); else dialog.showModal();
+  document.getElementById("tab-search").classList.add("detail-open");
+  markSelectedRow(record.id);
 }
 
 // --- Search ---
@@ -628,6 +648,15 @@ function moveWindow(offset) {
   const filters = readFormFilters();
   writeStateToURL(filters);
   doSearch(filters);
+}
+
+// Which record the panel is showing. Beside the list, the list has to say so;
+// over it, the dialog is the answer.
+function markSelectedRow(id) {
+  for (const row of document.querySelectorAll("#results-table tr.selected, #inherited-table tr.selected")) {
+    row.classList.remove("selected");
+  }
+  if (id) document.querySelector(`tr[data-id="${id}"]`)?.classList.add("selected");
 }
 
 async function openDetail(id) {
@@ -808,7 +837,28 @@ export function mountSearch() {
 
   // On the dialog itself rather than the close button: Escape closes it too, and
   // the images a closed dialog was showing are worth handing back either way.
-  document.getElementById("detail-dialog").addEventListener("close", releaseImages);
+  document.getElementById("detail-dialog").addEventListener("close", (event) => {
+    // A close is also how the record moves between panel and dialog when a
+    // tablet is rotated, and that close arrives after it has been reopened.
+    // An open record is not one being put away.
+    if (event.target.open) return;
+    releaseImages();
+    document.getElementById("tab-search").classList.remove("detail-open");
+    markSelectedRow(null);
+  });
+
+  // Rotating a tablet, or plugging in a mouse, changes which of the two a
+  // record should be. An open one is reopened the other way rather than left
+  // as a panel in a layout that no longer has a column for it.
+  window.matchMedia(SPLIT_VIEW_QUERY).addEventListener("change", () => {
+    const dialog = document.getElementById("detail-dialog");
+    if (!dialog.open) return;
+    const selected = document.querySelector("tr.selected")?.dataset.id;
+    dialog.close();
+    if (splitView()) dialog.show(); else dialog.showModal();
+    document.getElementById("tab-search").classList.add("detail-open");
+    markSelectedRow(selected);
+  });
 
   window.addEventListener("popstate", () => {
     const { filters } = readStateFromURL();
