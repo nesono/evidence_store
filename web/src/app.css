@@ -1214,6 +1214,12 @@ body > main {
 /* The tab is always as wide as its own bold version, so selecting one does
  * not widen it and reflow the row — which pushed "Add Result" onto two lines.
  * A copy of the label in bold, laid out and not shown. */
+.nav-tab {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .nav-tab::after {
   content: attr(data-label);
   display: block;
@@ -1240,6 +1246,21 @@ body > main {
   opacity: 0.45;
   cursor: not-allowed;
   text-decoration: line-through;
+}
+
+/* The connection, now that it is only a dot: at the end of the row, after the
+ * account, and centred on the line. Left among the tabs it had no text of its
+ * own to sit on and rode above their baseline. */
+body > header #health-status {
+  order: 99;
+  display: flex;
+  align-items: center;
+  margin-left: calc(var(--spacing) * 2);
+}
+
+/* The gap before the word, which only the More sheet still shows. */
+body > header .health-dot {
+  margin-right: 0;
 }
 
 /* Who is signed in. Quiet: it answers a question nobody asks twice. */
