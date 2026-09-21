@@ -283,6 +283,18 @@
  * rather than hand's length, it needs more of the table; and a fixed root is
  * what lets a reader's own font-size setting reach the page. */
 
+/* Something to hit with a thumb. 44px is Apple's floor and Android's is 48;
+ * the measured buttons were 23 to 31px tall. Keyed to the input rather than to
+ * the width (#163): a tablet is a touch device with a desktop-sized viewport,
+ * and so is a touchscreen laptop. Every button and field takes it through the
+ * one height they share, and the small controls keep their step below. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 2.75rem;
+    --control-h-sm: 2.25rem;
+  }
+}
+
 *, ::before, ::after {
   box-sizing: border-box;
   background-repeat: no-repeat;
@@ -3049,12 +3061,23 @@ label > .input-with-button {
     #results-table .col-source { display: none; }
 }
 
-@media (max-width: 899px) {
+@media (max-width: 767px) {
     #results-table .col-repo { display: none; }
 }
 
+/* A tablet in portrait (768-1099px) keeps Result, Procedure, Repo, Branch,
+   Commit, Finished and Tags — Type and Source are dropped above. The fixed
+   columns give some width back so Procedure, which takes what is left, keeps
+   a readable share: without this it was 69px at 768. */
+@media (min-width: 768px) and (max-width: 1099px) {
+    #results-table .col-result   { width: 5rem; }
+    #results-table .col-commit   { width: 7rem; }
+    #results-table .col-finished { width: 9.5rem; }
+    #results-table .col-tags     { width: 7rem; }
+}
+
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
     /* Keyed off column classes rather than position, so the columns that survive
        stay correct regardless of what else is hidden. */
     #results-table .col-commit,
@@ -3127,15 +3150,6 @@ label > .input-with-button {
     #window-size, #window-size-label,
     #an-bar .an-field input, #an-bar .an-field select {
         font-size: var(--text-base);
-    }
-
-    /* Something to hit with a thumb. 44px is Apple's floor and Android's is
-       48; the measured buttons were 23 to 31px tall. Every button and field
-       takes it through the one height they share, and the small controls a
-       row's worth of them keep their step below. */
-    :root {
-        --control-h: 2.75rem;
-        --control-h-sm: 2.25rem;
     }
 
     /* One field per line. Two columns at this width leaves neither usable. */
@@ -3562,4 +3576,77 @@ label > .input-with-button {
 
     /* Nothing found is a line of text, not a card. */
     #results-table tbody td.empty-state { flex: 1 1 100%; }
+}
+
+/* --- A tablet in landscape (#163) ----------------------------------------------
+ * The list and the record at once, which is what the width is for and what an
+ * iPad user expects. The record is the same dialog as everywhere else, opened
+ * with show() rather than showModal() (search.js), so here it can be laid out
+ * as a column of the page instead of a sheet over it.
+ */
+@media (min-width: 1024px) and (pointer: coarse) {
+    #tab-search.detail-open {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(20rem, 34%);
+        column-gap: 1rem;
+        align-items: start;
+        /* min-content, or the panel — which spans every row — would stretch the
+           filter bar and the window bar to its own height. */
+        grid-auto-rows: min-content;
+    }
+
+    #tab-search.detail-open > :not(#detail-dialog) { grid-column: 1; }
+
+    /* Not a sheet over the page: a column of it. */
+    #tab-search.detail-open > #detail-dialog {
+        display: block;
+        position: sticky;
+        top: 1rem;
+        inset-inline: auto;
+        grid-column: 2;
+        /* span, not 1 / -1: the rows here are implicit, where -1 is the first
+           line, which pinned the panel to row one and stretched it. */
+        grid-row: 1 / span 99;
+        width: auto;
+        min-width: 0;
+        height: auto;
+        min-height: 0;
+        max-height: calc(100vh - 8rem);
+        overflow: auto;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-md);
+        background: var(--color-ground-raised);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    #tab-search.detail-open > #detail-dialog > article {
+        margin: 0;
+        max-width: none;
+        max-height: none;
+        box-shadow: none;
+    }
+
+    /* The list is now two thirds of the screen, so it gets the columns a
+       tablet in portrait has rather than the desktop's nine: with all of them
+       Procedure, which takes what the others leave, was squeezed to nothing
+       and the header wrapped into a block four lines tall. */
+    #tab-search.detail-open #results-table :is(.col-type, .col-source) { display: none; }
+
+    #tab-search.detail-open #results-table .col-result   { width: 5rem; }
+    #tab-search.detail-open #results-table .col-commit   { width: 7rem; }
+    #tab-search.detail-open #results-table .col-branch   { width: 5.5rem; }
+    #tab-search.detail-open #results-table .col-finished { width: 9.5rem; }
+    #tab-search.detail-open #results-table .col-tags     { width: 7rem; }
+
+    /* Which record the panel is showing. */
+    #results-table tbody tr.selected,
+    #inherited-table tbody tr.selected {
+        background: color-mix(in oklab, var(--color-accent) 12%, var(--color-ground));
+    }
+
+    #results-table tbody tr.selected td,
+    #inherited-table tbody tr.selected td {
+        background: transparent;
+    }
 }
