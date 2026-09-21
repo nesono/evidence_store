@@ -17,8 +17,8 @@
 // Bumped with the stylesheet version in index.html, so activation deletes the
 // previous cache rather than keeping an old stylesheet around indefinitely.
 // v3: style.css folded into app.css. v4: the phone shell (#162). v5: naming
-// what a form is missing. v6: Add Result on a phone. v7: Search on a phone. v8: tablets (#163).
-const VERSION = "v8";
+// what a form is missing. v6: Add Result on a phone. v7: Search on a phone. v8: tablets (#163). v9: a nav that does not move.
+const VERSION = "v9";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -29,7 +29,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=8",
+  "/app.css?v=9",
   "/app.js",
   "/blobref.js",
   "/access.js",
