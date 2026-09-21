@@ -2565,36 +2565,145 @@ body > header .health-dot {
     width: 100%;
 }
 
-/* Detail dialog */
+/* --- A record, as a reader sees it (#190) ---
+ * What opens when a row is clicked is a result somebody wants to read, not a
+ * row of the database. The verdict, what was run and the tester's own log are
+ * the record; the uuid, the ingest time and the metadata dump are one tab
+ * across, where the person chasing a duplicate ingest can still find them.
+ *
+ * Wider than it was, because the log is prose with photographs in it and 700px
+ * of it wrapped at about fifty characters. */
 #detail-dialog article {
-    max-width: 700px;
+    max-width: 900px;
+}
+
+.record-tabs {
+    display: flex;
+    gap: calc(var(--spacing) * 5);
+    margin-bottom: calc(var(--spacing) * 4);
+    border-bottom: 1px solid var(--color-line);
+}
+
+/* Bold at rest as well as when selected: the nav taught us what a tab that
+   changes weight on selection does to the row around it. */
+.record-tab {
+    width: auto;
+    margin-bottom: -1px;
+    padding: calc(var(--spacing) * 1.5) 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--color-ink-muted);
+    font-size: var(--text-ui);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.record-tab:hover {
+    background: none;
+    color: var(--color-ink);
+}
+
+.record-tab.active {
+    border-bottom-color: var(--color-accent);
+    color: var(--color-ink);
+}
+
+/* The verdict and what was run, before any field: a reader who opened the
+   wrong row can see that without reading a list. */
+.record-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 calc(var(--spacing) * 3);
+    align-items: center;
+    margin-bottom: calc(var(--spacing) * 4);
+}
+
+.record-head > .badge {
+    grid-row: 1 / span 2;
+    padding: 0.3em 0.75em;
+    font-size: var(--text-ui);
+}
+
+.record-title {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
+    line-height: var(--leading-tight);
+    overflow-wrap: anywhere;
+}
+
+.record-sub {
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-size: var(--text-ui);
+    overflow-wrap: anywhere;
+}
+
+.record-tags {
+    margin-bottom: calc(var(--spacing) * 4);
 }
 
 .detail-grid {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.4em 1em;
-    font-size: 0.9em;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.5em 1.5em;
+    font-size: var(--text-ui);
+    line-height: var(--leading-normal);
 }
 
 .detail-grid dt {
+    color: var(--color-ink-muted);
     font-weight: 600;
     white-space: nowrap;
 }
 
+/* anywhere, not break-all: a commit hash has to be able to break mid-word,
+   and a repository name should still break at its slash. */
 .detail-grid dd {
     margin: 0;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
-.metadata-block {
-    margin-top: 1em;
+.record-block {
+    margin-top: calc(var(--spacing) * 5);
 }
 
-.metadata-block pre {
-    font-size: 0.85em;
-    max-height: 300px;
+.record-block h5 {
+    margin: 0 0 calc(var(--spacing) * 2);
+    color: var(--color-ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* What the tester typed, with the line breaks they typed. */
+.record-notes {
+    font-size: var(--text-ui);
+    line-height: var(--leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* The log is the substance of a manual result, so in a record it gets the room
+   the dialog has rather than a fixed 420px box inside it. */
+.record-pane .test-log {
+    margin-top: 0;
+    max-height: none;
+}
+
+.record-pane pre {
+    max-height: 24rem;
     overflow: auto;
+    font-size: var(--text-xs);
+}
+
+.record-empty {
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-size: var(--text-ui);
 }
 
 /* Feedback while a file is over the log field, so a drop that is about to be

@@ -507,76 +507,161 @@ function renderWeather(metadata) {
   return html;
 }
 
+// Text a reader is meant to read, or "" for anything else.
+//
+// Every one of these metadata fields is optional, may be absent, and may hold
+// whatever another client put there. A non-string under a name this view knows
+// is not rendered as that field: it stays in the dump, where it is visible as
+// what it actually is.
+function readerText(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+// What the record says, for somebody reading the result (#190).
+//
+// The verdict and the procedure name the record in its heading, and the ids and
+// the ingest time are an administrator's business, so neither appears here.
+// What is left is the run: which code, from whom, and when it finished.
+export function readerFields(record) {
+  return [
+    ["Repo", record.repo],
+    ["Branch", record.branch || ""],
+    ["Commit", record.rcs_ref, "commit-ref"],
+    ["Source", record.source],
+    ["Finished", `${formatTime(record.finished_at)} UTC`],
+  ];
+}
+
+// What the store knows about the record as an object: what it is called, when
+// it arrived, and whether it stands on another record's word.
+//
+// This used to sit at the top of the one list everybody saw. A reader opening a
+// result has no use for a uuid, and a tester chasing a duplicate ingest has no
+// other place to find one, so it moved a tab across rather than away.
+export function detailFields(record) {
+  const fields = [
+    ["ID", record.id, "commit-ref"],
+    ["Type", evidenceTypeLabel(record.evidence_type)],
+    ["Ingested", `${formatTime(record.ingested_at)} UTC`],
+    ["Inherited", record.inherited ? "Yes" : "No"],
+  ];
+  if (record.inheritance_declaration_id) {
+    fields.push(["Inheritance ID", record.inheritance_declaration_id, "commit-ref"]);
+  }
+  return fields;
+}
+
+// The metadata that no part of the reader's view has already shown.
+//
+// Tags, notes, the log, the place and the weather are rendered as themselves,
+// so repeating them as JSON would only make the dump longer and the record
+// harder to read. Everything else is some other client's field: it stays,
+// because dropping a field the store accepted would hide evidence.
+export function leftoverMetadata(metadata) {
+  const rest = { ...(metadata || {}) };
+  if (readerText(rest.location)) {
+    delete rest.location;
+    delete rest.location_accuracy_m;
+  }
+  if (readerText(rest.weather_conditions)) {
+    delete rest.weather_conditions;
+    delete rest.weather_observed_at;
+  }
+  if (readerText(rest.observations)) delete rest.observations;
+  if (readerText(rest.notes)) delete rest.notes;
+  if (Array.isArray(rest.tags) && rest.tags.length > 0) delete rest.tags;
+  return rest;
+}
+
+// A field's value is escaped here unless it is marked "raw", which only this
+// module's own renderers (the map link, the weather hour) ever are. Keeping the
+// escaping in one place is what lets the field lists above stay plain data.
+function fieldList(fields) {
+  let html = '<dl class="detail-grid">';
+  for (const [label, value, kind] of fields) {
+    let cell = kind === "raw" ? value : esc(value);
+    if (kind && kind !== "raw") cell = `<span class="${kind}">${cell}</span>`;
+    html += `<dt>${label}</dt><dd>${cell}</dd>`;
+  }
+  return html + "</dl>";
+}
+
 export function renderDetail(record) {
   const el = document.getElementById("detail-content");
   const metadata = record.metadata || {};
-  const rest = { ...metadata };
 
   // Location sits with the record's own fields rather than in the metadata dump:
   // where a manual test was run is part of what it proves, and a reader looking
   // for it should not have to read JSON to find out.
-  const location = renderLocation(metadata);
-  if (location) {
-    delete rest.location;
-    delete rest.location_accuracy_m;
-  }
-
+  //
   // Weather goes beside it for the same reason: braking distance on a wet
   // surface is a different measurement from braking distance on a dry one, and
   // a reader comparing two records needs to see which without reading JSON.
+  const location = renderLocation(metadata);
   const weather = renderWeather(metadata);
-  if (weather) {
-    delete rest.weather_conditions;
-    delete rest.weather_observed_at;
-  }
 
   const fields = [
-    ["ID", record.id],
-    ["Result", resultBadge(record.result)],
-    ["Repo", esc(record.repo)],
-    ["Branch", esc(record.branch || "")],
-    ["Commit", `<span class="commit-ref">${esc(record.rcs_ref)}</span>`],
-    ["Procedure", esc(record.procedure_ref)],
-    ["Type", esc(evidenceTypeLabel(record.evidence_type))],
-    ["Source", esc(record.source)],
-    ...(location ? [["Location", location]] : []),
-    ...(weather ? [["Weather", weather]] : []),
-    ["Finished", record.finished_at],
-    ["Ingested", record.ingested_at],
-    ["Inherited", record.inherited ? "Yes" : "No"],
+    ...readerFields(record).slice(0, 4),
+    ...(location ? [["Location", location, "raw"]] : []),
+    ...(weather ? [["Weather", weather, "raw"]] : []),
+    ...readerFields(record).slice(4),
   ];
-  if (record.inheritance_declaration_id) {
-    fields.push(["Inheritance ID", record.inheritance_declaration_id]);
-  }
 
-  let html = '<dl class="detail-grid">';
-  for (const [label, value] of fields) {
-    html += `<dt>${label}</dt><dd>${value}</dd>`;
+  // The heading says what the record is before any field does: the verdict,
+  // what was run, and against what. A reader who opened the wrong row can see
+  // that from here without reading a list.
+  let reader = `<div class="record-head">
+    ${resultBadge(record.result)}
+    <h4 class="record-title">${esc(record.procedure_ref)}</h4>
+    <p class="record-sub">${esc(record.repo)}${record.branch ? ` \u00b7 ${esc(record.branch)}` : ""}</p>
+  </div>`;
+  if (Array.isArray(metadata.tags) && metadata.tags.length > 0) {
+    reader += `<div class="record-tags">${renderTags(metadata)}</div>`;
   }
-  html += "</dl>";
+  reader += fieldList(fields);
+
+  const notes = readerText(metadata.notes);
+  if (notes) {
+    reader += `<div class="record-block">
+      <h5>Notes</h5>
+      <div class="record-notes">${esc(notes)}</div>
+    </div>`;
+  }
 
   // The tester's log comes up with the record rather than behind a click: it is
   // the substance of a manual result, and the fields above are just its label.
   // It is lifted out of the metadata dump below because a log rendered as one
   // JSON string of escaped newlines is a log nobody reads.
-  //
-  // Anything but a string under `observations` is some other client's field and
-  // stays in the dump, where it is at least visible, rather than being rendered
-  // as a log or silently dropped from both places.
-  const log = typeof metadata.observations === "string" ? metadata.observations : "";
-  if (log.trim()) {
-    delete rest.observations;
-    html += `<div class="metadata-block">
-      <strong>Test log</strong>
+  const log = readerText(metadata.observations);
+  if (log) {
+    reader += `<div class="record-block">
+      <h5>Test log</h5>
       <div class="test-log">${renderMarkdown(log)}</div>
     </div>`;
   }
 
-  if (Object.keys(rest).length > 0) {
-    html += `<div class="metadata-block"><strong>Metadata</strong><pre><code>${esc(JSON.stringify(rest, null, 2))}</code></pre></div>`;
+  const rest = leftoverMetadata(metadata);
+  let details = fieldList(detailFields(record));
+  details += `<div class="record-block">
+    <h5>Metadata</h5>
+    ${Object.keys(rest).length > 0
+      ? `<pre><code>${esc(JSON.stringify(rest, null, 2))}</code></pre>`
+      : '<p class="record-empty">Nothing beyond what the record shows.</p>'}
+  </div>`;
+
+  el.innerHTML = `<div class="record-tabs" role="tablist">
+      <button type="button" role="tab" class="record-tab active" aria-selected="true" data-pane="record">Record</button>
+      <button type="button" role="tab" class="record-tab" aria-selected="false" data-pane="details">Details</button>
+    </div>
+    <div class="record-pane" data-pane="record">${reader}</div>
+    <div class="record-pane" data-pane="details" hidden>${details}</div>`;
+
+  // The buttons are new markup on every render, so the handler goes on with
+  // them; there is nothing left behind to leak.
+  for (const tab of el.querySelectorAll(".record-tab")) {
+    tab.addEventListener("click", () => showRecordPane(el, tab.dataset.pane));
   }
 
-  el.innerHTML = html;
   // The log's images are fetched once the markup is in the document: the
   // renderer leaves them without a src because reading a blob needs the API key.
   hydrateImages(el);
@@ -587,6 +672,17 @@ export function renderDetail(record) {
   if (splitView()) dialog.show(); else dialog.showModal();
   document.getElementById("tab-search").classList.add("detail-open");
   markSelectedRow(record.id);
+}
+
+function showRecordPane(el, name) {
+  for (const tab of el.querySelectorAll(".record-tab")) {
+    const on = tab.dataset.pane === name;
+    tab.classList.toggle("active", on);
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  for (const pane of el.querySelectorAll(".record-pane")) {
+    pane.hidden = pane.dataset.pane !== name;
+  }
 }
 
 // --- Search ---

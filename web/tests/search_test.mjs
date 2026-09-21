@@ -10,7 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  activeAdvancedCount, activeFilterCount, parseSearchState, prefersSplitView, searchStateToQuery,
+  activeAdvancedCount, activeFilterCount, detailFields, leftoverMetadata, parseSearchState, prefersSplitView,
+  readerFields, searchStateToQuery,
 } from "../static/search.js";
 
 // --- Reading a link ---
@@ -185,4 +186,42 @@ test("a phone and a desktop keep the dialog", () => {
   assert.equal(prefersSplitView({ width: 1440, coarse: false }), false,
     "a wide screen with a mouse is a desktop, and a dialog is what it has always had");
   assert.equal(prefersSplitView(), false);
+});
+
+// --- What a record shows, and where (#190) ---
+//
+// The record used to be one list of fields for everybody, ids and ingest time
+// among them, with the metadata as raw JSON underneath. A reader wants what
+// the result says; the ids and the dump are a tab away.
+
+const full = {
+  id: "d5203fa2", result: "PASS", repo: "org/firmware", branch: "main", rcs_ref: "abc123",
+  procedure_ref: "manual/brake", evidence_type: "manual_test", source: "user:alice",
+  finished_at: "2026-09-11T10:00:00Z", ingested_at: "2026-09-12T20:14:53Z", inherited: false,
+  inheritance_declaration_id: "inh-1",
+  metadata: { tags: ["regression"], notes: "rig was cold", observations: "1. Step", location: "52.5, 13.4", weather_conditions: "Overcast", surface: "wet" },
+};
+
+test("the reader gets what the result says", () => {
+  const labels = readerFields(full).map(([label]) => label);
+  assert.deepEqual(labels, ["Repo", "Branch", "Commit", "Source", "Finished"],
+    "the verdict and the procedure name the record in its heading, so they are not repeated here");
+});
+
+test("ids, ingest time and provenance are the details", () => {
+  const labels = detailFields(full).map(([label]) => label);
+  assert.deepEqual(labels, ["ID", "Type", "Ingested", "Inherited", "Inheritance ID"]);
+  assert.deepEqual(detailFields({ ...full, inheritance_declaration_id: null }).map(([l]) => l),
+    ["ID", "Type", "Ingested", "Inherited"], "a record that inherits nothing has no inheritance id to show");
+});
+
+test("metadata the record shows in its own right is not repeated in the dump", () => {
+  assert.deepEqual(leftoverMetadata(full.metadata), { surface: "wet" },
+    "tags, notes, the log, the place and the weather are all shown as themselves");
+});
+
+test("anything else keeps its place in the dump", () => {
+  assert.deepEqual(leftoverMetadata({ jira: "EV-12", observations: 42 }), { jira: "EV-12", observations: 42 },
+    "a log that is not a string is some other client's field and stays visible as JSON");
+  assert.deepEqual(leftoverMetadata(undefined), {});
 });
