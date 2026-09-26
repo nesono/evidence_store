@@ -1325,22 +1325,31 @@ body > header .health-dot {
   color: var(--color-on-fill);
 }
 
-/* --- Footer ---
- * Which build is answering. Read when something else has already gone wrong,
- * ignored the rest of the time. */
-.app-footer {
-  padding-top: 0;
-  padding-bottom: calc(var(--spacing) * 6);
-  font-size: var(--text-xs);
-  color: var(--color-ink-muted);
+/* The live server version sits beside the application name. */
+.app-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
-
-.app-footer small { font-size: inherit; }
-
-.app-footer #server-version {
+#server-version {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: inherit;
+  cursor: pointer;
+  color: var(--color-ink-muted);
   font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
+#server-version:hover { color: var(--color-ink); }
+#server-version:empty { display: none; }
 
 /* --- Search --------------------------------------------------------------
  * The filter bar and the results table: the densest thing in the store and the
@@ -1514,6 +1523,13 @@ body > header .health-dot {
   margin-left: auto;
 }
 
+/* Reserve room for either label and the active-filter count. */
+#filter-bar #toggle-advanced {
+  width: 17ch;
+  min-width: 17ch;
+  white-space: nowrap;
+}
+
 #filter-bar .fb-actions button {
   width: auto;
   margin-bottom: 0;
@@ -1580,13 +1596,10 @@ body > header .health-dot {
   cursor: default;
 }
 
-/* --- The results table ---
- * A fixed-height viewport onto the current window of records. The offset
- * accounts for the header, filter bar and window bar above it. */
+/* Results grow with the document: the page owns vertical scrolling. */
 #results-window {
-  max-height: calc(100vh - 9.5em);
   min-height: 16em;
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
 }
@@ -2565,49 +2578,39 @@ body > header .health-dot {
     width: 100%;
 }
 
-/* --- A record, as a reader sees it (#190) ---
- * What opens when a row is clicked is a result somebody wants to read, not a
- * row of the database. The verdict, what was run and the tester's own log are
- * the record; the uuid, the ingest time and the metadata dump are one tab
- * across, where the person chasing a duplicate ingest can still find them.
- *
- * Wider than it was, because the log is prose with photographs in it and 700px
- * of it wrapped at about fifty characters. */
+/* Record content adapts to the dialog or the narrower tablet side panel. */
 #detail-dialog article {
-    max-width: 900px;
+    max-width: 1120px;
+    container-type: inline-size;
 }
 
-.record-tabs {
-    display: flex;
-    gap: calc(var(--spacing) * 5);
-    margin-bottom: calc(var(--spacing) * 4);
-    border-bottom: 1px solid var(--color-line);
-}
-
-/* Bold at rest as well as when selected: the nav taught us what a tab that
-   changes weight on selection does to the row around it. */
-.record-tab {
+.record-layout { display: grid; gap: 1.5rem; margin-top: 1.25rem; }
+.record-layout > * { min-width: 0; }
+.record-layout .record-block:first-child { margin-top: 0; }
+.record-map { width: 100%; height: 300px; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
+.record-text :is(p, ul, ol) { max-width: 75ch; }
+.record-details { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-line); }
+.record-details summary { cursor: pointer; font-weight: 600; }
+.record-details[open] summary { margin-bottom: 1rem; }
+.record-sub .record-copy {
+    display: inline-block;
     width: auto;
-    margin-bottom: -1px;
-    padding: calc(var(--spacing) * 1.5) 0;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    background: none;
-    color: var(--color-ink-muted);
-    font-size: var(--text-ui);
-    font-weight: 600;
-    cursor: pointer;
+    min-height: 0;
+    margin: 0;
+    padding: 0.1rem 0.35rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font-family: var(--font-mono);
+    font-size: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
 }
-
-.record-tab:hover {
-    background: none;
-    color: var(--color-ink);
-}
-
-.record-tab.active {
-    border-bottom-color: var(--color-accent);
-    color: var(--color-ink);
+.record-sub .record-copy:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.record-copy-status { font-size: var(--text-xs); }
+@container (min-width: 760px) {
+    .record-layout.has-context { grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); }
 }
 
 /* The verdict and what was run, before any field: a reader who opened the
@@ -3266,9 +3269,6 @@ label > .input-with-button {
         margin-left: 0;
     }
 
-    #results-window {
-        max-height: calc(100vh - 14em);
-    }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3814,4 +3814,37 @@ label > .input-with-button {
     #inherited-table tbody tr.selected td {
         background: transparent;
     }
+}
+
+/* A record opened in its own browser tab uses the page rather than an overlay. */
+#tab-search.record-page { display: block; }
+#tab-search.record-page > :not(#detail-dialog) { display: none; }
+#tab-search.record-page #close-detail { display: none; }
+#tab-search.record-page > #detail-dialog {
+    display: block;
+    position: static;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    overflow: visible;
+}
+#tab-search.record-page > #detail-dialog > article {
+    margin: 0 auto;
+    max-width: 1120px;
+    max-height: none;
+    overflow: visible;
+}
+#tab-search.record-page .test-log {
+    overflow: visible;
+}
+#tab-search.record-page pre {
+    max-height: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: visible;
 }

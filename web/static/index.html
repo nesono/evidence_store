@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=10">
+    <link rel="stylesheet" href="app.css?v=12">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -35,7 +35,7 @@
 <body>
     <header class="container">
         <nav>
-            <ul><li><strong>Evidence Store</strong></li></ul>
+            <ul><li class="app-brand"><strong>Evidence Store</strong><button type="button" id="server-version" aria-label="Copy server version"></button><span id="version-copy-status" class="sr-only" role="status"></span></li></ul>
             <ul>
                 <li id="search-tab-item"><a href="#" class="nav-tab active" data-tab="search" data-label="Search">Search</a></li>
                 <li id="analytics-tab-item"><a href="#" class="nav-tab" data-tab="analytics" data-label="Analytics">Analytics</a></li>
@@ -558,18 +558,9 @@
 
     </main>
 
-    <!-- Which build is answering. In the footer rather than the header because
-         it is not something anybody acts on — it is something they read out
-         when reporting that something else went wrong. Empty when the server
-         has not been reached, since a remembered version is a claim about a
-         deployment nobody has checked. -->
     <div class="container" id="update-notice" hidden>
         <small>A newer version of this page is available. <a href="#" id="update-reload">Reload</a> when you are ready &mdash; nothing you have typed is sent or lost by waiting.</small>
     </div>
-
-    <footer class="container app-footer">
-        <small>Evidence Store <span id="server-version"></span></small>
-    </footer>
 
     <!-- The phone's navigation (#162), shown only below 768px. Each tab here
          acts through the header's own tab, so what a caller may use is decided

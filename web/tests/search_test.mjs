@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import {
   activeAdvancedCount, activeFilterCount, detailFields, leftoverMetadata, parseSearchState, prefersSplitView,
-  readerFields, searchStateToQuery,
+  readerFields, recordURL, recordMapURL, searchStateToQuery,
 } from "../static/search.js";
 
 // --- Reading a link ---
@@ -191,8 +191,7 @@ test("a phone and a desktop keep the dialog", () => {
 // --- What a record shows, and where (#190) ---
 //
 // The record used to be one list of fields for everybody, ids and ingest time
-// among them, with the metadata as raw JSON underneath. A reader wants what
-// the result says; the ids and the dump are a tab away.
+// among them. Attribution and storage details now live in a disclosure.
 
 const full = {
   id: "d5203fa2", result: "PASS", repo: "org/firmware", branch: "main", rcs_ref: "abc123",
@@ -204,7 +203,7 @@ const full = {
 
 test("the reader gets what the result says", () => {
   const labels = readerFields(full).map(([label]) => label);
-  assert.deepEqual(labels, ["Repo", "Branch", "Commit", "Source", "Finished"],
+  assert.deepEqual(labels, ["Source", "Finished"],
     "the verdict and the procedure name the record in its heading, so they are not repeated here");
 });
 
@@ -224,4 +223,21 @@ test("anything else keeps its place in the dump", () => {
   assert.deepEqual(leftoverMetadata({ jira: "EV-12", observations: 42 }), { jira: "EV-12", observations: 42 },
     "a log that is not a string is some other client's field and stays visible as JSON");
   assert.deepEqual(leftoverMetadata(undefined), {});
+});
+
+test("record maps use validated coordinates and retain a marker", () => {
+  const url = new URL(recordMapURL("52.5, 13.4"));
+  assert.equal(url.searchParams.get("marker"), "52.5,13.4");
+  assert.equal(recordMapURL("Berlin"), "");
+  assert.equal(recordMapURL("91, 0"), "");
+  const edge = new URL(recordMapURL("90, 180"));
+  assert.deepEqual(edge.searchParams.get("bbox").split(",").map(Number), [179.99, 89.994, 180, 90]);
+});
+
+test("record links open a standalone record with an encoded id", () => {
+  const url = new URL(recordURL("id /?&"), "https://example.test/");
+  assert.equal(url.searchParams.get("detail"), "id /?&");
+  assert.equal(url.searchParams.get("view"), "record");
+  assert.equal(url.hash, "#search");
+  assert.equal(url.searchParams.has("offset"), false);
 });
