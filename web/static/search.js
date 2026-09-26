@@ -393,7 +393,7 @@ function rowHTML(r) {
   return `
     <tr data-id="${r.id}" class="${r.inherited ? "inherited-row" : ""}">
       <td class="col-result">${resultBadge(r.result)}</td>
-      <td class="col-procedure" title="${esc(r.procedure_ref)}">${esc(r.procedure_ref)}</td>
+      <td class="col-procedure" title="${esc(r.procedure_ref)}"><a href="${esc(recordURL(r.id))}" target="_blank" rel="noopener">${esc(r.procedure_ref)}</a></td>
       <td class="col-repo" title="${esc(r.repo)}">${esc(r.repo)}</td>
       <td class="col-branch" title="${esc(branch)}">${esc(branch)}</td>
       <td class="col-commit commit-ref">${esc((r.rcs_ref || "").slice(0, 10))}</td>
@@ -412,8 +412,6 @@ function renderTable(records) {
   }
   tbody.innerHTML = records.map(rowHTML).join("");
   fitTagCells(document.getElementById("results-table"));
-  // Each window starts at its own top rather than inheriting the previous scroll.
-  document.getElementById("results-window").scrollTop = 0;
 }
 
 // Inherited records are resolved outside the paginated window, so they are listed
@@ -501,82 +499,180 @@ function renderWeather(metadata) {
   if (typeof metadata.weather_observed_at === "string") {
     const observed = new Date(metadata.weather_observed_at);
     if (!Number.isNaN(observed.getTime())) {
-      html += ` <small class="weather-observed">reading for ${formatTime(metadata.weather_observed_at)} UTC</small>`;
+      html += ` <small class="weather-observed">reading for <span class="commit-ref">${formatTime(metadata.weather_observed_at)} UTC</span></small>`;
     }
   }
   return html;
 }
 
-export function renderDetail(record) {
-  const el = document.getElementById("detail-content");
-  const metadata = record.metadata || {};
-  const rest = { ...metadata };
+// Text a reader is meant to read, or "" for anything else.
+//
+// Every one of these metadata fields is optional, may be absent, and may hold
+// whatever another client put there. A non-string under a name this view knows
+// is not rendered as that field: it stays in the dump, where it is visible as
+// what it actually is.
+function readerText(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
 
-  // Location sits with the record's own fields rather than in the metadata dump:
-  // where a manual test was run is part of what it proves, and a reader looking
-  // for it should not have to read JSON to find out.
-  const location = renderLocation(metadata);
-  if (location) {
-    delete rest.location;
-    delete rest.location_accuracy_m;
-  }
+// Run attribution and time stay beside the map; revision is in the heading.
+export function readerFields(record) {
+  return [
+    ["Source", record.source, "abbreviated"],
+    ["Finished", `${formatTime(record.finished_at)} UTC`, "commit-ref"],
+  ];
+}
 
-  // Weather goes beside it for the same reason: braking distance on a wet
-  // surface is a different measurement from braking distance on a dry one, and
-  // a reader comparing two records needs to see which without reading JSON.
-  const weather = renderWeather(metadata);
-  if (weather) {
-    delete rest.weather_conditions;
-    delete rest.weather_observed_at;
-  }
-
+// Storage provenance lives in the expandable technical details.
+export function detailFields(record) {
   const fields = [
-    ["ID", record.id],
-    ["Result", resultBadge(record.result)],
-    ["Repo", esc(record.repo)],
-    ["Branch", esc(record.branch || "")],
-    ["Commit", `<span class="commit-ref">${esc(record.rcs_ref)}</span>`],
-    ["Procedure", esc(record.procedure_ref)],
-    ["Type", esc(evidenceTypeLabel(record.evidence_type))],
-    ["Source", esc(record.source)],
-    ...(location ? [["Location", location]] : []),
-    ...(weather ? [["Weather", weather]] : []),
-    ["Finished", record.finished_at],
-    ["Ingested", record.ingested_at],
+    ["ID", record.id, "commit-ref"],
+    ["Type", evidenceTypeLabel(record.evidence_type)],
+    ["Ingested", `${formatTime(record.ingested_at)} UTC`, "commit-ref"],
     ["Inherited", record.inherited ? "Yes" : "No"],
   ];
   if (record.inheritance_declaration_id) {
-    fields.push(["Inheritance ID", record.inheritance_declaration_id]);
+    fields.push(["Inheritance ID", record.inheritance_declaration_id, "commit-ref"]);
   }
+  return fields;
+}
 
-  let html = '<dl class="detail-grid">';
-  for (const [label, value] of fields) {
-    html += `<dt>${label}</dt><dd>${value}</dd>`;
+// The metadata that no part of the reader's view has already shown.
+//
+// Tags, notes, the log, the place and the weather are rendered as themselves,
+// so repeating them as JSON would only make the dump longer and the record
+// harder to read. Everything else is some other client's field: it stays,
+// because dropping a field the store accepted would hide evidence.
+export function leftoverMetadata(metadata) {
+  const rest = { ...(metadata || {}) };
+  if (readerText(rest.location)) {
+    delete rest.location;
+    delete rest.location_accuracy_m;
   }
-  html += "</dl>";
+  if (readerText(rest.weather_conditions)) {
+    delete rest.weather_conditions;
+    delete rest.weather_observed_at;
+  }
+  if (readerText(rest.observations)) delete rest.observations;
+  if (readerText(rest.notes)) delete rest.notes;
+  if (Array.isArray(rest.tags) && rest.tags.length > 0) delete rest.tags;
+  return rest;
+}
+
+// Escape field values centrally so the field lists remain plain data.
+function fieldList(fields) {
+  let html = '<dl class="detail-grid">';
+  for (const [label, value, kind] of fields) {
+    let cell = esc(value);
+    if (kind === "abbreviated") {
+      const text = String(value || "");
+      cell = `<span title="${esc(text)}">${esc(text.length > 32 ? text.slice(0, 29) + "…" : text)}</span>`;
+    } else if (kind) cell = `<span class="${kind}">${cell}</span>`;
+    html += `<dt>${label}</dt><dd>${cell}</dd>`;
+  }
+  return html + "</dl>";
+}
+
+export function renderDetail(record) {
+  const el = document.getElementById("detail-content");
+  const metadata = record.metadata || {};
+
+  const location = renderLocation(metadata);
+  const weather = renderWeather(metadata);
+  const map = recordMapURL(metadata.location);
+  const context = map ? `<aside class="record-context" aria-label="Run location map">
+    <iframe class="record-map" title="Test location on OpenStreetMap" src="${esc(map)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+  </aside>` : "";
+  const commit = String(record.rcs_ref || "");
+
+  // The heading says what the record is before any field does: the verdict,
+  // what was run, and against what. A reader who opened the wrong row can see
+  // that from here without reading a list.
+  let reader = `<div class="record-head">
+    ${resultBadge(record.result)}
+    <h4 class="record-title">${esc(record.procedure_ref)}</h4>
+    <p class="record-sub">${esc(record.repo)}${record.branch ? ` \u00b7 <span class="commit-ref">${esc(record.branch)}</span>` : ""}${commit ? ` · <button type="button" class="record-copy commit-ref" title="${esc(commit)}" aria-label="Copy full commit hash">${esc(commit.slice(0, 12))}</button><span class="record-copy-status" role="status"></span>` : ""}</p>
+  </div>`;
+  if (record.inherited) reader += '<p class="record-empty">Inherited result</p>';
+  if (Array.isArray(metadata.tags) && metadata.tags.length > 0) {
+    reader += `<div class="record-tags">${renderTags(metadata)}</div>`;
+  }
+  reader += fieldList(readerFields(record));
+  if (location || weather) {
+    reader += `<dl class="detail-grid">
+      ${location ? `<dt>Location</dt><dd>${location}${!map ? ` <a href="https://www.openstreetmap.org/search?query=${encodeURIComponent(metadata.location)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ""}</dd>` : ""}
+      ${weather ? `<dt>Weather</dt><dd>${weather}</dd>` : ""}
+    </dl>`;
+  }
+  let body = "";
+
+  const notes = readerText(metadata.notes);
+  if (notes) {
+    reader += `<div class="record-block">
+      <h5>Notes</h5>
+      <div class="record-notes">${esc(notes)}</div>
+    </div>`;
+  }
 
   // The tester's log comes up with the record rather than behind a click: it is
   // the substance of a manual result, and the fields above are just its label.
   // It is lifted out of the metadata dump below because a log rendered as one
   // JSON string of escaped newlines is a log nobody reads.
-  //
-  // Anything but a string under `observations` is some other client's field and
-  // stays in the dump, where it is at least visible, rather than being rendered
-  // as a log or silently dropped from both places.
-  const log = typeof metadata.observations === "string" ? metadata.observations : "";
-  if (log.trim()) {
-    delete rest.observations;
-    html += `<div class="metadata-block">
-      <strong>Test log</strong>
+  const log = readerText(metadata.observations);
+  if (log) {
+    body += `<div class="record-block">
+      <h5>Test log</h5>
       <div class="test-log">${renderMarkdown(log)}</div>
     </div>`;
   }
 
-  if (Object.keys(rest).length > 0) {
-    html += `<div class="metadata-block"><strong>Metadata</strong><pre><code>${esc(JSON.stringify(rest, null, 2))}</code></pre></div>`;
-  }
+  const rest = leftoverMetadata(metadata);
+  let details = fieldList(detailFields(record));
+  details += `<div class="record-block">
+    <h5>Metadata</h5>
+    ${Object.keys(rest).length > 0
+      ? `<pre><code>${esc(JSON.stringify(rest, null, 2))}</code></pre>`
+      : '<p class="record-empty">Nothing beyond what the record shows.</p>'}
+  </div>`;
 
-  el.innerHTML = html;
+  el.innerHTML = `<div class="record-pane">
+    <div class="record-layout${context ? " has-context" : ""}"><div class="record-text">${reader}</div>${context}</div>
+    ${body}
+    <details class="record-details"><summary>Technical details</summary>${details}</details>
+  </div>`;
+  el.querySelector(".record-copy")?.addEventListener("click", async () => {
+    const status = el.querySelector(".record-copy-status");
+    // Older browsers and HTTP lab deployments need the synchronous copy path.
+    // Keep its temporary selection inside the modal, without changing the layout.
+    const copyLegacy = () => {
+      const selection = document.createElement("textarea");
+      selection.value = commit;
+      selection.readOnly = true;
+      selection.style.cssText = "position:fixed;opacity:0;width:1px;height:1px;pointer-events:none";
+      const focused = document.activeElement;
+      el.append(selection);
+      try {
+        selection.select();
+        if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+      } finally {
+        selection.remove();
+        focused?.focus({ preventScroll: true });
+      }
+    };
+    try {
+      if (navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(commit); }
+        catch { copyLegacy(); }
+      } else {
+        copyLegacy();
+      }
+      status.textContent = " Copied";
+    } catch {
+      status.textContent = " Clipboard access unavailable";
+    }
+    setTimeout(() => { status.textContent = ""; }, 2000);
+  });
+
   // The log's images are fetched once the markup is in the document: the
   // renderer leaves them without a src because reading a blob needs the API key.
   hydrateImages(el);
@@ -584,9 +680,23 @@ export function renderDetail(record) {
   // Beside the list, a record is part of the page: show() rather than
   // showModal(), which would put it in the top layer over everything.
   if (dialog.open) dialog.close();
-  if (splitView()) dialog.show(); else dialog.showModal();
+  if (new URLSearchParams(window.location.search).get("view") === "record") {
+    document.getElementById("tab-search").classList.add("record-page");
+    document.title = `${record.procedure_ref} — Evidence Record`;
+    dialog.show();
+  } else if (splitView()) dialog.show(); else dialog.showModal();
   document.getElementById("tab-search").classList.add("detail-open");
   markSelectedRow(record.id);
+}
+
+// The embed uses only validated coordinates; descriptive locations remain links.
+export function recordMapURL(location) {
+  const point = parseCoordinates(location);
+  if (!point) return "";
+  const { lat, lon } = point;
+  const bbox = [Math.max(-180, lon - 0.01), Math.max(-90, lat - 0.006),
+    Math.min(180, lon + 0.01), Math.min(90, lat + 0.006)];
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.join(",")}&layer=mapnik&marker=${lat},${lon}`;
 }
 
 // --- Search ---
@@ -659,14 +769,12 @@ function markSelectedRow(id) {
   if (id) document.querySelector(`tr[data-id="${id}"]`)?.classList.add("selected");
 }
 
-async function openDetail(id) {
-  try {
-    const record = await fetchEvidenceById(id);
-    renderDetail(record);
-    writeStateToURL(readFormFilters(), id);
-  } catch (err) {
-    alert(`Failed to load record: ${err.message}`);
-  }
+export function recordURL(id) {
+  return `?${new URLSearchParams({ detail: id, view: "record" })}#search`;
+}
+
+function openDetail(id) {
+  window.open(recordURL(id), "_blank", "noopener");
 }
 
 // Reflects URL-derived state into the form and the window controls.
@@ -822,15 +930,19 @@ export function mountSearch() {
 
   document.getElementById("results-body").addEventListener("click", (e) => {
     const row = e.target.closest("tr[data-id]");
-    if (row) openDetail(row.dataset.id);
+    if (row && !e.target.closest("a, button")) openDetail(row.dataset.id);
   });
 
   document.getElementById("inherited-body").addEventListener("click", (e) => {
     const row = e.target.closest("tr[data-id]");
-    if (row) openDetail(row.dataset.id);
+    if (row && !e.target.closest("a, button")) openDetail(row.dataset.id);
   });
 
   document.getElementById("close-detail").addEventListener("click", () => {
+    if (new URLSearchParams(window.location.search).get("view") === "record") {
+      window.location.assign(`${window.location.pathname}#search`);
+      return;
+    }
     document.getElementById("detail-dialog").close();
     writeStateToURL(readFormFilters());
   });
@@ -852,7 +964,7 @@ export function mountSearch() {
   // as a panel in a layout that no longer has a column for it.
   window.matchMedia(SPLIT_VIEW_QUERY).addEventListener("change", () => {
     const dialog = document.getElementById("detail-dialog");
-    if (!dialog.open) return;
+    if (!dialog.open || new URLSearchParams(window.location.search).get("view") === "record") return;
     const selected = document.querySelector("tr.selected")?.dataset.id;
     dialog.close();
     if (splitView()) dialog.show(); else dialog.showModal();

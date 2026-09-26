@@ -57,7 +57,7 @@ function showUpdateNotice() {
 // outside /api/v1, and sending a credential to it would be sending one where
 // none is wanted.
 //
-// A failure is silent and leaves the footer reading just "Evidence Store".
+// A failure is silent and leaves the header reading just "Evidence Store".
 // There is nothing for a tester to do about it, and an error line about a
 // version number would be noise on a page that has just failed to reach its
 // server for reasons they can already see in the header.
@@ -75,6 +75,44 @@ async function showServerVersion() {
       : source === "commit"
         ? "Built from a commit made at this time (UTC); the build itself was not stamped"
         : "This server was built from a working copy, so it matches no particular commit";
+    el.title += ". Click to copy version.";
+    let feedbackTimer;
+    el.addEventListener("click", async () => {
+      const status = document.getElementById("version-copy-status");
+      const copyLegacy = () => {
+        const field = document.createElement("textarea");
+        field.value = version;
+        field.readOnly = true;
+        field.style.cssText = "position:fixed;opacity:0;width:1px;height:1px;pointer-events:none";
+        const focused = document.activeElement;
+        document.body.append(field);
+        try {
+          field.select();
+          if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+        } finally {
+          field.remove();
+          focused?.focus({ preventScroll: true });
+        }
+      };
+      clearTimeout(feedbackTimer);
+      try {
+        if (navigator.clipboard?.writeText) {
+          try { await navigator.clipboard.writeText(version); }
+          catch { copyLegacy(); }
+        } else {
+          copyLegacy();
+        }
+        el.textContent = "Copied";
+        status.textContent = "Version copied to clipboard";
+      } catch {
+        el.textContent = "Copy failed";
+        status.textContent = "Clipboard access unavailable";
+      }
+      feedbackTimer = setTimeout(() => {
+        el.textContent = version;
+        status.textContent = "";
+      }, 1500);
+    });
   } catch {
     // Offline, or the server is not answering. The header already says so.
   }
@@ -306,12 +344,16 @@ async function loadIdentity() {
     // whoever is looking at it needs to know to go and ask.
     showNoAccess();
   } else {
-    await doSearch(filters);
+    if (!(detail && new URLSearchParams(window.location.search).get("view") === "record")) {
+      await doSearch(filters);
+    }
   }
 
   if (detail) {
     try {
       renderDetail(await fetchEvidenceById(detail));
-    } catch { /* record may have been deleted; leave the window as it is */ }
+    } catch (err) {
+      document.getElementById("results-body").textContent = `Could not load record: ${err.message}`;
+    }
   }
 })();
