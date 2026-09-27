@@ -116,6 +116,7 @@ export function digestsInRecord(record) {
   const metadata = (record && record.metadata) || {};
   const fromLog = refsIn(metadata.observations);
   const fromPhotos = refsIn([].concat(metadata.photo_uris || []).join("\n"));
-  const digests = new Set([...fromLog, ...fromPhotos].map(r => r.digest));
+  const fromVideos = refsIn([].concat(metadata.video_uris || []).join("\n"));
+  const digests = new Set([...fromLog, ...fromPhotos, ...fromVideos].map(r => r.digest));
   return [...digests];
 }

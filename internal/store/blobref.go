@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -91,7 +92,7 @@ func recordBlobRefs(ctx context.Context, tx pgx.Tx, evidenceID uuid.UUID, refs [
 }
 
 // annotateBlobRefs finds the blobs a record's test log references and lists
-// them under metadata.photo_uris.
+// them under metadata.photo_uris or metadata.video_uris.
 //
 // The log is the source of truth — it is where a tester actually put the image —
 // but a client reading the API should not have to parse markdown to find out
@@ -117,42 +118,52 @@ func annotateBlobRefs(metadata json.RawMessage) (json.RawMessage, []blob.Ref, er
 	if raw, ok := fields["observations"]; ok {
 		// Anything but a string under `observations` belongs to some other
 		// client and is left alone.
-		if err := json.Unmarshal(raw, &observations); err != nil {
-			return metadata, nil, nil
-		}
+		_ = json.Unmarshal(raw, &observations)
 	}
 
-	refs := blob.Refs(observations)
+	referenced := observations
+	for _, field := range []string{"photo_uris", "video_uris"} {
+		var uris []string
+		if json.Unmarshal(fields[field], &uris) == nil {
+			referenced += "\n" + strings.Join(uris, "\n")
+		}
+	}
+	refs := blob.Refs(referenced)
 	if len(refs) == 0 {
 		return metadata, nil, nil
 	}
 
-	var existing []string
-	if raw, ok := fields["photo_uris"]; ok {
-		if err := json.Unmarshal(raw, &existing); err != nil {
-			// Same reasoning: a photo_uris that is not a list of strings is not
-			// ours to rewrite.
-			return metadata, refs, nil
+	for _, field := range []string{"photo_uris", "video_uris"} {
+		var existing []string
+		if raw, ok := fields[field]; ok {
+			if err := json.Unmarshal(raw, &existing); err != nil {
+				continue
+			}
 		}
-	}
-
-	have := make(map[string]bool, len(existing))
-	for _, uri := range existing {
-		have[uri] = true
-	}
-	uris := existing
-	for _, ref := range refs {
-		if path := ref.Path(); !have[path] {
-			uris = append(uris, path)
-			have[path] = true
+		have := make(map[string]bool)
+		for _, uri := range existing {
+			have[uri] = true
 		}
+		uris := existing
+		for _, ref := range refs {
+			video := ref.Ext == "mp4" || ref.Ext == "webm"
+			if video != (field == "video_uris") {
+				continue
+			}
+			if path := ref.Path(); !have[path] {
+				uris = append(uris, path)
+				have[path] = true
+			}
+		}
+		if len(uris) == 0 {
+			continue
+		}
+		encoded, err := json.Marshal(uris)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encode %s: %w", field, err)
+		}
+		fields[field] = encoded
 	}
-
-	encoded, err := json.Marshal(uris)
-	if err != nil {
-		return nil, nil, fmt.Errorf("encode photo_uris: %w", err)
-	}
-	fields["photo_uris"] = encoded
 
 	annotated, err := json.Marshal(fields)
 	if err != nil {

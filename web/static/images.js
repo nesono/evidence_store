@@ -1,11 +1,4 @@
-// Images in a test log: getting them in (paste and drop) and getting them back
-// out (hydrating what the renderer left behind).
-//
-// The renderer is a pure string function and never fetches anything, so it
-// emits `<img data-blob="…">` with no `src`. It could not do otherwise: reading
-// a blob needs the API key, and an `<img src>` cannot carry an Authorization
-// header. So the bytes are fetched here, turned into an object URL, and put on
-// the tag afterwards.
+// Media attachments: paste/drop uploads and authenticated streaming playback.
 
 import { API_BASE, apiFetch } from "./common.js";
 import { describe as describeBytes } from "./blobref.js";
@@ -38,7 +31,7 @@ let uploadCounter = 0;
 
 // hydrateImages fills in the images inside a rendered log.
 export async function hydrateImages(root) {
-  const images = [...root.querySelectorAll("img[data-blob]:not([src])")];
+  const images = [...root.querySelectorAll("img[data-blob]:not([src]), video[data-blob]:not([src])")];
   await Promise.all(images.map(loadImage));
 }
 
@@ -69,17 +62,37 @@ async function loadImage(img) {
   }
 
   try {
-    const resp = await apiFetch(ref);
+    const resp = await apiFetch(`${ref}/url`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const url = URL.createObjectURL(await resp.blob());
-    objectURLs.set(ref, url);
+    const { url } = await resp.json();
     img.src = url;
+    // A seek after expiry obtains a fresh capability, without buffering video.
+    // Limit retries so an unsupported codec cannot become a request loop.
+    if (img.tagName === "VIDEO") {
+      let renewedAt = Date.now();
+      img.addEventListener("error", async () => {
+        if (Date.now() - renewedAt < 60_000) return;
+        renewedAt = Date.now();
+        const position = img.currentTime;
+        const paused = img.paused;
+        try {
+          const response = await apiFetch(`${ref}/url`);
+          if (!response.ok) return;
+          img.src = (await response.json()).url;
+          img.addEventListener("loadedmetadata", () => {
+            img.currentTime = position;
+            if (!paused) img.play().catch(() => {});
+          }, { once: true });
+          img.load();
+        } catch { /* The native player retains its failure state. */ }
+      });
+    }
   } catch {
     // A log whose image has been swept, or whose reader lacks the key, still
     // reads as a log. Saying so beats a broken-image icon.
     const missing = document.createElement("span");
     missing.className = "test-log-image-missing";
-    missing.textContent = img.alt ? `[image unavailable: ${img.alt}]` : "[image unavailable]";
+    missing.textContent = `[media unavailable: ${img.alt || img.getAttribute("aria-label") || "attachment"}]`;
     img.replaceWith(missing);
   }
 }
@@ -89,7 +102,7 @@ async function loadImage(img) {
 // the Add form's preview share the cache without one closing out the other.
 export function releaseImages() {
   const showing = new Set(
-    [...document.querySelectorAll('img[src^="blob:"]')].map(img => img.src),
+    [...document.querySelectorAll('img[src^="blob:"], video[src^="blob:"]')].map(img => img.src),
   );
   for (const [ref, url] of objectURLs) {
     if (showing.has(url)) continue;
@@ -136,16 +149,20 @@ export function attachImageUploads(field, onStatus) {
 // photo library, through the Add photo button (#162) — exactly as a pasted or
 // dropped one is: stashed or uploaded, then referenced in the log at the caret.
 export function embedImages(field, files, onStatus) {
-  embedAll(field, [...files].filter(file => file.type.startsWith("image/")), onStatus);
+  embedAll(field, [...files].filter(file => isMediaFile(file)), onStatus);
 }
 
 function hasFiles(transfer) {
   return !!transfer && [...(transfer.types || [])].includes("Files");
 }
 
+export function isMediaFile(file) {
+  return file.type.startsWith("image/") || file.type.startsWith("video/") || /\.(mp4|webm)$/i.test(file.name || "");
+}
+
 function imageFiles(transfer) {
   if (!transfer) return [];
-  return [...(transfer.files || [])].filter(file => file.type.startsWith("image/"));
+  return [...(transfer.files || [])].filter(file => isMediaFile(file));
 }
 
 function embedAll(field, files, onStatus) {
@@ -181,6 +198,12 @@ async function embed(field, file, onStatus) {
 // Uploading immediately when online would be a second way of doing the same
 // thing, and the second way is the one that gets less use and breaks quietly.
 async function reference(file) {
+  // Browser digest APIs buffer their input. Stream videos straight to the
+  // server instead of allocating several hundred MB in the offline queue.
+  if (file.type.startsWith("video/") || /\.(mp4|webm)$/i.test(file.name || "")) {
+    const { ref } = await uploadBlob(file);
+    return ref;
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
   const described = await describeBytes(bytes);
   if (!described) {
@@ -224,7 +247,7 @@ async function fromStash(ref) {
 // as it is, and the server decides whether it is something a log may carry.
 async function prepareForUpload(file) {
   // Re-encoding an animation would quietly reduce it to its first frame.
-  if (file.type === "image/gif") return file;
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
   if (file.size <= DOWNSCALE_ABOVE_BYTES) return file;
 
   try {

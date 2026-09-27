@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -14,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/nesono/evidence-store/internal/auth"
+	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/config"
 	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/store"
@@ -24,10 +27,15 @@ type EvidenceHandler struct {
 	evidence    *store.EvidenceStore
 	inheritance *store.InheritanceStore
 	cfg         *config.Config
+	blobs       blob.Store
 }
 
-func NewEvidenceHandler(es *store.EvidenceStore, is *store.InheritanceStore, cfg *config.Config) *EvidenceHandler {
-	return &EvidenceHandler{evidence: es, inheritance: is, cfg: cfg}
+func NewEvidenceHandler(es *store.EvidenceStore, is *store.InheritanceStore, cfg *config.Config, blobs ...blob.Store) *EvidenceHandler {
+	h := &EvidenceHandler{evidence: es, inheritance: is, cfg: cfg}
+	if len(blobs) > 0 {
+		h.blobs = blobs[0]
+	}
+	return h
 }
 
 func (h *EvidenceHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +55,7 @@ func (h *EvidenceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Source = source
 
-	if errs := validate.EvidenceCreate(&req); len(errs) > 0 {
+	if errs := h.validateCreate(r.Context(), &req); len(errs) > 0 {
 		writeErrors(w, http.StatusUnprocessableEntity, errs)
 		return
 	}
@@ -110,7 +118,7 @@ func (h *EvidenceHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	hasErrors := false
 
 	for i, rec := range req.Records {
-		if errs := validate.EvidenceCreate(&rec); len(errs) > 0 {
+		if errs := h.validateCreate(r.Context(), &rec); len(errs) > 0 {
 			results[i] = model.BatchRecordStatus{
 				Index:  i,
 				Status: model.StatusError,
@@ -370,4 +378,43 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// Check renderer hints against stored bytes before an immutable record is filed.
+func (h *EvidenceHandler) validateCreate(ctx context.Context, rec *model.EvidenceCreate) []string {
+	errs := validate.EvidenceCreate(rec)
+	if len(errs) != 0 || h.blobs == nil {
+		return errs
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(rec.Metadata, &fields) != nil {
+		return errs
+	}
+	var log string
+	_ = json.Unmarshal(fields["observations"], &log)
+	for _, field := range []string{"photo_uris", "video_uris"} {
+		var uris []string
+		if json.Unmarshal(fields[field], &uris) == nil {
+			log += "\n" + strings.Join(uris, "\n")
+		}
+	}
+	for _, ref := range blob.Refs(log) {
+		rc, _, err := h.blobs.Get(ctx, ref.Digest)
+		if err != nil {
+			errs = append(errs, "attachment is unavailable: "+ref.Path())
+			continue
+		}
+		head := make([]byte, blob.SniffLen)
+		n, readErr := io.ReadFull(rc, head)
+		_ = rc.Close()
+		if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+			errs = append(errs, "could not read attachment: "+ref.Path())
+			continue
+		}
+		_, ext, err := blob.DetectMedia(head[:n])
+		if err != nil || (ref.Ext != "" && ref.Ext != ext) || (ref.Ext == "" && (ext == "mp4" || ext == "webm")) {
+			errs = append(errs, "attachment extension does not match its media type: "+ref.Path())
+		}
+	}
+	return errs
 }

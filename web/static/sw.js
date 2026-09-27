@@ -20,7 +20,8 @@
 // what a form is missing. v6: Add Result on a phone. v7: Search on a phone. v8: tablets (#163). v9: a nav that does not move. v10: a record for a reader (#190).
 // v11: wider record, revision copy, map and expandable technical details.
 // v12: standalone record tabs, page scrolling and a copyable header version.
-const VERSION = "v12";
+// v13: streaming video and image playback with scoped media URLs.
+const VERSION = "v13";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -31,7 +32,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=12",
+  "/app.css?v=13",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -72,7 +73,7 @@ const SHELL = [
 // perfectly well, and a cached one is exactly the problem. The version is what
 // somebody reads out when they are already confused, and a remembered answer
 // would name a build that may have been replaced since.
-const NEVER_CACHED = ["/api/", "/auth/", "/healthz", "/version"];
+const NEVER_CACHED = ["/api/", "/auth/", "/healthz", "/version", "/media/"];
 
 self.addEventListener("install", event => {
   event.waitUntil(

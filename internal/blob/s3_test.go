@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -150,4 +151,26 @@ func TestS3StatReportsSizeAndAge(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), obj.Size)
 	assert.WithinDuration(t, time.Now(), obj.Created, time.Minute)
+}
+
+func TestS3SeekReadsOnlyRequestedPosition(t *testing.T) {
+	s := newS3(t)
+	body := bytes.Repeat([]byte("0123456789"), 10000)
+	d, _, err := s.Put(context.Background(), bytes.NewReader(body))
+	require.NoError(t, err)
+	rc, size, err := s.Get(context.Background(), d)
+	require.NoError(t, err)
+	defer rc.Close()
+	assert.Equal(t, int64(len(body)), size)
+	_, err = rc.Seek(90001, io.SeekStart)
+	require.NoError(t, err)
+	got := make([]byte, 5)
+	_, err = io.ReadFull(rc, got)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("12345"), got)
+	_, err = rc.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	_, err = io.ReadFull(rc, got)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("01234"), got)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,7 +45,19 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(func(next http.Handler) http.Handler {
+		timed := middleware.Timeout(30 * time.Second)(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v1/blobs" || strings.HasPrefix(r.URL.Path, "/api/v1/blobs/") || strings.HasPrefix(r.URL.Path, "/media/") {
+				controller := http.NewResponseController(w)
+				_ = controller.SetReadDeadline(time.Time{})
+				_ = controller.SetWriteDeadline(time.Time{})
+				next.ServeHTTP(w, r)
+				return
+			}
+			timed.ServeHTTP(w, r)
+		})
+	})
 
 	// Which build this is. Public for the same reason /healthz is, and because
 	// the page names it before anybody has logged in.
@@ -65,10 +78,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	principalStore := store.NewPrincipalStore(pool)
 	sessionStore := store.NewSessionStore(pool)
 
-	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg)
+	evidenceAPI := api.NewEvidenceHandler(evidenceStore, inheritanceStore, cfg, blobs)
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
 	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
-	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes)
+	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes, cfg.Blob.SigningKey)
+	r.Get("/media/{ref}", blobAPI.Playback)
+	r.Head("/media/{ref}", blobAPI.Playback)
 	// Mounted whether or not EVIDENCE_AUTH_DB is on. Issuing keys before
 	// flipping the switch is a reasonable way to prepare a cutover, so the
 	// handler reports the setting rather than refusing to work without it.
@@ -174,6 +189,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 
 		r.With(auth.Require(auth.PermBlobWrite)).Post("/blobs", blobAPI.Upload)
 		r.With(auth.Require(auth.PermBlobRead)).Get("/blobs/{ref}", blobAPI.Get)
+		r.With(auth.Require(auth.PermBlobRead)).Head("/blobs/{ref}", blobAPI.Get)
+		r.With(auth.Require(auth.PermBlobRead)).Get("/blobs/{ref}/url", blobAPI.PlaybackURL)
 
 		// Who is calling, for a client deciding what to offer them. The only
 		// route here asserting no permission: authentication has already run,

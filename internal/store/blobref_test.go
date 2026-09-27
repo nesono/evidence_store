@@ -129,3 +129,18 @@ func TestAnnotateKeepsRefsWhenPhotoURIsIsForeign(t *testing.T) {
 	assert.Equal(t, []blob.Ref{ref}, refs)
 	assert.JSONEq(t, string(metadata), string(annotated))
 }
+
+func TestAnnotateSeparatesVideoAndPhotoURIs(t *testing.T) {
+	video := blob.Ref{Digest: blob.DigestOf([]byte("video")), Ext: "mp4"}
+	photo := blob.Ref{Digest: blob.DigestOf([]byte("photo")), Ext: "png"}
+	metadata, _ := json.Marshal(map[string]any{"observations": logWith(video, photo), "video_uris": []string{"https://example.test/existing.mp4"}})
+	annotated, refs, err := annotateBlobRefs(metadata)
+	require.NoError(t, err)
+	assert.Len(t, refs, 2)
+	assert.Equal(t, []string{photo.Path()}, photoURIs(t, annotated))
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(annotated, &fields))
+	var videos []string
+	require.NoError(t, json.Unmarshal(fields["video_uris"], &videos))
+	assert.Equal(t, []string{"https://example.test/existing.mp4", video.Path()}, videos)
+}

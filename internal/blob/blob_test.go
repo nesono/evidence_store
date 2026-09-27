@@ -91,6 +91,8 @@ func TestDetectMediaAcceptsTheEmbeddableTypes(t *testing.T) {
 		ext   string
 	}{
 		{"png", pngBytes(t), "image/png", "png"},
+		{"webm", []byte("\x1a\x45\xdf\xa3"), "video/webm", "webm"},
+		{"mp4", []byte("\x00\x00\x00\x14ftypmp42\x00\x00\x00\x00mp42"), "video/mp4", "mp4"},
 		{"jpeg", []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00"), "image/jpeg", "jpg"},
 		{"gif", []byte("GIF89a\x01\x00\x01\x00\x00\x00\x00;"), "image/gif", "gif"},
 		{"webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 \x18\x00\x00\x00"), "image/webp", "webp"},
@@ -140,4 +142,33 @@ func TestRefPath(t *testing.T) {
 	// A reference without an extension still resolves; only the renderer's
 	// choice of element depends on the hint.
 	assert.Equal(t, "/api/v1/blobs/"+string(d), Ref{Digest: d}.Path())
+}
+
+func TestDetectMP4CameraBrands(t *testing.T) {
+	for _, brand := range []string{"isom", "iso2", "iso4", "avc1", "M4V ", "MSNV"} {
+		head := []byte("\x00\x00\x00\x14ftyp" + brand + "\x00\x00\x00\x00isom")
+		media, ext, err := DetectMedia(head)
+		require.NoError(t, err, brand)
+		assert.Equal(t, "video/mp4", media)
+		assert.Equal(t, "mp4", ext)
+	}
+	for _, head := range [][]byte{
+		[]byte("\x00\x00\x00\x14ftypisom\x00\x00\x00\x00avif"),
+		[]byte("\x00\x00\x00\x14ftypheic\x00\x00\x00\x00isom"),
+		[]byte("\x00\x00\x00\x40ftypisom\x00\x00\x00\x00"),
+		[]byte("\x00\x00\x00\x0cftypisom\x00\x00\x00\x00"),
+		[]byte("\x00\x00\x00\x11ftypisom\x00\x00\x00\x00x"),
+	} {
+		_, _, err := DetectMedia(head)
+		assert.ErrorIs(t, err, ErrUnsupportedMedia)
+	}
+}
+
+// Header from a Reolink HEVC MP4: no mp41/mp42 brand is present.
+func TestDetectReolinkHEVCMP4(t *testing.T) {
+	head := []byte("\x00\x00\x00\x18ftypiso4\x00\x00\x00\x01iso4hvc1")
+	media, ext, err := DetectMedia(head)
+	require.NoError(t, err)
+	assert.Equal(t, "video/mp4", media)
+	assert.Equal(t, "mp4", ext)
 }

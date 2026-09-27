@@ -98,7 +98,7 @@ open `http://localhost:8000`.
 | `EVIDENCE_RATE_LIMIT_WRITE_RPS` | `0` (disabled) | Sustained writes per second per caller |
 | `EVIDENCE_RATE_LIMIT_READ_BURST` | `2 × read RPS` | Token-bucket burst capacity for reads |
 | `EVIDENCE_RATE_LIMIT_WRITE_BURST` | `2 × write RPS` | Token-bucket burst capacity for writes |
-| `EVIDENCE_BLOB_BACKEND` | `fs` | Where images live: `fs` or `s3` (see [Images in test logs](docs/api-reference.md#images-in-test-logs)) |
+| `EVIDENCE_BLOB_BACKEND` | `fs` | Where media attachments live: `fs` or `s3` (see [Images in test logs](docs/api-reference.md#images-in-test-logs)) |
 | `EVIDENCE_BLOB_PATH` | `blobs` | Directory for the `fs` backend |
 | `EVIDENCE_BLOB_S3_ENDPOINT` | *(empty)* | `host:port` of the S3/MinIO endpoint |
 | `EVIDENCE_BLOB_S3_BUCKET` | `evidence-blobs` | Bucket to store blobs in |
@@ -106,7 +106,8 @@ open `http://localhost:8000`.
 | `EVIDENCE_BLOB_S3_SECRET_KEY` | *(empty)* | S3 secret key |
 | `EVIDENCE_BLOB_S3_USE_SSL` | `false` | `true` to talk to the endpoint over HTTPS |
 | `EVIDENCE_BLOB_S3_REGION` | *(empty)* | S3 region |
-| `EVIDENCE_MAX_BLOB_BYTES` | `5242880` (5 MiB) | Largest image that may be uploaded |
+| `EVIDENCE_MAX_BLOB_BYTES` | `536870912` (512 MiB) | Largest media attachment that may be uploaded |
+| `EVIDENCE_BLOB_SIGNING_KEY` | random per process | Secret for 15-minute playback URLs; set the same high-entropy secret on all replicas |
 | `EVIDENCE_BLOB_ORPHAN_GRACE_HOURS` | `24` | How long an unreferenced image is kept before the sweep removes it |
 | `EVIDENCE_RETENTION_CONFIG` | *(empty — retention off)* | Path to a retention rules YAML file (see [Retention](#retention)) |
 | `EVIDENCE_WEATHER_ENDPOINT` | `https://api.open-meteo.com/v1/forecast` | Forecast API the weather lookup asks. Set it to an empty value to switch the lookup off (see [Weather while a test ran](docs/api-reference.md#weather-while-a-test-ran)) |

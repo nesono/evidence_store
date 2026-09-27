@@ -136,6 +136,9 @@ function link(url, label) {
 function image(url, alt, base) {
   const ref = BLOB_REF.exec(url);
   if (!ref) return null;
+  if ([".mp4", ".webm"].includes(ref[2])) {
+    return `<video data-blob="${escapeHTML(base)}${ref[1]}${ref[2]}" aria-label="${alt}" controls playsinline preload="metadata">Video playback requires a supported browser and codec.</video>`;
+  }
   return `<img data-blob="${escapeHTML(base)}${ref[1]}${ref[2] || ""}" alt="${alt}" loading="lazy">`;
 }
 

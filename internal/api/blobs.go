@@ -2,32 +2,36 @@ package api
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/nesono/evidence-store/internal/blob"
 )
 
-// BlobHandler serves the images a test log embeds.
-//
-// Blobs are proxied through the API rather than handed out as presigned URLs so
-// that the object store stays private and there is one place where access is
-// decided — the same API key that reads a record reads its photos. When video
-// arrives (#79) that trade will need revisiting, because streaming a large file
-// through the app server is a different proposition than serving a screenshot.
+// BlobHandler streams private media, with scoped playback URLs for browsers.
 type BlobHandler struct {
-	blobs    blob.Store
-	maxBytes int64
+	blobs      blob.Store
+	maxBytes   int64
+	signingKey []byte
 }
 
-func NewBlobHandler(blobs blob.Store, maxBytes int64) *BlobHandler {
-	return &BlobHandler{blobs: blobs, maxBytes: maxBytes}
+func NewBlobHandler(blobs blob.Store, maxBytes int64, signingKey ...string) *BlobHandler {
+	key := rand.Text()
+	if len(signingKey) > 0 && signingKey[0] != "" {
+		key = signingKey[0]
+	}
+	return &BlobHandler{blobs: blobs, maxBytes: maxBytes, signingKey: []byte(key)}
 }
 
 type blobResponse struct {
@@ -57,7 +61,7 @@ func (h *BlobHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	contentType, ext, err := blob.DetectMedia(head)
 	if err != nil {
 		writeError(w, http.StatusUnsupportedMediaType,
-			"unsupported image type: a test log can embed PNG, JPEG, WebP or GIF")
+			"file contents were not recognized as a supported image or video (PNG, JPEG, WebP, GIF, MP4 or WebM); the filename extension alone is not sufficient")
 		return
 	}
 
@@ -82,7 +86,7 @@ func (h *BlobHandler) writeReadError(w http.ResponseWriter, err error) {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge,
-			"image exceeds the maximum size of "+strconv.FormatInt(h.maxBytes, 10)+" bytes")
+			"media exceeds the maximum size of "+strconv.FormatInt(h.maxBytes, 10)+" bytes")
 		return
 	}
 	slog.Error("failed to store blob", "error", err)
@@ -107,13 +111,8 @@ func (h *BlobHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Content is immutable and named by its own hash, so a cached copy can never
 	// be stale and the digest is the only ETag that makes sense.
 	etag := `"` + string(digest) + `"`
-	if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, string(digest)) {
-		w.Header().Set("ETag", etag)
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
 
-	rc, size, err := h.blobs.Get(r.Context(), digest)
+	rc, _, err := h.blobs.Get(r.Context(), digest)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "blob not found")
@@ -136,27 +135,80 @@ func (h *BlobHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Sniffed again on the way out rather than recorded at upload: the type is a
 	// property of the bytes, and one answer is better than two that can drift.
-	// Bytes that no longer sniff as an embeddable image are not served at all.
+	// Bytes that no longer sniff as an embeddable media are not served at all.
 	contentType, _, err := blob.DetectMedia(head)
 	if err != nil {
-		slog.Error("stored blob is not a servable image", "digest", digest)
+		slog.Error("stored blob is not a servable media", "digest", digest)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	if strings.HasPrefix(r.URL.Path, "/media/") {
+		w.Header().Set("Cache-Control", "private, no-store")
+	} else {
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	}
 	// The type was decided here; a browser guessing a different one is exactly
 	// the hole the allowlist exists to close.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", "inline")
 
-	if _, err := w.Write(head); err != nil {
+	if _, err := rc.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not seek media")
 		return
 	}
-	if _, err := io.Copy(w, rc); err != nil {
-		slog.Error("failed to write blob", "error", err, "digest", digest)
+	http.ServeContent(w, r, string(digest), time.Time{}, rc)
+}
+
+const playbackLifetime = 15 * time.Minute
+
+func (h *BlobHandler) signature(ref, expires string) string {
+	mac := hmac.New(sha256.New, h.signingKey)
+	_, _ = io.WriteString(mac, ref+"\n"+expires)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// PlaybackURL requires blob:read. The capability is bound to one exact ref and
+// expires even if shared; it never grants upload or access to another blob.
+func (h *BlobHandler) PlaybackURL(w http.ResponseWriter, r *http.Request) {
+	ref := chi.URLParam(r, "ref")
+	digestText, ext, hasExt := strings.Cut(ref, ".")
+	if hasExt && ext != "png" && ext != "jpg" && ext != "webp" && ext != "gif" && ext != "mp4" && ext != "webm" {
+		writeError(w, http.StatusBadRequest, "invalid media extension")
+		return
 	}
+	digest, err := blob.ParseDigest(digestText)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid blob reference")
+		return
+	}
+	if _, err := h.blobs.Stat(r.Context(), digest); err != nil {
+		if errors.Is(err, blob.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "blob not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	expires := strconv.FormatInt(time.Now().Add(playbackLifetime).Unix(), 10)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]string{"url": "/media/" + ref + "?expires=" + expires + "&token=" + h.signature(ref, expires)})
+}
+
+func (h *BlobHandler) Playback(w http.ResponseWriter, r *http.Request) {
+	ref := chi.URLParam(r, "ref")
+	expires := r.URL.Query().Get("expires")
+	deadline, err := strconv.ParseInt(expires, 10, 64)
+	supplied, decodeErr := hex.DecodeString(r.URL.Query().Get("token"))
+	expected, _ := hex.DecodeString(h.signature(ref, expires))
+	if err != nil || decodeErr != nil || deadline <= time.Now().Unix() || !hmac.Equal(supplied, expected) {
+		writeError(w, http.StatusForbidden, "playback link expired or invalid")
+		return
+	}
+	// Do not let a browser reuse protected media beyond the capability lifetime.
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	h.Get(w, r)
 }

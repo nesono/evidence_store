@@ -3848,3 +3848,5 @@ label > .input-with-button {
     overflow-wrap: anywhere;
     overflow: visible;
 }
+
+.test-log video { display: block; max-width: 100%; max-height: 70vh; margin-block: 0.75rem; }

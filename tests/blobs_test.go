@@ -398,3 +398,53 @@ func assertBlobPresent(t *testing.T, digest string, want bool) {
 	}
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "blob %s should have been swept", digest)
 }
+
+func TestVideoReferencesAndPrivatePlayback(t *testing.T) {
+	body := append([]byte("\x00\x00\x00\x14ftypmp42\x00\x00\x00\x00mp42"), bytes.Repeat([]byte{42}, 2048)...)
+	resp := upload(t, body, "image/png") // sniffed type wins over the claim
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	uploaded := decodeJSON[uploadedBlob](t, resp)
+	assert.Equal(t, "video/mp4", uploaded.ContentType)
+	record := createWithLog(t, "org/video_"+uuid.NewString(), "![rig]("+uploaded.Ref+")")
+	var meta struct {
+		Videos []string `json:"video_uris"`
+		Photos []string `json:"photo_uris"`
+	}
+	require.NoError(t, json.Unmarshal(record.Metadata, &meta))
+	assert.Equal(t, []string{uploaded.Ref}, meta.Videos)
+	assert.Empty(t, meta.Photos)
+	digests, err := testBlobRefStore.ForEvidence(context.Background(), record.ID)
+	require.NoError(t, err)
+	assert.Contains(t, digests, blob.Digest(uploaded.Digest))
+
+	ts := setupAuthServer(t, []config.APIKey{{Key: "video-reader", ReadOnly: true}})
+	defer ts.Close()
+	resp = doRequest(t, "GET", ts.URL+uploaded.Ref+"/url", "", nil)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.Body.Close()
+	resp = doRequest(t, "GET", ts.URL+uploaded.Ref+"/url", "Bearer video-reader", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	link := decodeJSON[map[string]string](t, resp)["url"]
+	request, err := http.NewRequest("GET", ts.URL+link, nil)
+	require.NoError(t, err)
+	request.Header.Set("Range", "bytes=100-199")
+	resp, err = http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusPartialContent, resp.StatusCode)
+	got, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, body[100:200], got)
+}
+
+func TestRecordRejectsFalseMediaExtension(t *testing.T) {
+	uploaded, _ := uploadPNG(t, 97)
+	body := map[string]any{
+		"repo": "org/video-mismatch", "rcs_ref": "abc123", "procedure_ref": "manual/run", "evidence_type": "manual_test",
+		"source": "tester", "result": "PASS", "finished_at": "2026-03-30 14:00",
+		"metadata": map[string]any{"observations": "![video](/api/v1/blobs/" + uploaded.Digest + ".mp4)"},
+	}
+	resp := postJSON(t, "/api/v1/evidence", body)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+}

@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=12">
+    <link rel="stylesheet" href="app.css?v=13">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -184,7 +184,7 @@
                      actually seen, step by step, and is long enough to need room
                      and formatting. Stored as metadata.observations. -->
                 <label>Test log
-                    <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links; paste or drop images, or use Add photo)<br>
+                    <small>(what you observed while running the procedure &mdash; markdown: <code>**bold**</code>, <code>`code`</code>, <code>-</code> lists, links; paste or drop images or MP4/WebM videos, or use Add photo / video; videos require a connection)<br>
                         <span class="keyboard-hint">Enter continues a list, Tab and Shift-Tab nest it, and <kbd>&#8984;/Ctrl</kbd> with <kbd>B</kbd>, <kbd>I</kbd>, <kbd>K</kbd> or <kbd>E</kbd> (also <kbd>&#8679;E</kbd>, where an extension has taken <kbd>&#8984;E</kbd>) formats the selection.</span></small>
                     <textarea name="observations" rows="10" placeholder="1. Powered on the rig — all lights green&#10;2. Pressed the brake pedal — firm, no travel&#10;&#10;Saw `ERR_42` on screen 2 during step 3." autocapitalize="sentences" spellcheck="true"></textarea>
                 </label>
@@ -192,8 +192,8 @@
                     <!-- A phone cannot paste or drop a photo it has not taken yet. accept=image/*
                      offers the camera or the photo library; the picture goes into
                      the log exactly as a pasted one does (images.js). -->
-                    <input type="file" id="add-photo-input" accept="image/*" multiple hidden>
-                    <button type="button" class="secondary outline" id="add-photo">Add photo</button>
+                    <input type="file" id="add-photo-input" accept="image/*,video/mp4,video/webm" multiple hidden>
+                    <button type="button" class="secondary outline" id="add-photo">Add photo / video</button>
                     <button type="button" class="secondary outline" id="test-log-preview-toggle" aria-expanded="false" aria-controls="test-log-preview">Preview</button>
                 </div>
                 <div class="test-log" id="test-log-preview" hidden></div>
