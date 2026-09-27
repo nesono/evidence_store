@@ -61,7 +61,7 @@ func (h *BlobHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	contentType, ext, err := blob.DetectMedia(head)
 	if err != nil {
 		writeError(w, http.StatusUnsupportedMediaType,
-			"unsupported media type: a test log can embed PNG, JPEG, WebP, GIF, MP4 or WebM")
+			"file contents were not recognized as a supported image or video (PNG, JPEG, WebP, GIF, MP4 or WebM); the filename extension alone is not sufficient")
 		return
 	}
 

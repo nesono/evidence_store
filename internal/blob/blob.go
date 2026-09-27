@@ -19,6 +19,7 @@ package blob
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -123,11 +124,42 @@ const SniffLen = 512
 // it has to be a property of the bytes.
 func DetectMedia(head []byte) (mediaType, ext string, err error) {
 	mediaType, _, _ = strings.Cut(http.DetectContentType(head), ";")
+	// Go's web MIME sniffer requires an mp4* brand. Many camera exports use
+	// an ISO base-media or AVC brand without listing mp41/mp42 compatibility.
+	if mediaType == "application/octet-stream" && isMP4(head) {
+		mediaType = "video/mp4"
+	}
 	ext, ok := mediaExt[mediaType]
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrUnsupportedMedia, mediaType)
 	}
 	return mediaType, ext, nil
+}
+
+// isMP4 recognizes a bounded file-type box, without trusting the filename or
+// treating every ISO base-media file (notably HEIF/AVIF images) as a video.
+func isMP4(head []byte) bool {
+	if len(head) < 16 || string(head[4:8]) != "ftyp" {
+		return false
+	}
+	size := uint64(binary.BigEndian.Uint32(head[:4]))
+	if size < 16 || size > uint64(len(head)) || size%4 != 0 {
+		return false
+	}
+	for offset := 8; offset < int(size); offset += 4 {
+		if offset == 12 {
+			continue
+		} // minor version, not a compatible brand
+		switch string(head[offset : offset+4]) {
+		case "avif", "avis", "heic", "heix", "hevc", "hevx", "mif1", "msf1":
+			return false
+		}
+	}
+	switch string(head[8:12]) {
+	case "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "iso7", "iso8", "iso9", "avc1", "dash", "M4V ", "MSNV":
+		return true
+	}
+	return false
 }
 
 // Ref is a blob as a test log refers to it: a digest plus the extension that

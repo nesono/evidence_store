@@ -17,7 +17,7 @@ import (
 )
 
 func videoBytes() []byte {
-	return append([]byte{0, 0, 0, 20, 'f', 't', 'y', 'p', 'm', 'p', '4', '2', 0, 0, 0, 0, 'm', 'p', '4', '2'}, bytes.Repeat([]byte{42}, 4096)...)
+	return append([]byte("\x00\x00\x00\x18ftypiso4\x00\x00\x00\x01iso4hvc1"), bytes.Repeat([]byte{42}, 4096)...)
 }
 
 func TestVideoUploadAndScopedPlayback(t *testing.T) {
