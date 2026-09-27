@@ -747,3 +747,39 @@ The SCIM envelope, not this store's:
 | 403 | `mutability` | Deactivating the last enabled administrator |
 | 404 | — | No such id |
 | 409 | `uniqueness` | The name belongs to somebody else, or to a principal that is not a person |
+
+### Videos in test logs
+
+Paste, drop, or select an MP4 or WebM file in the test-log editor. Videos upload
+while the log is being written and require a connection; offline photo capture
+continues to work. The editor prevents submission while attachments are pending.
+No transcoding is performed: playback depends on browser codec support (HEVC
+footage may play in Safari but not in other browsers).
+
+The blob API sniffs the bytes and returns a canonical `.mp4` or `.webm` reference.
+Use the same markdown syntax as images: `![description](/api/v1/blobs/sha256:<hex>.mp4)`.
+Records list these references in `metadata.video_uris`, separately from
+`photo_uris`. Ingestion validates referenced blobs and their extension hints.
+
+Uploads are hashed while streaming to a temporary file, then finalized under
+the digest key. S3 uploads stream from that file; memory use does not scale with
+the entire video. The default maximum attachment size is 512 MiB, configurable
+with `EVIDENCE_MAX_BLOB_BYTES`. Blob transfer routes have no request read/write
+or router deadline; the header timeout and upload size bound remain in force.
+Configure any reverse proxy to allow the intended upload sizes and durations.
+
+Authenticated `GET /api/v1/blobs/{ref}/url` (requires `blob:read`) returns
+`{"url":"/media/<ref>?expires=...&token=..."}`. This bearer capability permits
+GET/HEAD of only that reference for 15 minutes. Keep it out of shared logs;
+access logs should omit the query string. Permission changes take effect for
+new URLs immediately; already issued URLs remain usable until expiry. Media
+responses are private and not cached, and the service worker excludes them.
+The player can obtain a new URL after expiration using the reader's current
+credentials. Images use the same URL path without whole-file hydration.
+
+Set `EVIDENCE_BLOB_SIGNING_KEY` to a shared high-entropy secret for multiple
+replicas. With no configured key, a random process-local secret is generated,
+and restarting the server invalidates its outstanding playback URLs.
+GET/HEAD media responses support `Accept-Ranges: bytes`, partial 206 responses,
+and 416 for unsatisfiable ranges. Seeking on S3 is delegated to the object
+client's range reads, rather than downloading the whole object.

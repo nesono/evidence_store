@@ -67,6 +67,10 @@ async function submitEvidence(andAnother) {
   // `observations` is the field DESIGN.md gives the manual evidence type for the
   // tester's own account of the run.
   const observations = form.observations.value.trim();
+  if (/!\[attaching…\]\(#pending-\d+\)/.test(observations)) {
+    feedback.innerHTML = '<p class="feedback-error">Wait for the attachments to finish uploading before submitting.</p>';
+    return;
+  }
   if (observations) metadata.observations = observations;
   const location = form.location.value.trim();
   if (location) {

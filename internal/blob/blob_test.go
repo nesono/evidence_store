@@ -91,6 +91,8 @@ func TestDetectMediaAcceptsTheEmbeddableTypes(t *testing.T) {
 		ext   string
 	}{
 		{"png", pngBytes(t), "image/png", "png"},
+		{"webm", []byte("\x1a\x45\xdf\xa3"), "video/webm", "webm"},
+		{"mp4", []byte("\x00\x00\x00\x14ftypmp42\x00\x00\x00\x00mp42"), "video/mp4", "mp4"},
 		{"jpeg", []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00"), "image/jpeg", "jpg"},
 		{"gif", []byte("GIF89a\x01\x00\x01\x00\x00\x00\x00;"), "image/gif", "gif"},
 		{"webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 \x18\x00\x00\x00"), "image/webp", "webp"},

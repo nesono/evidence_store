@@ -67,7 +67,7 @@ func (s *FS) Put(ctx context.Context, r io.Reader) (Digest, int64, error) {
 	return d, size, nil
 }
 
-func (s *FS) Get(ctx context.Context, d Digest) (io.ReadCloser, int64, error) {
+func (s *FS) Get(ctx context.Context, d Digest) (io.ReadSeekCloser, int64, error) {
 	f, err := os.Open(s.path(d))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

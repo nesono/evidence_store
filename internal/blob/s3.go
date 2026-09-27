@@ -84,7 +84,7 @@ func (s *S3) Put(ctx context.Context, r io.Reader) (Digest, int64, error) {
 	return d, size, nil
 }
 
-func (s *S3) Get(ctx context.Context, d Digest) (io.ReadCloser, int64, error) {
+func (s *S3) Get(ctx context.Context, d Digest) (io.ReadSeekCloser, int64, error) {
 	obj, err := s.client.GetObject(ctx, s.bucket, d.Key(), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, 0, fmt.Errorf("open blob: %w", err)

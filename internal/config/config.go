@@ -182,7 +182,8 @@ type Weather struct {
 
 // Blob configures the content-addressed store behind the images in a test log.
 type Blob struct {
-	Options blob.Options
+	SigningKey string
+	Options    blob.Options
 	// MaxBytes caps a single upload.
 	MaxBytes int64
 	// OrphanGrace is how long an unreferenced blob is kept before the sweep
@@ -268,6 +269,7 @@ func loadServer() (*Config, error) {
 // loadBlob reads where the images in a test log are kept.
 func loadBlob() (Blob, error) {
 	b := Blob{
+		SigningKey: os.Getenv("EVIDENCE_BLOB_SIGNING_KEY"),
 		Options: blob.Options{
 			Backend: envOrDefault("EVIDENCE_BLOB_BACKEND", "fs"),
 			Path:    envOrDefault("EVIDENCE_BLOB_PATH", "blobs"),
@@ -280,9 +282,8 @@ func loadBlob() (Blob, error) {
 				Region:    os.Getenv("EVIDENCE_BLOB_S3_REGION"),
 			},
 		},
-		// 5 MiB is a generous screenshot and a small photo. Videos will need
-		// their own cap and a streaming upload path (#79).
-		MaxBytes: int64(envOrDefaultInt("EVIDENCE_MAX_BLOB_BYTES", 5<<20)),
+		// Media uploads stream to disk; the cap also accommodates short videos.
+		MaxBytes: int64(envOrDefaultInt("EVIDENCE_MAX_BLOB_BYTES", 512<<20)),
 		OrphanGrace: time.Duration(
 			envOrDefaultInt("EVIDENCE_BLOB_ORPHAN_GRACE_HOURS", 24)) * time.Hour,
 	}

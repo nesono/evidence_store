@@ -1,5 +1,5 @@
 // Package blob is the content-addressed store for files that hang off a test
-// log — today the images a tester pastes in, later the videos (#79).
+// log, including images and videos.
 //
 // Blobs are named by the SHA-256 of their bytes, never by where they sit. That
 // buys three things this store cares about specifically:
@@ -108,6 +108,8 @@ var mediaExt = map[string]string{
 	"image/jpeg": "jpg",
 	"image/webp": "webp",
 	"image/gif":  "gif",
+	"video/mp4":  "mp4",
+	"video/webm": "webm",
 }
 
 // SniffLen is how many leading bytes DetectMedia needs.
@@ -161,7 +163,7 @@ type Object struct {
 // re-runnable.
 type Store interface {
 	Put(ctx context.Context, r io.Reader) (Digest, int64, error)
-	Get(ctx context.Context, d Digest) (io.ReadCloser, int64, error)
+	Get(ctx context.Context, d Digest) (io.ReadSeekCloser, int64, error)
 	Stat(ctx context.Context, d Digest) (Object, error)
 	Delete(ctx context.Context, d Digest) error
 	// List walks every object in the store. Order is unspecified.

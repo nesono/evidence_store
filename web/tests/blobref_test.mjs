@@ -123,3 +123,8 @@ test("a record with no images depends on no blobs", () => {
   assert.deepEqual(digestsInRecord({ metadata: { observations: "nothing attached" } }), []);
   assert.deepEqual(digestsInRecord({}), []);
 });
+
+test("video URI metadata keeps its blobs reachable without a log", () => {
+  const digest = `sha256:${"a".repeat(64)}`;
+  assert.deepEqual(digestsInRecord({metadata:{video_uris:[refPath(digest,"mp4")]}}), [digest]);
+});

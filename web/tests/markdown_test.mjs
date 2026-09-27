@@ -296,3 +296,14 @@ test("leaves an image reference inside a code span alone", () => {
   assert.ok(!html.includes("<img"), html);
   assert.ok(html.includes("<code>"), html);
 });
+
+test("video refs render native players without fetching during rendering", () => {
+  for (const ext of ["mp4", "webm"]) {
+    const ref = `/api/v1/blobs/sha256:${"a".repeat(64)}.${ext}`;
+    const html = renderMarkdown(`![rig](${ref})`);
+    assert.match(html, /<video data-blob=/);
+    assert.match(html, /controls playsinline preload="metadata"/);
+    assert.ok(!html.includes(" src="));
+  }
+  assert.ok(!renderMarkdown("![remote](https://example.test/video.mp4)").includes("<video"));
+});
