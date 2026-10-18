@@ -1031,15 +1031,6 @@ model and the equivalent `/api/v1/principals` calls.
 
 ## Contributing
 
-### Test campaign design (planned)
-
-Campaign support is being designed in
-[Test Campaign Packages](docs/test-campaign-packages-design.md) and the
-[first implementation proposal](docs/test-campaign-implementation-plan.md).
-The proposal covers package-backed procedure selection, structured inputs/checks,
-execution sessions, offline preparation, and source-side packaging. These are
-design documents; the campaign format and endpoints are not implemented yet.
-
 ### Build and test with Bazel
 
 ```bash
