@@ -125,6 +125,17 @@ Querying evidence for `target_rcs_ref` will include inherited results, clearly m
 
 ## 3. Architecture Overview
 
+### Planned campaign extension
+
+[Test Campaign Packages](docs/test-campaign-packages-design.md) extend manual
+collection with imported, immutable procedure definitions and separate mutable
+execution sessions. The [first implementation proposal](docs/test-campaign-implementation-plan.md)
+specifies deterministic YAML/Markdown packages, typed inline inputs and checks,
+edited execution copies, and offline preparation. Finalized attempts produce
+ordinary evidence with the existing result enum and actual SUT fields; package
+source provenance is separate. Campaigns are not implemented yet. Evidence-search
+sorting (#201) is independent of campaign execution order.
+
 ```
                         +-----------------+
                         |   Ingestion API |  (REST / gRPC)
