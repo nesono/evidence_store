@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -188,6 +189,8 @@ type ListParams struct {
 	// Must be a member of sortColumns.
 	Sort string
 	Desc bool
+	// Sorts takes precedence over the legacy single-column fields.
+	Sorts []SortField
 	// WithTotal requests a COUNT(*) of all matching rows. Callers paging through a
 	// result set should set it only on the first request and cache the answer.
 	WithTotal bool
@@ -213,6 +216,80 @@ func IsSortable(column string) bool {
 	return sortColumns[column]
 }
 
+// SortField is one ordering criterion, in priority order.
+type SortField struct {
+	Column string
+	Desc   bool
+}
+
+// ParseSort accepts parallel comma-separated columns and directions. An omitted
+// order makes every column ascending; otherwise the lists must have equal length.
+func ParseSort(columns, orders string) ([]SortField, error) {
+	if columns == "" {
+		if orders != "" && orders != "asc" && orders != "desc" {
+			return nil, fmt.Errorf("order requires sort columns")
+		}
+		return nil, nil
+	}
+	names := strings.Split(columns, ",")
+	directions := strings.Split(orders, ",")
+	if orders != "" && len(directions) != len(names) {
+		return nil, fmt.Errorf("sort and order must have the same number of entries")
+	}
+	seen := map[string]bool{}
+	result := make([]SortField, 0, len(names))
+	for i, name := range names {
+		if !IsSortable(name) {
+			return nil, fmt.Errorf("cannot sort by %q", name)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("duplicate sort column %q", name)
+		}
+		seen[name] = true
+		direction := "asc"
+		if orders != "" {
+			direction = directions[i]
+		}
+		if direction != "asc" && direction != "desc" {
+			return nil, fmt.Errorf("order must be asc or desc")
+		}
+		result = append(result, SortField{Column: name, Desc: direction == "desc"})
+	}
+	return result, nil
+}
+
+func listOrder(params ListParams) (string, error) {
+	sorts := params.Sorts
+	if len(sorts) == 0 && params.Sort != "" {
+		sorts = []SortField{{Column: params.Sort, Desc: params.Desc}}
+	}
+	if len(sorts) == 0 {
+		return "ingested_at ASC, id ASC", nil
+	}
+	if params.Cursor != nil {
+		return "", fmt.Errorf("sort and cursor cannot be combined")
+	}
+	parts := make([]string, 0, len(sorts)+1)
+	seen := map[string]bool{}
+	for _, field := range sorts {
+		if !IsSortable(field.Column) || seen[field.Column] {
+			return "", fmt.Errorf("invalid or duplicate sort column %q", field.Column)
+		}
+		seen[field.Column] = true
+		direction := "ASC"
+		if field.Desc {
+			direction = "DESC"
+		}
+		parts = append(parts, field.Column+" "+direction)
+	}
+	// Follow the primary direction so reversing all criteria also reverses ties.
+	direction := "ASC"
+	if sorts[0].Desc {
+		direction = "DESC"
+	}
+	return strings.Join(append(parts, "id "+direction), ", "), nil
+}
+
 type ListResult struct {
 	Records    []model.Evidence `json:"records"`
 	NextCursor *string          `json:"next_cursor,omitempty"`
@@ -220,6 +297,10 @@ type ListResult struct {
 }
 
 func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResult, error) {
+	order, err := listOrder(params)
+	if err != nil {
+		return nil, err
+	}
 	f := buildFilter(params.Filter)
 
 	// Count matching records before adding pagination clauses. Only done when the
@@ -241,23 +322,7 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 
 	query := "SELECT " + evidenceColumns + " FROM evidence" + f.whereClause()
 
-	// id breaks ties so the total order is deterministic and offset windows
-	// neither repeat nor skip records.
-	if params.Sort == "" {
-		query += " ORDER BY ingested_at ASC, id ASC"
-	} else {
-		if !sortColumns[params.Sort] {
-			return nil, fmt.Errorf("column %q is not sortable", params.Sort)
-		}
-		direction := "ASC"
-		if params.Desc {
-			direction = "DESC"
-		}
-		// The tie-break follows the sort direction so that descending is the exact
-		// reverse of ascending. Clients rely on that to read a window near the end
-		// of a large result set from the far end, avoiding a deep OFFSET scan.
-		query += fmt.Sprintf(" ORDER BY %s %s, id %s", params.Sort, direction, direction)
-	}
+	query += " ORDER BY " + order
 
 	query += fmt.Sprintf(" LIMIT %s", f.arg(params.Limit+1))
 	if params.Offset > 0 && params.Cursor == nil {
@@ -288,7 +353,7 @@ func (s *EvidenceStore) List(ctx context.Context, params ListParams) (*ListResul
 		// A keyset cursor encodes a position in the default (ingested_at, id)
 		// ordering, so it is only meaningful when that ordering is in effect.
 		// Under a custom sort, callers page with offset instead.
-		if params.Sort == "" {
+		if params.Sort == "" && len(params.Sorts) == 0 {
 			last := records[params.Limit-1]
 			cursor := EncodeCursor(last.IngestedAt, last.ID)
 			result.NextCursor = &cursor

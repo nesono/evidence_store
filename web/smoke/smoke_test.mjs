@@ -317,3 +317,46 @@ test("a record filed offline waits, can be corrected, and sends itself", async t
     "and the counter is gone");
   noProblems(t);
 });
+
+test("column headers preserve sort priority, URLs, pagination and keyboard control", async t => {
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  const repo = await page.eval(`document.querySelector('#results-body tr[data-id] .col-repo').textContent.trim()`);
+  await page.goto(`${BASE}/?repo=${encodeURIComponent(repo)}&limit=25&offset=25&sort=finished_at&order=desc#search`);
+  await page.waitFor(`document.querySelector('#results-table [data-sort="finished_at"] .sort-indicator')?.textContent === '↓1'`);
+  await page.waitFor(`!document.getElementById('results-body').textContent.includes('Loading...')`);
+  await page.eval(`document.querySelector('#results-table [data-sort="procedure_ref"]').click()`);
+  await page.waitFor(`new URLSearchParams(location.search).get('sort') === 'procedure_ref,finished_at'`);
+  const state = await page.eval(`({
+    offset: new URLSearchParams(location.search).get('offset'),
+    repo: new URLSearchParams(location.search).get('repo'),
+    order: new URLSearchParams(location.search).get('order'),
+    procedure: document.querySelector('#results-table [data-sort="procedure_ref"] .sort-indicator').textContent,
+    finished: document.querySelector('#results-table [data-sort="finished_at"] .sort-indicator').textContent,
+  })`);
+  assert.deepEqual(state, { offset: null, repo, order: 'asc,desc', procedure: '↑1', finished: '↓2' });
+  await page.eval(`document.querySelector('#results-table [data-sort="procedure_ref"]').focus()`);
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await page.send('Input.dispatchKeyEvent', { type: 'char', text: '\r', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await page.waitFor(`new URLSearchParams(location.search).get('order') === 'desc,desc'`);
+  await page.eval('history.back()');
+  await page.waitFor(`document.querySelector('#results-table [data-sort="procedure_ref"] .sort-indicator').textContent === '↑1'`);
+  await page.eval('history.forward()');
+  await page.waitFor(`document.querySelector('#results-table [data-sort="procedure_ref"] .sort-indicator').textContent === '↓1'`);
+  const url = await page.eval('location.href');
+  await page.goto(url);
+  await page.waitFor(`document.querySelector('#results-table [data-sort="finished_at"] .sort-indicator').textContent === '↓2'`);
+  await page.eval(`document.getElementById('reset-sort').click()`);
+  await page.waitFor(`!new URLSearchParams(location.search).has('sort')`);
+  assert.equal(await page.eval(`new URLSearchParams(location.search).get('repo')`), repo);
+  assert.equal(await page.eval(`document.querySelectorAll('th[aria-sort]').length`), 0);
+  await page.waitFor(`!document.getElementById('results-body').textContent.includes('Loading...')`);
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await page.eval(`document.querySelector('#mobile-sort summary').click()`);
+  await page.eval(`document.querySelector('#mobile-sort [data-sort="result"]').click()`);
+  await page.waitFor(`new URLSearchParams(location.search).get('sort') === 'result'`);
+  assert.equal(await page.eval(`document.getElementById('mobile-sort').open`), false);
+  assert.ok(await page.eval(`document.documentElement.scrollWidth <= innerWidth`), 'phone controls should not overflow');
+  await page.send('Emulation.clearDeviceMetricsOverride');
+  noProblems(t);
+});

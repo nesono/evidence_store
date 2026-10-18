@@ -3850,3 +3850,47 @@ label > .input-with-button {
 }
 
 .test-log video { display: block; max-width: 100%; max-height: 70vh; margin-block: 0.75rem; }
+
+/* Native buttons keep column sorting available to keyboard and touch users. */
+#results-table .sort-header {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0.25rem 0;
+  margin: 0;
+  min-height: 2rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+#results-table .sort-header:hover { text-decoration: underline; }
+#results-table .sort-header:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.sort-indicator { white-space: nowrap; }
+
+#mobile-sort { display: none; }
+#reset-sort { white-space: nowrap; }
+@media (max-width: 767px) {
+  #window-bar .wb-controls { flex-wrap: wrap; }
+  #mobile-sort { display: block; position: relative; margin: 0; }
+  #mobile-sort summary { padding: 0.5rem; }
+  #mobile-sort .sort-options {
+    position: absolute;
+    z-index: 3;
+    top: 100%;
+    left: 0;
+    width: 15rem;
+    padding: 0.5rem;
+    background: var(--color-ground);
+    border: 1px solid var(--color-line);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+}

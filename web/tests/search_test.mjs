@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import {
   activeAdvancedCount, activeFilterCount, detailFields, leftoverMetadata, parseSearchState, prefersSplitView,
-  readerFields, recordURL, recordMapURL, searchStateToQuery,
+  readerFields, recordURL, recordMapURL, searchStateToQuery, nextSorts, sortQuery,
 } from "../static/search.js";
 
 // --- Reading a link ---
@@ -240,4 +240,34 @@ test("record links open a standalone record with an encoded id", () => {
   assert.equal(url.searchParams.get("view"), "record");
   assert.equal(url.hash, "#search");
   assert.equal(url.searchParams.has("offset"), false);
+});
+
+test("successive header selections retain secondary criteria without duplicates", () => {
+  let sorts = nextSorts([], "finished_at");
+  sorts = nextSorts(sorts, "finished_at");
+  sorts = nextSorts(sorts, "procedure_ref");
+  assert.deepEqual(sorts, [{ column: "procedure_ref", desc: false }, { column: "finished_at", desc: true }]);
+  sorts = nextSorts(sorts, "finished_at");
+  assert.deepEqual(sorts, [{ column: "finished_at", desc: true }, { column: "procedure_ref", desc: false }]);
+  assert.equal(nextSorts(sorts, "finished_at")[0].desc, false);
+});
+
+test("multi-column ordering round trips with filters and a page offset", () => {
+  const sorts = [{ column: "procedure_ref", desc: false }, { column: "finished_at", desc: true }];
+  const filters = { repo: "org/test", result: "FAIL" };
+  const query = searchStateToQuery(filters, { sorts, windowOffset: 100, windowSize: 50 });
+  const back = parseSearchState(query);
+  assert.deepEqual(back.sorts, sorts);
+  assert.deepEqual(back.filters, filters);
+  assert.equal(back.windowOffset, 100);
+  assert.deepEqual(sortQuery(sorts, true), { sort: "procedure_ref,finished_at", order: "desc,asc" });
+  assert.deepEqual(sortQuery([], true), { sort: "ingested_at", order: "desc" });
+  assert.deepEqual(parseSearchState(searchStateToQuery(filters, { sorts: [], windowSize: 50 })).sorts, []);
+});
+
+test("invalid sort URLs fall back to default rather than hiding an active criterion", () => {
+  for (const query of ["?sort=repo,repo", "?sort=repo,source&order=asc", "?sort=metadata", "?sort=repo&order=sideways"]) {
+    assert.deepEqual(parseSearchState(query).sorts, []);
+  }
+  assert.deepEqual(parseSearchState("?sort=repo,source").sorts, [{ column: "repo", desc: false }, { column: "source", desc: false }]);
 });

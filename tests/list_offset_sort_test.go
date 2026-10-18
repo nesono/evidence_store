@@ -385,3 +385,53 @@ func TestInheritedRecordsNeverExceedTheWindow(t *testing.T) {
 	assert.LessOrEqual(t, len(page.Records), 2, "records must never exceed the requested limit")
 	assert.Len(t, page.InheritedRecords, 5)
 }
+
+func TestListEvidenceMultiSortAcrossPages(t *testing.T) {
+	repo := "org/multisort_" + uuid.NewString()
+	base := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
+	for _, item := range []struct {
+		proc string
+		hour int
+	}{{"b", 1}, {"a", 0}, {"b", 2}, {"a", 2}, {"a", 2}, {"a", 1}} {
+		ev := makeEvidence(repo, "main", "multi123", item.proc, "ci", model.ResultPass)
+		ev.FinishedAt = model.FlexibleTime{Time: base.Add(time.Duration(item.hour) * time.Hour)}
+		resp := postJSON(t, "/api/v1/evidence", ev)
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		resp.Body.Close()
+	}
+	fetch := func(order string, offset, limit int) []model.EvidenceResponse {
+		resp := getJSON(t, fmt.Sprintf("/api/v1/evidence?repo=%s&sort=procedure_ref,finished_at&order=%s&offset=%d&limit=%d", repo, order, offset, limit))
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		page := decodeJSON[listResponse](t, resp)
+		assert.Nil(t, page.NextCursor)
+		return page.Records
+	}
+	all := fetch("asc,desc", 0, 10)
+	require.Len(t, all, 6)
+	for i, expected := range []struct {
+		proc string
+		hour int
+	}{{"a", 2}, {"a", 2}, {"a", 1}, {"a", 0}, {"b", 2}, {"b", 1}} {
+		assert.Equal(t, expected.proc, all[i].ProcedureRef)
+		assert.True(t, base.Add(time.Duration(expected.hour)*time.Hour).Equal(all[i].FinishedAt))
+	}
+	assert.Less(t, all[0].ID.String(), all[1].ID.String())
+	for offset := 0; offset < 6; offset += 2 {
+		page := fetch("asc,desc", offset, 2)
+		reverse := fetch("desc,asc", 6-offset-2, 2)
+		require.Len(t, page, 2)
+		require.Len(t, reverse, 2)
+		for i := range page {
+			assert.Equal(t, all[offset+i].ID, page[i].ID)
+			assert.Equal(t, page[i].ID, reverse[1-i].ID)
+		}
+	}
+	for _, query := range []string{
+		"sort=repo,repo&order=asc,desc", "sort=repo,source&order=asc",
+		"sort=repo,metadata&order=asc,desc", "sort=repo,source&order=asc,sideways",
+	} {
+		resp := getJSON(t, "/api/v1/evidence?"+query)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		resp.Body.Close()
+	}
+}
