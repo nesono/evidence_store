@@ -76,3 +76,24 @@ func TestIsSortableRejectsEverythingElse(t *testing.T) {
 		assert.False(t, IsSortable(col), "%q should not be sortable", col)
 	}
 }
+
+func TestMultiColumnSortValidation(t *testing.T) {
+	for _, tc := range []struct{ columns, orders string }{
+		{"repo,repo", "asc,desc"}, {"repo,source", "asc"}, {"repo", "asc,desc"},
+		{"repo,metadata", "asc,desc"}, {"repo,", ""}, {"repo", "sideways"},
+		{"repo; DROP TABLE evidence", ""}, {"", "sideways"},
+	} {
+		_, err := ParseSort(tc.columns, tc.orders)
+		require.Error(t, err, "%s / %s", tc.columns, tc.orders)
+	}
+	sorts, err := ParseSort("procedure_ref,finished_at", "asc,desc")
+	require.NoError(t, err)
+	order, err := listOrder(ListParams{Sorts: sorts})
+	require.NoError(t, err)
+	assert.Equal(t, "procedure_ref ASC, finished_at DESC, id ASC", order)
+	_, err = listOrder(ListParams{Sorts: sorts, Cursor: &Cursor{}})
+	require.Error(t, err)
+	sorts, err = ParseSort("repo,source", "")
+	require.NoError(t, err)
+	assert.Equal(t, []SortField{{Column: "repo"}, {Column: "source"}}, sorts)
+}

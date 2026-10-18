@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=13">
+    <link rel="stylesheet" href="app.css?v=15">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -315,6 +315,21 @@
             <div id="window-bar">
                 <span id="results-summary"></span>
                 <div class="wb-controls">
+                    <details id="mobile-sort">
+                        <summary>Sort</summary>
+                        <div class="sort-options">
+                            <button type="button" class="secondary outline" data-sort="result" data-label="Result">Result<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="procedure_ref" data-label="Procedure">Procedure<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="repo" data-label="Repo">Repo<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="branch" data-label="Branch">Branch<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="rcs_ref" data-label="Commit">Commit<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="evidence_type" data-label="Type">Type<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="source" data-label="Source">Source<span class="sort-indicator" aria-hidden="true"></span></button>
+                            <button type="button" class="secondary outline" data-sort="finished_at" data-label="Finished">Finished<span class="sort-indicator" aria-hidden="true"></span></button>
+                        </div>
+                    </details>
+                    <button type="button" class="secondary outline" id="reset-sort" disabled>Reset sort</button>
+                    <span id="sort-summary" class="sr-only" aria-live="polite"></span>
                     <label id="window-size-label">Rows
                         <select id="window-size">
                             <option value="25">25</option>
@@ -337,14 +352,14 @@
                 <table id="results-table">
                     <thead>
                         <tr>
-                            <th class="col-result">Result</th>
-                            <th class="col-procedure">Procedure</th>
-                            <th class="col-repo">Repo</th>
-                            <th class="col-branch">Branch</th>
-                            <th class="col-commit">Commit</th>
-                            <th class="col-type">Type</th>
-                            <th class="col-source">Source</th>
-                            <th class="col-finished">Finished</th>
+                            <th scope="col" class="col-result"><button type="button" class="sort-header" data-sort="result" data-label="Result">Result<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-procedure"><button type="button" class="sort-header" data-sort="procedure_ref" data-label="Procedure">Procedure<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-repo"><button type="button" class="sort-header" data-sort="repo" data-label="Repo">Repo<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-branch"><button type="button" class="sort-header" data-sort="branch" data-label="Branch">Branch<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-commit"><button type="button" class="sort-header" data-sort="rcs_ref" data-label="Commit">Commit<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-type"><button type="button" class="sort-header" data-sort="evidence_type" data-label="Type">Type<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-source"><button type="button" class="sort-header" data-sort="source" data-label="Source">Source<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th scope="col" class="col-finished"><button type="button" class="sort-header" data-sort="finished_at" data-label="Finished">Finished<span class="sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="col-tags">Tags</th>
                         </tr>
                     </thead>

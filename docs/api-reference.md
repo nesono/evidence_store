@@ -420,7 +420,11 @@ Two pagination modes are available, and they cannot be combined — passing both
 - **Cursor** — keyset pagination over the default `ingested_at` ordering. Stable while records are being inserted and cheap at any depth, so it is the right choice for streaming an entire result set. `next_cursor` is returned while more records remain; `total` is never returned for cursor requests.
 - **Offset** — `offset` skips N matching rows, giving addressable, shareable windows (`?offset=1000&limit=50`) and backwards navigation. Because a keyset cursor only describes a position in the default ordering, `sort` requires offset mode and suppresses `next_cursor`.
 
-`sort` accepts `repo`, `branch`, `rcs_ref`, `procedure_ref`, `evidence_type`, `source`, `result`, `finished_at` and `ingested_at`; any other value returns `400`. `order` is `asc` (default) or `desc`. Results are always tie-broken by `id`, so consecutive offset windows neither repeat nor skip a record.
+`sort` accepts a comma-separated list of `repo`, `branch`, `rcs_ref`, `procedure_ref`, `evidence_type`, `source`, `result`, `finished_at` and `ingested_at`, in priority order. Unknown or duplicate columns return `400`. If supplied, `order` must contain one `asc` or `desc` per column; omitting it makes all columns ascending. Existing single-column requests remain valid.
+
+For example, `?sort=procedure_ref,finished_at&order=asc,desc` groups procedures alphabetically and shows newest results first within each procedure. Results are tie-broken by `id` in the primary column's direction. Reversing every direction reverses the complete ordering, including ties. Offset pages are deterministic for an unchanged result set; concurrent inserts can still shift offsets.
+
+In Search, click a column header to make it primary. Clicking the primary header toggles direction; selecting a secondary header promotes it while retaining its direction. Other selected columns remain tie-breakers. Arrows and numbers show direction and priority, and **Reset sort** restores the default. On phones, the **Sort** menu provides the same controls because results are shown as cards. The complete ordering is preserved in the URL, and sorting changes return to the first page without clearing filters.
 
 `total` (a `COUNT(*)` of all matching rows) is returned by default for non-cursor requests. Pass `include_total=false` on subsequent windows to skip the count once you have it.
 

@@ -263,25 +263,13 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Keyset pagination is tied to the (ingested_at, id) ordering, so re-sorting
 	// mid-walk would skip or repeat records.
-	sort := q.Get("sort")
-	if sort != "" {
-		if cursor != nil {
-			writeError(w, http.StatusBadRequest, "sort and cursor cannot be combined; page with offset instead")
-			return
-		}
-		if !store.IsSortable(sort) {
-			writeError(w, http.StatusBadRequest, "cannot sort by "+sort)
-			return
-		}
+	sorts, err := store.ParseSort(q.Get("sort"), q.Get("order"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-
-	desc := false
-	switch order := q.Get("order"); order {
-	case "", "asc":
-	case "desc":
-		desc = true
-	default:
-		writeError(w, http.StatusBadRequest, `order must be "asc" or "desc"`)
+	if len(sorts) > 0 && cursor != nil {
+		writeError(w, http.StatusBadRequest, "sort and cursor cannot be combined; page with offset instead")
 		return
 	}
 
@@ -295,8 +283,7 @@ func (h *EvidenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		Cursor:    cursor,
 		Limit:     limit,
 		Offset:    offset,
-		Sort:      sort,
-		Desc:      desc,
+		Sorts:     sorts,
 		WithTotal: withTotal,
 	}
 

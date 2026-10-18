@@ -46,9 +46,70 @@ const DEFAULT_WINDOW_SIZE = 50;
 // The current window into the result set.
 let windowOffset = 0;
 let windowSize = DEFAULT_WINDOW_SIZE;
-let sortColumn = "";     // "" means the API's default ordering
-let sortDesc = false;
+let sorts = []; // priority-ordered {column, desc}; empty means default ordering
 let totalRecords = null; // cached, so only a filter change pays for the COUNT(*)
+
+const SORT_LABELS = {
+  repo: "Repo", branch: "Branch", rcs_ref: "Commit", procedure_ref: "Procedure",
+  evidence_type: "Type", source: "Source", result: "Result", finished_at: "Finished", ingested_at: "Ingested",
+};
+const SORT_COLUMNS = Object.keys(SORT_LABELS);
+
+export function parseSorts(columns = "", orders = "") {
+  if (!columns) return [];
+  const names = columns.split(",");
+  const directions = orders ? orders.split(",") : names.map(() => "asc");
+  if (names.length !== directions.length || new Set(names).size !== names.length
+      || names.some(name => !SORT_COLUMNS.includes(name))
+      || directions.some(order => !["asc", "desc"].includes(order))) return [];
+  return names.map((column, i) => ({ column, desc: directions[i] === "desc" }));
+}
+
+// Promote an existing secondary column without changing its direction. A click
+// on the primary column toggles it; a new column starts ascending.
+export function nextSorts(current, column) {
+  const existing = current.find(field => field.column === column);
+  const desc = current[0]?.column === column ? !current[0].desc : (existing?.desc ?? false);
+  return [{ column, desc }, ...current.filter(field => field.column !== column)];
+}
+
+export function sortQuery(current, reverse = false) {
+  const effective = current.length ? current : (reverse ? [{ column: DEFAULT_SORT_COLUMN, desc: false }] : []);
+  return effective.length ? {
+    sort: effective.map(field => field.column).join(","),
+    order: effective.map(field => (reverse ? !field.desc : field.desc) ? "desc" : "asc").join(","),
+  } : {};
+}
+
+function renderSortControls() {
+  for (const button of document.querySelectorAll("#results-table [data-sort], #mobile-sort [data-sort]")) {
+    const index = sorts.findIndex(field => field.column === button.dataset.sort);
+    const field = sorts[index];
+    button.querySelector(".sort-indicator").textContent = field ? `${field.desc ? "↓" : "↑"}${index + 1}` : "";
+    const status = field ? `${field.desc ? "descending" : "ascending"}, priority ${index + 1}` : "not sorted";
+    button.setAttribute("aria-label", `${button.dataset.label}: ${status}. ${index === 0 ? "Toggle direction" : "Make primary sort"}`);
+    const header = button.closest("th");
+    header?.removeAttribute("aria-sort");
+    if (index === 0) header?.setAttribute("aria-sort", field.desc ? "descending" : "ascending");
+  }
+  document.getElementById("reset-sort").disabled = sorts.length === 0;
+  document.getElementById("sort-summary").textContent = sorts.length
+    ? `Sort order: ${sorts.map((field, i) => `${i + 1}. ${SORT_LABELS[field.column]} ${field.desc ? "descending" : "ascending"}`).join("; ")}`
+    : "Default sort order";
+}
+
+function changeSort(next) {
+  sorts = next;
+  const menu = document.getElementById("mobile-sort");
+  const restoreFocus = menu.contains(document.activeElement);
+  menu.open = false;
+  if (restoreFocus) menu.querySelector("summary").focus();
+  windowOffset = 0;
+  renderSortControls();
+  const { filters } = parseSearchState(window.location.search);
+  writeStateToURL(filters);
+  doSearch(filters);
+}
 
 // --- Preferences ---
 
@@ -122,6 +183,7 @@ export function parseSearchState(search, { savedWindowSize = DEFAULT_WINDOW_SIZE
     windowSize: Number.isFinite(limit)
       ? normalizeWindowSize(limit)
       : normalizeWindowSize(savedWindowSize),
+    sorts: parseSorts(params.get("sort") || "", params.get("order") || ""),
     sortColumn: params.get("sort") || "",
     sortDesc: params.get("order") === "desc",
   };
@@ -130,7 +192,7 @@ export function parseSearchState(search, { savedWindowSize = DEFAULT_WINDOW_SIZE
 // searchStateToQuery writes that state back out — the other half of the round
 // trip, and pure for the same reason.
 export function searchStateToQuery(filters, {
-  windowOffset = 0, windowSize, sortColumn = "", sortDesc = false, detail = null,
+  windowOffset = 0, windowSize, sortColumn = "", sortDesc = false, sorts: sortFields, detail = null,
 } = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) {
@@ -140,9 +202,8 @@ export function searchStateToQuery(filters, {
   }
   if (windowOffset > 0) params.set("offset", String(windowOffset));
   params.set("limit", String(windowSize));
-  if (sortColumn) {
-    params.set("sort", sortColumn);
-    params.set("order", sortDesc ? "desc" : "asc");
+  for (const [key, value] of Object.entries(sortQuery(sortFields ?? parseSorts(sortColumn, sortDesc ? "desc" : "asc")))) {
+    params.set(key, value);
   }
   if (detail) params.set("detail", detail);
   return `?${params}`;
@@ -154,14 +215,13 @@ export function readStateFromURL() {
   });
   windowOffset = state.windowOffset;
   windowSize = state.windowSize;
-  sortColumn = state.sortColumn;
-  sortDesc = state.sortDesc;
+  sorts = state.sorts;
   return { filters: state.filters, detail: state.detail };
 }
 
 function writeStateToURL(filters, detail) {
   history.pushState(null, "", searchStateToQuery(filters, {
-    windowOffset, windowSize, sortColumn, sortDesc, detail,
+    windowOffset, windowSize, sorts, detail,
   }));
 }
 
@@ -351,10 +411,8 @@ async function fetchWindow(filters) {
   params.set("limit", String(limit));
   if (offset > 0) params.set("offset", String(offset));
 
-  if (fromFarEnd || sortColumn) {
-    params.set("sort", sortColumn || DEFAULT_SORT_COLUMN);
-    const desc = fromFarEnd ? !sortDesc : sortDesc;
-    params.set("order", desc ? "desc" : "asc");
+  for (const [key, value] of Object.entries(sortQuery(sorts, fromFarEnd))) {
+    params.set(key, value);
   }
 
   const resp = await apiFetch(`${API_BASE}/evidence?${params}`);
@@ -701,12 +759,16 @@ export function recordMapURL(location) {
 
 // --- Search ---
 
+let searchRequest = 0;
+
 export async function doSearch(filters, { clamped = false } = {}) {
+  const request = ++searchRequest;
   const tbody = document.getElementById("results-body");
   tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading...</td></tr>`;
 
   try {
     const data = await fetchWindow(filters);
+    if (request !== searchRequest) return;
     if (data.total !== undefined && data.total !== null) {
       totalRecords = data.total;
     }
@@ -724,6 +786,7 @@ export async function doSearch(filters, { clamped = false } = {}) {
     renderRange((data.records || []).length);
     renderWindowNav();
   } catch (err) {
+    if (request !== searchRequest) return;
     // "Failed to fetch" is what the browser says and not what happened. With
     // no connection there is nothing wrong with the search or the store: the
     // archive is simply somewhere else, and saying so stops a tester on a
@@ -779,6 +842,7 @@ function openDetail(id) {
 
 // Reflects URL-derived state into the form and the window controls.
 export function applyURLState(filters) {
+  renderSortControls();
   populateFormFromFilters(filters);
   refreshResultSummary();
   document.getElementById("window-size").value = String(windowSize);
@@ -791,6 +855,11 @@ export function applyURLState(filters) {
 // mountSearch wires the tab up. Nothing here runs on import: the module can
 // then be loaded by a test, and the page decides when the document is ready.
 export function mountSearch() {
+  for (const button of document.querySelectorAll("#results-table [data-sort], #mobile-sort [data-sort]")) {
+    button.addEventListener("click", () => changeSort(nextSorts(sorts, button.dataset.sort)));
+  }
+  document.getElementById("reset-sort").addEventListener("click", () => changeSort([]));
+  renderSortControls();
   // --- Events ---
 
   document.getElementById("filter-form").addEventListener("submit", (e) => {

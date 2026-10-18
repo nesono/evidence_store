@@ -1619,7 +1619,8 @@ body > header .health-dot {
   border-bottom: 1px solid var(--color-line);
 }
 
-/* Fixed widths keep columns from reflowing as the window advances.
+/* Fixed widths include room for the sort arrow and priority number, so
+ * columns do not reflow as sorting changes or the window advances.
  *
  * In px, not em, and that is the fix for a bug this phase introduced: the
  * header is set a step smaller than the cells, so an em width resolved against
@@ -1633,9 +1634,9 @@ body > header .health-dot {
  * table. Procedure is now the column that takes what is left, because it is
  * the one that most often has more to say; the narrower screens hide Type and
  * then Source to leave it room (see "Narrow screens"). */
-#results-table .col-result    { width: 88px; }
+#results-table .col-result    { width: 96px; }
 #results-table .col-repo      { width: 12%; }
-#results-table .col-branch    { width: 9%; }
+#results-table .col-branch    { width: 96px; }
 #results-table .col-commit    { width: 112px; }
 /* Wide enough for "Demonstration": a type truncated to "Demonst…" is a column
  * that has stopped answering the question it is there for. */
@@ -3224,15 +3225,13 @@ label > .input-with-button {
     #results-table .col-repo { display: none; }
 }
 
-/* A tablet in portrait (768-1099px) keeps Result, Procedure, Repo, Branch,
-   Commit, Finished and Tags — Type and Source are dropped above. The fixed
-   columns give some width back so Procedure, which takes what is left, keeps
-   a readable share: without this it was 69px at 768. */
+/* A tablet keeps enough room for each single-line sortable header. Tags
+   collapse into their existing +N indicator to leave Procedure readable. */
 @media (min-width: 768px) and (max-width: 1099px) {
-    #results-table .col-result   { width: 5rem; }
-    #results-table .col-commit   { width: 7rem; }
-    #results-table .col-finished { width: 9.5rem; }
-    #results-table .col-tags     { width: 7rem; }
+    #results-table .col-result   { width: 6rem; }
+    #results-table .col-commit   { width: 6rem; }
+    #results-table .col-finished { width: 9rem; }
+    #results-table .col-tags     { width: 4rem; }
 }
 
 /* Responsive */
@@ -3798,11 +3797,11 @@ label > .input-with-button {
        and the header wrapped into a block four lines tall. */
     #tab-search.detail-open #results-table :is(.col-type, .col-source) { display: none; }
 
-    #tab-search.detail-open #results-table .col-result   { width: 5rem; }
-    #tab-search.detail-open #results-table .col-commit   { width: 7rem; }
-    #tab-search.detail-open #results-table .col-branch   { width: 5.5rem; }
-    #tab-search.detail-open #results-table .col-finished { width: 9.5rem; }
-    #tab-search.detail-open #results-table .col-tags     { width: 7rem; }
+    #tab-search.detail-open #results-table .col-result   { width: 6rem; }
+    #tab-search.detail-open #results-table .col-commit   { width: 6rem; }
+    #tab-search.detail-open #results-table .col-branch   { width: 6rem; }
+    #tab-search.detail-open #results-table .col-finished { width: 9rem; }
+    #tab-search.detail-open #results-table .col-tags     { width: 4rem; }
 
     /* Which record the panel is showing. */
     #results-table tbody tr.selected,
@@ -3850,3 +3849,61 @@ label > .input-with-button {
 }
 
 .test-log video { display: block; max-width: 100%; max-height: 70vh; margin-block: 0.75rem; }
+
+/* Native buttons keep column sorting available to keyboard and touch users. */
+#results-table .sort-header {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 0.2rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0.25rem 0;
+  margin: 0;
+  min-height: 2rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+#results-table .sort-header:hover { text-decoration: underline; }
+#results-table .sort-header:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+/* Reserve the arrow and one-digit priority even before a column is sorted. */
+.sort-indicator {
+  display: inline-block;
+  flex: 0 0 2.5ch;
+  width: 2.5ch;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#mobile-sort { display: none; }
+#reset-sort { white-space: nowrap; }
+@media (max-width: 767px) {
+  #window-bar .wb-controls { flex-wrap: wrap; }
+  #mobile-sort { display: block; position: relative; margin: 0; }
+  #mobile-sort summary { padding: 0.5rem; }
+  #mobile-sort .sort-options {
+    position: absolute;
+    z-index: 3;
+    top: 100%;
+    left: 0;
+    width: 15rem;
+    padding: 0.5rem;
+    background: var(--color-ground);
+    border: 1px solid var(--color-line);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+}
+
+/* A nine-column status cell otherwise creates phantom columns when responsive
+   layouts hide headers, squeezing Procedure during every loading state. */
+#results-body:has(.empty-state) { display: table-caption; caption-side: bottom; }
+#results-body tr:has(.empty-state),
+#results-body .empty-state { display: block; }

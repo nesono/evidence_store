@@ -21,7 +21,9 @@
 // v11: wider record, revision copy, map and expandable technical details.
 // v12: standalone record tabs, page scrolling and a copyable header version.
 // v13: streaming video and image playback with scoped media URLs.
-const VERSION = "v13";
+// v14: multi-column search sorting and responsive controls.
+// v15: fixed sort-indicator space and single-line table headers.
+const VERSION = "v15";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -32,7 +34,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=13",
+  "/app.css?v=15",
   "/app.js",
   "/blobref.js",
   "/access.js",
