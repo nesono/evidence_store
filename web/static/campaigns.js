@@ -113,6 +113,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     selected = row;
     el("campaign-detail").hidden = false;
     el("campaign-package-info").innerHTML = packageInfoHTML(row);
+    el("campaign-procedure-context").textContent = `Part of campaign: ${row.definition.manifest.campaign.name}. Instructions and fields below apply only to the selected procedure.`;
     el("campaign-download").hidden = !canReadBlobs;
     el("campaign-procedure-search").value = "";
     el("campaign-procedure").replaceChildren();

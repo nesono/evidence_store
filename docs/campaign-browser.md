@@ -13,8 +13,12 @@ directly. The tab requires `evidence:read`, matching the backend read endpoints.
    imported. Failed uploads keep the file selected so the same bytes can be retried.
 4. Browse imported packages with **Previous**, **Next**, and **Refresh**. The
    server's import-time order is preserved, 25 packages per page.
-5. Select a package to see its full digest, source repository, import attribution,
-   nominal planning context, and procedures. Source identity is not a deployed
+5. Select a package to open its **Campaign overview**: campaign identity,
+   procedure count, and nominal planning context. Expand **Package source and
+   import details** for the full digest, repository, and import attribution.
+   A separate **Procedure detail** region contains search, selection, and the
+   selected procedure's instructions, with its parent campaign named explicitly.
+   Source identity is not a deployed
    software version or a build-provenance claim.
 
 The import form requires both `evidence:write` and `blob:write`; viewers can
@@ -22,7 +26,7 @@ browse definitions without being offered an upload they cannot perform. Files
 over 16 MiB or empty files are rejected before upload; archive validation remains
 the server's responsibility.
 
-**Download original package** retrieves the exact imported archive through the
+**Download entire campaign package** retrieves the exact imported archive through the
 authenticated API. It requires `blob:read` in addition to the tab's read
 permission. The download supports API-key and session authentication without
 putting credentials in a link URL.

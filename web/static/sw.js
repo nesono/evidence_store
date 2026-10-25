@@ -24,7 +24,8 @@
 // v14: multi-column search sorting and responsive controls.
 // v15: fixed sort-indicator space and single-line table headers.
 // v16: campaign package browser and definition previews.
-const VERSION = "v16";
+// v17: distinct campaign overview and procedure detail regions.
+const VERSION = "v17";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -35,7 +36,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=16",
+  "/app.css?v=17",
   "/app.js",
   "/blobref.js",
   "/access.js",

@@ -96,6 +96,10 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   await page.waitFor(`document.querySelector('#campaign-package-info h3')?.textContent === 'Patrol package-1'`);
   await new Promise(resolve => setTimeout(resolve, 350));
   assert.equal(await page.eval(`document.querySelector('#campaign-package-info h3').textContent`), "Patrol package-1");
+  assert.equal(await page.eval(`document.getElementById('campaign-procedure-context').textContent.includes('Patrol package-1')`), true);
+  assert.equal(await page.eval(`document.querySelector('.campaign-overview #campaign-procedure-search') === null`), true);
+  assert.equal(await page.eval(`document.querySelector('.campaign-procedure-detail #campaign-procedure-search') !== null`), true);
+  assert.equal(await page.eval(`document.querySelector('.campaign-provenance').open`), false);
   assert.equal(await page.eval(`document.querySelectorAll('#campaign-procedure-preview input:disabled, #campaign-procedure-preview select:disabled').length`), 2);
   assert.equal(await page.eval(`!!window.unsafeCampaign`), false);
   await page.waitFor(`document.querySelector('#campaign-procedure-preview img')?.getAttribute('src')`);

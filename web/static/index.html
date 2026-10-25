@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=16">
+    <link rel="stylesheet" href="app.css?v=17">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -86,6 +86,7 @@
             <p id="campaign-import-status" role="status" aria-live="polite"></p>
             <div class="campaign-layout">
                 <aside aria-label="Imported packages">
+                    <h3>Choose a campaign</h3>
                     <button id="campaign-refresh" type="button" class="secondary outline">Refresh</button>
                     <p id="campaign-list-status" role="status" aria-live="polite"></p>
                     <ul id="campaign-list" class="campaign-list"></ul>
@@ -98,14 +99,23 @@
                 <div>
                     <p id="campaign-detail-status" role="status" aria-live="polite">Select an imported package to view its procedures.</p>
                     <section id="campaign-detail" aria-label="Selected campaign package" hidden>
-                        <div id="campaign-package-info"></div>
-                        <button id="campaign-download" type="button" class="secondary outline">Download original package</button>
-                        <label for="campaign-procedure-search">Find a procedure in this package</label>
-                        <input id="campaign-procedure-search" type="search" placeholder="Title, ID, or procedure reference">
-                        <label for="campaign-procedure">Procedure</label>
-                        <select id="campaign-procedure"></select>
-                        <p id="campaign-procedure-count" role="status"></p>
-                        <section id="campaign-procedure-preview" aria-label="Procedure definition preview"></section>
+                        <section class="campaign-overview" aria-labelledby="campaign-overview-title">
+                            <h2 id="campaign-overview-title" class="campaign-level-heading">Campaign overview</h2>
+                            <div id="campaign-package-info"></div>
+                            <button id="campaign-download" type="button" class="secondary outline">Download entire campaign package</button>
+                        </section>
+                        <section class="campaign-procedure-detail" aria-labelledby="campaign-procedure-title">
+                            <h2 id="campaign-procedure-title" class="campaign-level-heading">Procedure detail</h2>
+                            <p id="campaign-procedure-context" class="campaign-scope"></p>
+                            <div class="campaign-procedure-picker">
+                                <label for="campaign-procedure-search">Find a procedure in this campaign</label>
+                                <input id="campaign-procedure-search" type="search" placeholder="Title, ID, or procedure reference">
+                                <label for="campaign-procedure">Selected procedure</label>
+                                <select id="campaign-procedure"></select>
+                                <p id="campaign-procedure-count" role="status"></p>
+                            </div>
+                            <section id="campaign-procedure-preview" aria-label="Procedure definition preview"></section>
+                        </section>
                     </section>
                 </div>
             </div>

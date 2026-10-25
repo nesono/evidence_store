@@ -31,15 +31,20 @@ export function packageListHTML(rows, selectedID) {
 export function packageInfoHTML(row) {
   const m = row.definition.manifest;
   return `<h3>${esc(m.campaign.name)}</h3>
+    <p class="campaign-scope">${row.definition.scenarios.length} procedures in this campaign. Planning information below applies to the whole package.</p>
     <dl class="campaign-metadata">
       <dt>Campaign ID</dt><dd>${esc(m.campaign.id)}</dd>
-      <dt>Source repository</dt><dd>${esc(m.source.repository)}</dd>
-      <dt>Package digest</dt><dd><code>${esc(row.digest)}</code></dd>
-      <dt>Imported</dt><dd>${esc(formatTime(row.imported_at))} by ${esc(row.imported_by)}</dd>
       ${m.campaign.planned_location ? `<dt>Planned location</dt><dd>${esc(m.campaign.planned_location)}</dd>` : ""}
       ${m.campaign.planned_start ? `<dt>Planned start</dt><dd>${esc(m.campaign.planned_start)}</dd>` : ""}
       ${m.campaign.planned_end ? `<dt>Planned end</dt><dd>${esc(m.campaign.planned_end)}</dd>` : ""}
-    </dl>`;
+    </dl>
+    <details class="campaign-provenance"><summary>Package source and import details</summary>
+      <dl class="campaign-metadata">
+        <dt>Source repository</dt><dd>${esc(m.source.repository)}</dd>
+        <dt>Package digest</dt><dd><code>${esc(row.digest)}</code></dd>
+        <dt>Imported</dt><dd>${esc(formatTime(row.imported_at))} by ${esc(row.imported_by)}</dd>
+      </dl>
+    </details>`;
 }
 
 // Resolve only validated archive-relative dependencies. Raw HTML and unrelated
