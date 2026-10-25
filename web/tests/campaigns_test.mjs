@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCampaignAPI } from "../static/campaigns.js";
-import { MAX_CAMPAIGN_BYTES, matchingScenarios, packageListHTML, procedureHTML, resolveAssetImages, uploadProblem } from "../static/campaignview.js";
+import { MAX_CAMPAIGN_BYTES, matchingScenarios, packageInfoHTML, packageListHTML, procedureHTML, resolveAssetImages, uploadProblem } from "../static/campaignview.js";
 import { tabFromHash } from "../static/offline.js";
 
 test("campaign upload validates selection, empty files and the compressed limit", () => {
@@ -10,6 +10,18 @@ test("campaign upload validates selection, empty files and the compressed limit"
   assert.match(uploadProblem({ size: MAX_CAMPAIGN_BYTES + 1 }), /16 MiB/);
   assert.equal(uploadProblem({ size: MAX_CAMPAIGN_BYTES }), "");
   assert.equal(tabFromHash("#campaigns"), "campaigns");
+});
+
+test("campaign key, imported UUID, and archive digest have distinct labels", () => {
+  const row = { id: "f5c0b62a-70c6-4f3d-8327-d0ba2edaf3dc", digest: `sha256:${"b".repeat(64)}`,
+    imported_at: "2026-10-25T10:00:00Z", imported_by: "user:tester",
+    definition: { manifest: { campaign: { id: "equipment-patrol", name: "Equipment patrol" },
+      source: { repository: "https://example.org/scenarios" } }, scenarios: [] } };
+  const html = packageInfoHTML(row);
+  assert.match(html, /<dt>Campaign key<\/dt><dd>equipment-patrol<\/dd>/);
+  assert.ok(html.includes(`<dt>Imported package UUID</dt><dd><code>${row.id}</code>`));
+  assert.ok(html.includes(`<dt>Package digest</dt><dd><code>${row.digest}</code>`));
+  assert.ok(!html.includes("<dt>Campaign ID</dt>"));
 });
 
 test("API sends raw bytes and distinguishes duplicate imports", async () => {

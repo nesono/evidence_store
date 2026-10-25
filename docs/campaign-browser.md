@@ -21,6 +21,12 @@ directly. The tab requires `evidence:read`, matching the backend read endpoints.
    Source identity is not a deployed
    software version or a build-provenance claim.
 
+**Campaign key** is the source-authored `campaign.id` from the manifest; it may
+be reused across updated packages. **Imported package UUID**, shown under
+**Package source and import details**, identifies the server's imported record.
+The **Package digest** identifies the exact archive bytes. Importing identical
+bytes returns the same UUID; the digest is not a source commit hash.
+
 The import form requires both `evidence:write` and `blob:write`; viewers can
 browse definitions without being offered an upload they cannot perform. Files
 over 16 MiB or empty files are rejected before upload; archive validation remains

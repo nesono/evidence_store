@@ -22,7 +22,7 @@ export function packageListHTML(rows, selectedID) {
   if (!rows.length) return '<li class="empty-state">No campaign packages imported yet.</li>';
   return rows.map(row => `<li><button type="button" class="secondary outline campaign-package" data-campaign-id="${esc(row.id)}" aria-pressed="${row.id === selectedID}">
     <strong>${esc(row.manifest.campaign.name)}</strong>
-    <span>${esc(row.manifest.campaign.id)} · ${row.scenario_count} procedures</span>
+    <span>Campaign key: ${esc(row.manifest.campaign.id)} · ${row.scenario_count} procedures</span>
     <small>Imported ${esc(formatTime(row.imported_at))}</small>
     <code>${esc(row.digest)}</code>
   </button></li>`).join("");
@@ -33,13 +33,14 @@ export function packageInfoHTML(row) {
   return `<h3>${esc(m.campaign.name)}</h3>
     <p class="campaign-scope">${row.definition.scenarios.length} procedures in this campaign. Planning information below applies to the whole package.</p>
     <dl class="campaign-metadata">
-      <dt>Campaign ID</dt><dd>${esc(m.campaign.id)}</dd>
+      <dt>Campaign key</dt><dd>${esc(m.campaign.id)}</dd>
       ${m.campaign.planned_location ? `<dt>Planned location</dt><dd>${esc(m.campaign.planned_location)}</dd>` : ""}
       ${m.campaign.planned_start ? `<dt>Planned start</dt><dd>${esc(m.campaign.planned_start)}</dd>` : ""}
       ${m.campaign.planned_end ? `<dt>Planned end</dt><dd>${esc(m.campaign.planned_end)}</dd>` : ""}
     </dl>
     <details class="campaign-provenance"><summary>Package source and import details</summary>
       <dl class="campaign-metadata">
+        <dt>Imported package UUID</dt><dd><code>${esc(row.id)}</code></dd>
         <dt>Source repository</dt><dd>${esc(m.source.repository)}</dd>
         <dt>Package digest</dt><dd><code>${esc(row.digest)}</code></dd>
         <dt>Imported</dt><dd>${esc(formatTime(row.imported_at))} by ${esc(row.imported_by)}</dd>
