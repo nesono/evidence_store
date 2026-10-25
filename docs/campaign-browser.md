@@ -60,11 +60,11 @@ The selected procedure displays:
   defaults, stable IDs, and result bindings.
 - An expandable view of parameters, metadata defaults, and traceability.
 
-This is a **read-only definition preview**, visibly labeled as such. It does not
-start an attempt, collect answers, prefill Add Result, or save test evidence.
-Check and overall-result previews start unanswered. Actual response capture
-requires the next attempt/draft implementation slice; editable inputs would be
-misleading until their persistence exists.
+The inspection is a **read-only definition preview**, visibly labeled as such.
+Contributors can now choose **Start new attempt**, or resume a saved draft, to
+open the separate [draft capture dialog](campaign-attempt-drafts.md). Its typed
+inputs are editable and explicitly saved on the server. Drafts are not finalized
+evidence and do not prefill the independent Add Result form.
 
 ## Connectivity
 

@@ -2,6 +2,7 @@
 // capture will use a separate draft lifecycle rather than this preview screen.
 import { API_BASE, apiFetch, mayDo } from "./common.js";
 import { hydrateImages, releaseImages } from "./images.js";
+import { mountCampaignDrafts } from "./campaigndrafts.js";
 import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
 
 export function createCampaignAPI(request = apiFetch) {
@@ -36,6 +37,7 @@ export function showCampaigns() { view?.show(); }
 // Scoped DOM and injected API make request ordering testable without importing
 // app.js or coupling this tab to the Add Result form.
 export function createCampaignView(root, me, api = createCampaignAPI()) {
+  const drafts = mountCampaignDrafts(root, me);
   const el = id => root.querySelector(`#${id}`);
   let rows = [], offset = 0, hasMore = false, selected = null;
   let procedureOffset = 0, selectedProcedure = null;
@@ -92,6 +94,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   }
 
   function closeProcedure() {
+    drafts.clear();
     selectedProcedure = null;
     el("campaign-procedure-inspection").hidden = true;
     el("campaign-procedure-preview").replaceChildren();
@@ -109,6 +112,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     // responses from an older server. Selection itself uses only procedure_ref.
     const entry = selected.definition.manifest.scenarios[index];
     output.innerHTML = procedureHTML(scenario, entry.path);
+    drafts.select(selected.id, scenario, entry);
     releaseImages();
     if (canReadBlobs) hydrateImages(output);
     else for (const img of output.querySelectorAll("img[data-blob]")) img.replaceWith(document.createTextNode("Setup image requires blob:read permission."));

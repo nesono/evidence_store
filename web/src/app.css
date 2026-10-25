@@ -3916,6 +3916,14 @@ label > .input-with-button {
 .campaign-list li { margin-bottom: 0.75rem; }
 .campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
 .campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
+.campaign-draft-frame { position: relative; width: min(56rem, calc(100vw - 4rem)); margin: 2rem; }
+.campaign-draft-frame > article { margin: 0; max-height: calc(100dvh - 5rem); overflow: auto; }
+#campaign-draft-close { position: absolute; top: -1.25rem; right: -1.25rem; z-index: 1; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; border: 1px solid var(--color-line); background: var(--color-ground-raised); color: var(--color-ink); box-shadow: 0 2px 6px #0003; }
+#campaign-draft-close:hover { background: var(--color-ground-sunken); }
+#campaign-draft-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+#campaign-draft-identity { overflow-wrap: anywhere; }
+#campaign-draft-fields { min-width: 0; }
+#campaign-attempt-tools { margin-block: 1rem; }
 #campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }
 #campaign-procedure-table th, #campaign-procedure-table td { padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2); border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
 #campaign-procedure-table th { background: var(--color-ground); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }

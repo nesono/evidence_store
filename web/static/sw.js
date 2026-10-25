@@ -30,7 +30,9 @@
 // v20: left-align the contents of procedure list buttons.
 // v21: compact procedure table matching the Search view.
 // v22: cell-owned procedure spacing and aligned text baselines.
-const VERSION = "v22";
+// v23: online campaign attempt drafts.
+// v24: floating circular close control on attempt drafts.
+const VERSION = "v24";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -41,7 +43,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=22",
+  "/app.css?v=24",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -49,6 +51,7 @@ const SHELL = [
   "/analytics.js",
   "/common.js",
   "/campaigns.js",
+  "/campaigndrafts.js",
   "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",

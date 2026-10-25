@@ -7,6 +7,7 @@ go_library(
         "blobref.go",
         "cache.go",
         "campaign.go",
+        "campaign_attempt.go",
         "evidence.go",
         "filter.go",
         "inheritance.go",
