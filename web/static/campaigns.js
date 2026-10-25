@@ -211,7 +211,9 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     if (!button) return;
     selectedProcedure = button.dataset.procedureRef;
     for (const item of el("campaign-procedure-list").querySelectorAll("[data-procedure-ref]")) {
-      item.setAttribute("aria-pressed", String(item.dataset.procedureRef === selectedProcedure));
+      const active = item.dataset.procedureRef === selectedProcedure;
+      item.classList.toggle("selected", active);
+      item.querySelector("button").setAttribute("aria-pressed", String(active));
     }
     paintProcedure();
     el("campaign-inspection-title").focus();
@@ -221,7 +223,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     closeProcedure();
     paintProcedures();
     const button = [...el("campaign-procedure-list").querySelectorAll("[data-procedure-ref]")].find(item => item.dataset.procedureRef === previous);
-    button?.focus();
+    button?.querySelector("button")?.focus();
   });
   return { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
 }

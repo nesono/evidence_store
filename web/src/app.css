@@ -3915,9 +3915,17 @@ label > .input-with-button {
 .campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
 .campaign-list li { margin-bottom: 0.75rem; }
 .campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
-.campaign-procedure-item { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; gap: 0.25rem 1rem; width: 100%; text-align: left; overflow-wrap: anywhere; }
-.campaign-procedure-item > strong, .campaign-procedure-item > code { min-width: 0; max-width: 100%; }
-.campaign-procedure-item[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
+#campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }
+#campaign-procedure-table th, #campaign-procedure-table td { padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2); border-bottom: 1px solid var(--color-line); text-align: left; overflow-wrap: anywhere; }
+#campaign-procedure-table th { background: var(--color-ground); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+#campaign-procedure-table tr[data-procedure-ref] { cursor: pointer; }
+#campaign-procedure-table tr[data-procedure-ref]:hover, #campaign-procedure-table tr.selected { background: var(--color-ground-sunken); }
+#campaign-procedure-table tr.selected td:first-child { box-shadow: inset 3px 0 currentColor; }
+.campaign-procedure-reference { font-family: var(--font-mono); }
+#campaign-procedure-table .campaign-procedure-item { display: block; width: 100%; min-height: 0; padding: 0.25rem 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font: inherit; text-align: left; overflow-wrap: anywhere; }
+#campaign-procedure-table .campaign-procedure-item:hover { text-decoration: underline; }
+#campaign-procedure-table .campaign-procedure-item:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 #campaign-procedure-inspection { margin-top: 1.5rem; }
 .campaign-package[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
 .campaign-package code, .campaign-metadata dd { overflow-wrap: anywhere; word-break: break-word; }
@@ -3949,4 +3957,5 @@ label > .input-with-button {
   .campaign-metadata { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
   .campaign-metadata dd { margin-bottom: 0.5rem; }
   #tab-campaigns button { min-height: 44px; }
+  #campaign-procedure-table .campaign-procedure-item { min-height: 44px; }
 }

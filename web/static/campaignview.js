@@ -25,10 +25,11 @@ export function procedurePage(scenarios, query, offset = 0) {
 }
 
 export function procedureListHTML(rows, selectedID) {
-  if (!rows.length) return '<li class="empty-state">No matching procedures.</li>';
-  return rows.map(({ definition: d }) => `<li><button type="button" class="secondary outline campaign-procedure-item" data-procedure-ref="${esc(d.procedure_ref)}" aria-pressed="${d.procedure_ref === selectedID}">
-    <strong>${esc(d.title)}</strong><code>${esc(d.procedure_ref)}</code>
-  </button></li>`).join("");
+  if (!rows.length) return '<tr><td colspan="2" class="empty-state">No matching procedures.</td></tr>';
+  return rows.map(({ definition: d }) => `<tr data-procedure-ref="${esc(d.procedure_ref)}" class="${d.procedure_ref === selectedID ? "selected" : ""}">
+    <td><button type="button" class="campaign-procedure-item" aria-pressed="${d.procedure_ref === selectedID}">${esc(d.title)}</button></td>
+    <td class="campaign-procedure-reference">${esc(d.procedure_ref)}</td>
+  </tr>`).join("");
 }
 
 export function packageListHTML(rows, selectedID) {

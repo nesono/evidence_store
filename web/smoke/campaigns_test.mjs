@@ -110,13 +110,15 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   assert.equal(await page.eval(`document.querySelector('.campaign-procedure-detail #campaign-procedure-search') !== null`), true);
   assert.equal(await page.eval(`document.querySelector('.campaign-provenance').open`), false);
   assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 10);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll('#campaign-procedure-table th')].map(th => th.textContent)`), ["Title", "Procedure reference"]);
+  assert.equal(await page.eval(`document.querySelectorAll('#campaign-procedure-list tr:first-child td').length`), 2);
   assert.equal(await page.eval(`document.getElementById('campaign-procedure-inspection').hidden`), true);
   await page.eval(`document.getElementById('campaign-procedure-next').click()`);
   assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 3);
   await page.eval(`document.getElementById('campaign-procedure-search').value='DISPLAY'; document.getElementById('campaign-procedure-search').dispatchEvent(new Event('input'))`);
   assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 1);
   assert.equal(await page.eval(`document.getElementById('campaign-procedure-prev').disabled`), true);
-  await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
+  await page.eval(`document.querySelector('#campaign-procedure-list .campaign-procedure-reference').click()`);
   assert.equal(await page.eval(`document.activeElement.id`), "campaign-inspection-title");
   assert.equal(await page.eval(`document.querySelectorAll('#campaign-procedure-preview input:disabled, #campaign-procedure-preview select:disabled').length`), 2);
   assert.equal(await page.eval(`!!window.unsafeCampaign`), false);

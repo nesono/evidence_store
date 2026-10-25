@@ -39,14 +39,16 @@ putting credentials in a link URL.
 
 ## Procedure preview
 
-Opening a campaign shows a list of up to **10 procedures per page**, in manifest
+Opening a campaign shows a table of up to **10 procedures per page**, with
+left-aligned **Title** and **Procedure reference** columns, in manifest
 order, without automatically opening a procedure. Search filters the whole
 campaign immediately as you type, matching title or procedure
 reference; typing resets pagination to the first matching page. Use **Previous
 procedures** and **Next procedures** to browse more matches. Counts show the
 visible range and total matches. An empty search restores the full list.
 
-Select a procedure to open its detail below the list. Changing the search or
+Click a row, or activate its title button with the keyboard, to open its detail
+below the table. Cells wrap on narrow screens. Changing the search or
 procedure page closes the previous detail so it cannot be confused with the new
 matches. **Close procedure detail** returns keyboard focus to its list item.
 The selected procedure displays:

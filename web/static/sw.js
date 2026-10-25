@@ -28,7 +28,8 @@
 // v18: incrementally filtered, paginated procedure list.
 // v19: compact procedure rows, wrapping only when space requires it.
 // v20: left-align the contents of procedure list buttons.
-const VERSION = "v20";
+// v21: compact procedure table matching the Search view.
+const VERSION = "v21";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -39,7 +40,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=20",
+  "/app.css?v=21",
   "/app.js",
   "/blobref.js",
   "/access.js",
