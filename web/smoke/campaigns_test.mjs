@@ -20,6 +20,7 @@ function packageRow(id) {
 }
 let httpServer, chrome, page, base;
 let role = "writer", listFails = false, uploads = 0, imageRequests = 0, downloads = 0, delayA = false;
+const attempts=new Map();
 const rows = Array.from({ length: 26 }, (_, i) => packageRow(`package-${i}`));
 // A campaign larger than one procedure page exercises incremental filtering
 // over the whole package, rather than only the visible list.
@@ -39,6 +40,21 @@ async function handle(req, res) {
   if (url.pathname === "/version") return json(res, { version: "dev" });
   if (url.pathname === "/auth/config") return json(res, { sso_enabled: false });
   if (url.pathname === "/api/v1/me") return json(res, { authenticated: true, subject: "user:tester", permissions: role === "writer" ? permissions : permissions.slice(0, 3) });
+  if(url.pathname.startsWith("/api/v1/campaign-attempts")) {
+    if(req.method==="POST" || req.method==="PUT") {
+      const chunks=[];for await(const chunk of req) chunks.push(chunk);
+      const body=JSON.parse(Buffer.concat(chunks));
+      if(req.method==="POST") {
+        const a={...body,owner:"user:tester",revision:1,updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
+        attempts.set(a.id,a);return json(res,a,201);
+      }
+      const a=attempts.get(url.pathname.split("/").pop());
+      if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
+      a.data=body.data;a.revision++;return json(res,a);
+    }
+    if(url.pathname==="/api/v1/campaign-attempts") return json(res,{attempts:[...attempts.values()].filter(a=>a.campaign_id===url.searchParams.get("campaign_id") && a.procedure_ref===url.searchParams.get("procedure_ref")),has_more:false});
+    return json(res,attempts.get(url.pathname.split("/").pop()));
+  }
   if (url.pathname === "/api/v1/campaigns/import") {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -158,6 +174,32 @@ test("uploads report validation failures and duplicates, and list errors allow r
   assert.deepEqual(page.problems, []);
 });
 
+test("attempts save typed answers, survive reload, and keep unsaved edits on conflict", async () => {
+  await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
+  await page.waitFor(`document.getElementById('campaign-attempt-list-status').textContent.includes('No saved drafts')`);
+  await page.eval(`document.getElementById('campaign-attempt-start').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.repo.value='example/software';f.querySelector('[data-answer=status]').value='FAIL';f.querySelector('[data-answer=operator]').value='tester';f.dispatchEvent(new Event('input'));f.requestSubmit();})()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 2')`);
+  await page.eval(`document.getElementById('campaign-draft-close').click()`);
+  await page.goto(`${base}/?resume=1#campaigns`);
+  await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
+  await page.eval(`document.querySelector('.campaign-package').click()`);
+  await page.waitFor(`document.querySelector('.campaign-procedure-item')`);
+  await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
+  await page.waitFor(`document.querySelector('[data-attempt-id]')`);
+  await page.eval(`document.querySelector('[data-attempt-id]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(await page.eval(`document.querySelector('#campaign-draft-form [data-answer=status]').value`),"FAIL");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.repo.value`),"example/software");
+  [...attempts.values()][0].revision++;
+  await page.eval(`const f=document.getElementById('campaign-draft-form');f.elements.notes.value='keep my edit';f.dispatchEvent(new Event('input'));f.requestSubmit()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Not saved')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.notes.value`),"keep my edit");
+  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-close').click()`);
+  assert.deepEqual(page.problems,[]);
+});
+
 test("phone navigation opens campaigns; viewer can browse but cannot import", async () => {
   role = "viewer";
   await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -171,6 +213,7 @@ test("phone navigation opens campaigns; viewer can browse but cannot import", as
   await page.waitFor(`!document.getElementById('campaign-detail').hidden`);
   await assertTableGeometry(true);
   await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-attempt-tools').hidden`),true);
   assert.equal(await page.eval(`document.documentElement.scrollWidth <= window.innerWidth`), true);
   assert.deepEqual(page.problems, []);
 });

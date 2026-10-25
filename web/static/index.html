@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=22">
+    <link rel="stylesheet" href="app.css?v=23">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -76,7 +76,7 @@
     <main class="container">
         <section id="tab-campaigns" class="tab-content" hidden>
             <h2>Campaign packages</h2>
-            <p>Import a package and review its procedures. This is an online definition browser; test execution and response capture are not available here yet.</p>
+            <p>Import a package, review its procedures, and start a draft to record your observations. Drafts can be saved online and resumed; finalizing test evidence follows separately.</p>
             <form id="campaign-import-form">
                 <label for="campaign-file">Campaign archive <small>(.tar.gz, at most 16 MiB)</small></label>
                 <input id="campaign-file" type="file" accept=".tar.gz,.tgz,application/gzip">
@@ -125,12 +125,43 @@
                             <section id="campaign-procedure-inspection" aria-labelledby="campaign-inspection-title" hidden>
                                 <h2 id="campaign-inspection-title" class="campaign-level-heading" tabindex="-1">Procedure detail</h2>
                                 <button id="campaign-procedure-close" type="button" class="secondary outline">Close procedure detail</button>
+                                <div id="campaign-attempt-tools">
+                                    <button id="campaign-attempt-start" type="button">Start new attempt</button>
+                                    <button id="campaign-attempt-refresh" type="button" class="secondary outline">Refresh drafts</button>
+                                    <p id="campaign-attempt-list-status" role="status"></p>
+                                    <ul id="campaign-attempt-list" class="campaign-list"></ul>
+                                    <button id="campaign-attempt-prev" type="button" class="secondary outline" disabled>Newer drafts</button>
+                                    <button id="campaign-attempt-next" type="button" class="secondary outline" disabled>Older drafts</button>
+                                </div>
                                 <div id="campaign-procedure-preview" aria-label="Procedure definition preview"></div>
                             </section>
                         </section>
                     </section>
                 </div>
             </div>
+            <dialog id="campaign-draft-dialog" aria-labelledby="campaign-draft-title">
+                <article>
+                    <header><h2 id="campaign-draft-title">Attempt draft</h2><button id="campaign-draft-close" type="button" class="secondary outline">Close draft</button></header>
+                    <p id="campaign-draft-identity"></p>
+                    <p>Online draft capture. Save explicitly before closing. A draft is not finalized evidence.</p>
+                    <form id="campaign-draft-form">
+                        <fieldset id="campaign-draft-fields">
+                            <h3>Actual software under test</h3>
+                            <div class="grid">
+                                <label>Repository<input name="repo" type="text" placeholder="org/repo"></label>
+                                <label>Branch<input name="branch" type="text"></label>
+                                <label>Deployed revision<input name="rcs_ref" type="text" placeholder="Actual commit or release"></label>
+                            </div>
+                            <div id="campaign-draft-controls"></div>
+                            <label>Overall assessment (provisional)<select name="result"><option value="">Not assessed</option><option>PASS</option><option>FAIL</option><option>ERROR</option><option>SKIPPED</option></select></label>
+                            <label>Tester notes<textarea name="notes" rows="3"></textarea></label>
+                        </fieldset>
+                        <p id="campaign-draft-status" role="status" aria-live="polite"></p>
+                        <button id="campaign-draft-save" type="submit">Save draft</button>
+                        <button id="campaign-draft-reload" type="button" class="secondary outline">Reload saved draft</button>
+                    </form>
+                </article>
+            </dialog>
         </section>
         <section id="tab-add" class="tab-content" hidden>
             <h4>Add Manual Test Result</h4>

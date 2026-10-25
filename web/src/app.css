@@ -3916,6 +3916,10 @@ label > .input-with-button {
 .campaign-list li { margin-bottom: 0.75rem; }
 .campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
 .campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
+#campaign-draft-dialog > article { width: min(56rem, 95vw); max-width: 95vw; }
+#campaign-draft-identity { overflow-wrap: anywhere; }
+#campaign-draft-fields { min-width: 0; }
+#campaign-attempt-tools { margin-block: 1rem; }
 #campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }
 #campaign-procedure-table th, #campaign-procedure-table td { padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2); border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
 #campaign-procedure-table th { background: var(--color-ground); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
