@@ -65,8 +65,8 @@ test("procedure pages bound the visible list and search the full campaign", () =
   const rows = Array.from({ length: 23 }, (_, i) => ({ definition: { id: `check-${i}`, title: `Check ${i}`, procedure_ref: `patrol/${i}` } }));
   assert.deepEqual(procedurePage(rows, "", 0), { rows: rows.slice(0, 10), total: 23 });
   assert.deepEqual(procedurePage(rows, "", 20), { rows: rows.slice(20), total: 23 });
-  assert.deepEqual(procedurePage(rows, "check-22"), { rows: [rows[22]], total: 1 });
-  const html = procedureListHTML([{ definition: { id: 'id" autofocus', title: "<script>", procedure_ref: "test/ref" } }], null);
+  assert.deepEqual(procedurePage(rows, "patrol/22"), { rows: [rows[22]], total: 1 });
+  const html = procedureListHTML([{ definition: { title: "<script>", procedure_ref: 'test/ref" autofocus' } }], null);
   assert.ok(!html.includes("<script>"));
   assert.ok(html.includes("&quot;"));
   assert.ok(html.includes('aria-pressed="false"'));

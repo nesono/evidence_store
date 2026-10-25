@@ -2,7 +2,7 @@
 
 The package builder and validator extend the
 [procedure validator](campaign-procedure-validation.md) with an offline,
-deterministic archive format. This is the implemented v1 authoring contract.
+deterministic archive format. This is the implemented v2 authoring contract.
 [Server import and CAS storage](campaign-import.md) are available. Execution
 screens follow separately.
 
@@ -38,28 +38,48 @@ run directory differs from the invoking shell's directory.
 `manifest.yaml` is at the archive root:
 
 ```yaml
-format_version: 1
+format_version: 2
 campaign:
   id: equipment-patrol
   name: Equipment patrol
 source:
   repository: https://example.org/team/scenarios
 scenarios:
-  - id: display
+  - procedure_ref: patrol/display
     path: scenarios/display/scenario.yaml
-  - id: recording
+  - procedure_ref: patrol/recording
     path: scenarios/recording/scenario.yaml
 ```
 
 The campaign ID/name, source repository and a nonempty scenario list are required.
-IDs match `[A-Za-z0-9][A-Za-z0-9_.-]*`. Scenario IDs and definition paths must be
-unique. Scenario order is the order in the manifest, independent of archive order.
+Campaign keys match `[A-Za-z0-9][A-Za-z0-9_.-]*`. Procedure references and definition
+paths must be unique within the package. A procedure reference is a nonempty
+string without surrounding whitespace or control characters; Bazel labels such
+as `//tests:display` are valid. It is an identity, not a filesystem path.
+Scenario order is the order in the manifest, independent of archive order.
 The optional `campaign.planned_location`, `planned_start`, and `planned_end`
 describe the plan; dates are quoted `YYYY-MM-DD` strings, with end not before start.
 Omit occurrence-specific dates for a reusable daily patrol.
 
 The source repository is an absolute HTTPS URL without credentials, query, or
 fragment. It namespaces scenario identities; it is never fetched by these tools.
+
+### Procedure identity and older packages
+
+The exact procedure identity is **(package digest, procedure_ref)**. There is no
+separate scenario/procedure `id` in v2. Each manifest entry's `procedure_ref`
+must match its definition. Renaming a reference creates a different identity
+in a new immutable package. Logical/functional scenario IDs remain optional
+traceability, and field/check IDs still identify individual execution answers.
+
+Version 1 archives remain readable and importable. Their legacy IDs are checked
+on input, then removed from the parsed representation and replaced with procedure
+references in manifest entries. `format_version` still describes the original
+archive. Migration 17 applies the same normalization to existing stored definitions;
+it does not change their original CAS bytes, digest, UUID, or import attribution.
+Reimporting an existing v1 archive remains idempotent. Building v1 source inputs
+is retained for compatibility; new examples and authoring use v2. Older server
+versions reject v2, so upgrade the server before uploading newly authored packages.
 
 ### Product revision association lives outside the archive
 
@@ -77,7 +97,6 @@ execution facts. The tools do not infer any of them from the current checkout.
 ## Scenario definition
 
 ```yaml
-id: display
 title: Check operator display
 procedure_ref: patrol/display
 description: procedure.md
@@ -97,7 +116,7 @@ traceability:
     entry_version: "1"
 ```
 
-Required: matching scenario `id`, nonempty `title`, `procedure_ref`, `description`,
+Required: nonempty `title`, matching `procedure_ref`, `description`,
 and `defaults.evidence_type` using the existing canonical enum. Procedure
 references must be unique within a package. Optional maps `parameters` and
 `defaults.metadata` hold JSON-compatible values. Optional tags are nonempty,

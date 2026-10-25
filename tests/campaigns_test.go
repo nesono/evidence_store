@@ -9,6 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -72,6 +75,9 @@ func TestCampaignImportRoundTrip(t *testing.T) {
 	assert.Equal(t, int64(len(archive)), row.ArchiveSize)
 	assert.Equal(t, "/api/v1/campaigns/"+row.ID.String(), resp.Header.Get("Location"))
 	assert.Equal(t, "visible", row.Definition.Scenarios[0].Procedure.Blocks[1].Check.ID)
+	assert.Empty(t, row.Definition.Scenarios[0].Definition.ID)
+	assert.Empty(t, row.Definition.Manifest.Scenarios[0].ID)
+	assert.Equal(t, "patrol/display", row.Definition.Manifest.Scenarios[0].ProcedureRef)
 
 	again := importCampaign(t, testServer.URL, "", archive)
 	require.Equal(t, http.StatusOK, again.StatusCode)
@@ -110,6 +116,70 @@ func TestCampaignImportRoundTrip(t *testing.T) {
 		resp.Body.Close()
 		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
 	}
+}
+
+func TestCampaignProcedureReferenceMigration(t *testing.T) {
+	// Recreate the old persisted projection in a transaction. Migration changes
+	// only that projection; the original archive and record identity stay intact.
+	archive, _ := campaignArchive(t)
+	p, err := campaign.ReadPackage(bytes.NewReader(archive))
+	require.NoError(t, err)
+	p.Manifest.Scenarios[0].ID = "old-display-id"
+	p.Manifest.Scenarios[0].ProcedureRef = ""
+	p.Scenarios[0].Definition.ID = "old-display-id"
+	definition, err := json.Marshal(p)
+	require.NoError(t, err)
+	ctx := context.Background()
+	tx, err := testPool.Begin(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+	id := uuid.New()
+	_, err = tx.Exec(ctx, `INSERT INTO campaign_package (id,digest,archive_size,imported_by,definition) VALUES ($1,$2,$3,'tester',$4)`, id, p.Digest, len(archive), definition)
+	require.NoError(t, err)
+	run := func(direction string) {
+		data, err := os.ReadFile(filepath.Join(testMigrationsPath, "000017_campaign_procedure_references."+direction+".sql"))
+		require.NoError(t, err)
+		_, err = tx.Exec(ctx, string(data))
+		require.NoError(t, err)
+	}
+	for _, direction := range []string{"up", "down", "up"} {
+		run(direction)
+		var digest string
+		var stored []byte
+		require.NoError(t, tx.QueryRow(ctx, `SELECT digest, definition FROM campaign_package WHERE id=$1`, id).Scan(&digest, &stored))
+		assert.Equal(t, p.Digest, digest)
+		var decoded campaign.Package
+		require.NoError(t, json.Unmarshal(stored, &decoded))
+		assert.Equal(t, 1, decoded.Manifest.FormatVersion)
+		assert.Equal(t, "patrol/display", decoded.Scenarios[0].Definition.ProcedureRef)
+		if direction == "up" {
+			assert.Empty(t, decoded.Scenarios[0].Definition.ID)
+			assert.Empty(t, decoded.Manifest.Scenarios[0].ID)
+			assert.Equal(t, "patrol/display", decoded.Manifest.Scenarios[0].ProcedureRef)
+		} else {
+			assert.Equal(t, "patrol/display", decoded.Scenarios[0].Definition.ID)
+			assert.Equal(t, "patrol/display", decoded.Manifest.Scenarios[0].ID)
+		}
+	}
+}
+
+func TestCampaignReferenceOnlyImport(t *testing.T) {
+	const ref = "//tests/display:check"
+	archive, _, err := campaign.BuildPackage(map[string][]byte{
+		"manifest.yaml": []byte(fmt.Sprintf("format_version: 2\ncampaign: {id: '%s', name: Demo}\nsource: {repository: 'https://example.org/scenarios'}\nscenarios: [{procedure_ref: '%s', path: scenario.yaml}]\n", uuid.NewString(), ref)),
+		"scenario.yaml": []byte("title: Display\nprocedure_ref: '" + ref + "'\ndescription: procedure.md\ndefaults: {evidence_type: manual_test}\n"),
+		"procedure.md":  []byte("# Display\nObserve the display."),
+	})
+	require.NoError(t, err)
+	resp := importCampaign(t, testServer.URL, "", archive)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	row := decodeJSON[store.CampaignPackage](t, resp)
+	cleanupCampaign(t, row.ID)
+	assert.Equal(t, ref, row.Definition.Manifest.Scenarios[0].ProcedureRef)
+	assert.Equal(t, ref, row.Definition.Scenarios[0].Definition.ProcedureRef)
+	encoded, err := json.Marshal(row.Definition.Scenarios[0].Definition)
+	require.NoError(t, err)
+	assert.False(t, strings.Contains(string(encoded), `"id":`))
 }
 
 func TestCampaignListAndErrors(t *testing.T) {

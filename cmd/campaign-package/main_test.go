@@ -15,8 +15,8 @@ import (
 func TestBuildAndValidate(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
-		"manifest.yaml": "format_version: 1\ncampaign: {id: demo, name: Demo}\nsource: {repository: 'https://example.org/scenarios'}\nscenarios: [{id: check, path: scenario.yaml}]\n",
-		"scenario.yaml": "id: check\ntitle: Check\nprocedure_ref: patrol/check\ndescription: procedure.md\ndefaults: {evidence_type: manual_test}\n",
+		"manifest.yaml": "format_version: 2\ncampaign: {id: demo, name: Demo}\nsource: {repository: 'https://example.org/scenarios'}\nscenarios: [{procedure_ref: patrol/check, path: scenario.yaml}]\n",
+		"scenario.yaml": "title: Check\nprocedure_ref: patrol/check\ndescription: procedure.md\ndefaults: {evidence_type: manual_test}\n",
 		"procedure.md":  "# Check\nObserve the display.\n",
 	}
 	for name, body := range files {

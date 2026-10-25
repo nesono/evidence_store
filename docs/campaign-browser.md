@@ -41,7 +41,7 @@ putting credentials in a link URL.
 
 Opening a campaign shows a list of up to **10 procedures per page**, in manifest
 order, without automatically opening a procedure. Search filters the whole
-campaign immediately as you type, matching title, scenario ID, or procedure
+campaign immediately as you type, matching title or procedure
 reference; typing resets pagination to the first matching page. Use **Previous
 procedures** and **Next procedures** to browse more matches. Counts show the
 visible range and total matches. An empty search restores the full list.

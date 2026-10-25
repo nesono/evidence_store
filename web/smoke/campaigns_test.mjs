@@ -8,8 +8,8 @@ import { connect, launchChrome } from "./driver.mjs";
 
 const digest = `sha256:${"a".repeat(64)}`;
 function packageRow(id) {
-  const entry = { id: "display", path: "scenarios/display/scenario.yaml" };
-  const definition = { id: "display", title: "Display status", procedure_ref: "patrol/display", description: "procedure.md", defaults: { evidence_type: "manual_test" } };
+  const entry = { procedure_ref: "patrol/display", path: "scenarios/display/scenario.yaml" };
+  const definition = { title: "Display status", procedure_ref: "patrol/display", description: "procedure.md", defaults: { evidence_type: "manual_test" } };
   return { id, digest, imported_at: "2026-10-25T10:00:00Z", imported_by: "user:tester", archive_size: 123,
     definition: { manifest: { campaign: { id: `patrol-${id}`, name: `Patrol ${id}` }, source: { repository: "https://example.org/scenarios" }, scenarios: [entry] },
       scenarios: [{ definition, assets: { "scenarios/display/setup.png": digest }, procedure: { blocks: [
@@ -26,8 +26,8 @@ const rows = Array.from({ length: 26 }, (_, i) => packageRow(`package-${i}`));
 for (const row of rows) {
   const original = row.definition.scenarios[0];
   for (let i = 1; i <= 12; i++) {
-    row.definition.scenarios.push({ ...original, definition: { ...original.definition, id: `check-${i}`, title: `Equipment check ${i}`, procedure_ref: `patrol/check-${i}` } });
-    row.definition.manifest.scenarios.push({ id: `check-${i}`, path: "scenarios/display/scenario.yaml" });
+    row.definition.scenarios.push({ ...original, definition: { ...original.definition, title: `Equipment check ${i}`, procedure_ref: `patrol/check-${i}` } });
+    row.definition.manifest.scenarios.push({ procedure_ref: `patrol/check-${i}`, path: "scenarios/display/scenario.yaml" });
   }
 }
 const permissions = ["evidence:read", "blob:read", "analytics:read", "evidence:write", "blob:write"];

@@ -9,7 +9,7 @@ Updated proposal following [#199](https://github.com/nesono/evidence_store/issue
 implemented, as is [server import with CAS persistence](campaign-import.md);
 the [Campaigns tab](campaign-browser.md) provides upload and read-only procedure
 previews. Execution remains planned. The
-[package format](campaign-package-format.md) documents the implemented v1 subset.
+[package format](campaign-package-format.md) documents the implemented v2 subset.
 The [first implementation plan](test-campaign-implementation-plan.md) specifies
 the proposed v1 format, field contract, delivery slices, and a worked example.
 These refinements supersede the earlier separate `observations.yaml` proposal.
@@ -233,7 +233,7 @@ The package contains a manifest describing the campaign and its scenarios.
 
 For example:
 
-    format_version: 1
+    format_version: 2
     campaign:
       id: vehicle-release-2026-10
       name: Vehicle Release Test Campaign
@@ -245,10 +245,10 @@ For example:
       repository: https://example.org/team/scenarios
 
     scenarios:
-      - id: network-loss-nominal
+      - procedure_ref: scenario/network-loss-nominal
         path: scenarios/network-loss-nominal/scenario.yaml
 
-      - id: emergency-stop-nominal
+      - procedure_ref: scenario/emergency-stop-nominal
         path: scenarios/emergency-stop-nominal/scenario.yaml
 
 Following #200, product revisions are associated with package digests in an
@@ -256,6 +256,12 @@ external build/release record. List order supplies the initial execution order. 
 location describe the plan, not when or where an execution actually happened.
 
 The package contains already-expanded Concrete Scenarios.
+
+Each procedure is identified by its unique `procedure_ref` within the package;
+the exact identity is `(package digest, procedure_ref)`. No separate scenario ID
+is needed. Logical/functional IDs remain traceability, and field/check IDs remain
+the keys for answers. Legacy v1 archives are read into this reference-keyed model
+without altering their archive content or digest.
 
 The Evidence Store therefore does not require information about the expansion
 strategy or original parameter ranges.

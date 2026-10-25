@@ -16,7 +16,7 @@ export function uploadProblem(file) {
 export function matchingScenarios(scenarios, query) {
   const text = query.trim().toLowerCase();
   return scenarios.filter(({ definition: d }) =>
-    [d.id, d.title, d.procedure_ref].some(value => String(value).toLowerCase().includes(text)));
+    [d.title, d.procedure_ref].some(value => String(value).toLowerCase().includes(text)));
 }
 
 export function procedurePage(scenarios, query, offset = 0) {
@@ -26,7 +26,7 @@ export function procedurePage(scenarios, query, offset = 0) {
 
 export function procedureListHTML(rows, selectedID) {
   if (!rows.length) return '<li class="empty-state">No matching procedures.</li>';
-  return rows.map(({ definition: d }) => `<li><button type="button" class="secondary outline campaign-procedure-item" data-procedure-id="${esc(d.id)}" aria-pressed="${d.id === selectedID}">
+  return rows.map(({ definition: d }) => `<li><button type="button" class="secondary outline campaign-procedure-item" data-procedure-ref="${esc(d.procedure_ref)}" aria-pressed="${d.procedure_ref === selectedID}">
     <strong>${esc(d.title)}</strong><code>${esc(d.procedure_ref)}</code>
   </button></li>`).join("");
 }

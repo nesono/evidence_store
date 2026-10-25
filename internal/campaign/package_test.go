@@ -50,7 +50,7 @@ func TestPackageRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(p, built) || p.Digest != contentDigest(data) {
 		t.Fatal("package changed on round trip")
 	}
-	if p.Scenarios[0].Definition.ID != "display" || p.Scenarios[1].Definition.ID != "recording" {
+	if p.Scenarios[0].Definition.ProcedureRef != "patrol/display" || p.Scenarios[1].Definition.ProcedureRef != "patrol/recording" {
 		t.Fatal("manifest scenario order lost")
 	}
 	if p.Scenarios[0].Procedure.Blocks[1].Check.ID != "status_visible" {
@@ -115,22 +115,25 @@ func TestInvalidPackageDefinitions(t *testing.T) {
 	const scenario = "scenarios/display/scenario.yaml"
 	const procedure = "scenarios/display/procedure.md"
 	for _, tc := range []struct{ name, file, old, replacement, want string }{
-		{"version", "manifest.yaml", "format_version: 1", "format_version: 99", "unsupported package"},
+		{"version", "manifest.yaml", "format_version: 2", "format_version: 99", "unsupported package"},
 		{"revision", "manifest.yaml", "source:", "source:\n  revision: deadbeef", "unknown field"},
-		{"unknown", "manifest.yaml", "format_version: 1", "format_version: 1\nother: true", "unknown field"},
-		{"duplicate key", "manifest.yaml", "format_version: 1", "format_version: 1\nformat_version: 1", "duplicate YAML key"},
-		{"multiple documents", "manifest.yaml", "format_version: 1", "---\nformat_version: 1\n---", "one YAML document"},
+		{"unknown", "manifest.yaml", "format_version: 2", "format_version: 2\nother: true", "unknown field"},
+		{"duplicate key", "manifest.yaml", "format_version: 2", "format_version: 2\nformat_version: 2", "duplicate YAML key"},
+		{"multiple documents", "manifest.yaml", "format_version: 2", "---\nformat_version: 2\n---", "one YAML document"},
 		{"unquoted date", "manifest.yaml", "  name: Equipment patrol", "  name: Equipment patrol\n  planned_start: 2026-10-25", "quote dates"},
 		{"date range", "manifest.yaml", "  name: Equipment patrol", "  name: Equipment patrol\n  planned_start: '2026-10-25'\n  planned_end: '2026-10-24'", "precedes"},
 		{"numeric id", "manifest.yaml", "id: equipment-patrol", "id: 123", "cannot unmarshal"},
-		{"duplicate id", "manifest.yaml", "- id: recording", "- id: display", "duplicate scenario id"},
+		{"duplicate reference", "manifest.yaml", "procedure_ref: patrol/recording", "procedure_ref: patrol/display", "duplicate procedure identity"},
+		{"legacy id in v2", "manifest.yaml", "- procedure_ref: patrol/display", "- id: display\n    procedure_ref: patrol/display", "no id"},
+		{"empty reference", "manifest.yaml", "procedure_ref: patrol/display", "procedure_ref: ''", "requires procedure_ref"},
+		{"numeric reference", "manifest.yaml", "procedure_ref: patrol/display", "procedure_ref: 123", "cannot unmarshal"},
 		{"duplicate path", "manifest.yaml", "path: scenarios/recording/scenario.yaml", "path: scenarios/display/scenario.yaml", "duplicate scenario path"},
 		{"missing scenario", "manifest.yaml", "path: scenarios/display/scenario.yaml", "path: missing.yaml", "invalid YAML"},
 		{"missing name", "manifest.yaml", "name: Equipment patrol", "name: ''", "nonempty name"},
 		{"credentials", "manifest.yaml", "https://example.org/team/scenarios", "https://user:secret@example.org/repo", "source.repository"},
 		{"missing description", scenario, "description: procedure.md", "description: missing.md", "procedure is empty"},
 		{"path escape", scenario, "description: procedure.md", "description: ../../outside.md", "invalid relative file"},
-		{"wrong id", scenario, "id: display", "id: wrong", "matching id"},
+		{"legacy definition id", scenario, "title: Check operator display", "id: wrong\ntitle: Check operator display", "matching legacy id"},
 		{"bad type", scenario, "manual_test", "Manual Test", "evidence_type"},
 		{"notes default", scenario, "cluster: Commissioning", "notes: Instructions", "reserved for execution"},
 		{"spoof campaign", scenario, "cluster: Commissioning", "campaign: {}", "reserved for execution"},
@@ -138,7 +141,7 @@ func TestInvalidPackageDefinitions(t *testing.T) {
 		{"null", scenario, "cluster: Commissioning", "value: null", "null values"},
 		{"alias", scenario, "cluster: Commissioning", "cluster: &cluster Commissioning", "anchors"},
 		{"duplicate tag", scenario, "tags: [patrol]", "tags: [patrol, patrol]", "tags must"},
-		{"duplicate procedure ref", "scenarios/recording/scenario.yaml", "patrol/recording", "patrol/display", "duplicate procedure_ref"},
+		{"mismatched reference", "scenarios/recording/scenario.yaml", "patrol/recording", "patrol/display", "must match the manifest"},
 		{"numeric tag", scenario, "tags: [patrol]", "tags: [123]", "cannot unmarshal"},
 		{"procedure", procedure, "behavior: expect", "behavior: assert", "only check behavior"},
 	} {
@@ -155,6 +158,38 @@ func TestInvalidPackageDefinitions(t *testing.T) {
 	files["secret.txt"] = []byte("unrelated file")
 	if _, _, err := BuildPackage(files); err == nil || !strings.Contains(err.Error(), "undeclared") {
 		t.Fatalf("undeclared file accepted: %v", err)
+	}
+}
+
+func TestLegacyPackageNormalization(t *testing.T) {
+	files := fixtureFiles(t)
+	manifest := strings.Replace(string(files["manifest.yaml"]), "format_version: 2", "format_version: 1", 1)
+	for _, name := range []string{"display", "recording"} {
+		manifest = strings.Replace(manifest, "procedure_ref: patrol/"+name, "id: "+name, 1)
+		file := "scenarios/" + name + "/scenario.yaml"
+		files[file] = append([]byte("id: "+name+"\n"), files[file]...)
+	}
+	files["manifest.yaml"] = []byte(manifest)
+	data, built, err := BuildPackage(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := ReadPackage(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Manifest.FormatVersion != 1 || p.Digest != contentDigest(data) || !reflect.DeepEqual(p, built) {
+		t.Fatal("legacy version, digest, or round trip changed")
+	}
+	for i, name := range []string{"display", "recording"} {
+		if p.Manifest.Scenarios[i].ID != "" || p.Scenarios[i].Definition.ID != "" || p.Manifest.Scenarios[i].ProcedureRef != "patrol/"+name {
+			t.Fatal("legacy IDs were not replaced with procedure references")
+		}
+	}
+	file := "scenarios/recording/scenario.yaml"
+	files[file] = bytes.Replace(files[file], []byte("patrol/recording"), []byte("patrol/display"), 1)
+	if _, _, err := BuildPackage(files); err == nil || !strings.Contains(err.Error(), "duplicate procedure_ref") {
+		t.Fatalf("duplicate legacy reference accepted: %v", err)
 	}
 }
 

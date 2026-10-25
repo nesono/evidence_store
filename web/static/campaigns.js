@@ -101,10 +101,13 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   function paintProcedure() {
     if (!selected) return;
     const output = el("campaign-procedure-preview");
-    const scenario = selected.definition.scenarios.find(s => s.definition.id === selectedProcedure);
+    const scenario = selected.definition.scenarios.find(s => s.definition.procedure_ref === selectedProcedure);
     if (!scenario) { closeProcedure(); return; }
     el("campaign-procedure-inspection").hidden = false;
-    const entry = selected.definition.manifest.scenarios.find(e => e.id === scenario.definition.id);
+    const index = selected.definition.scenarios.indexOf(scenario);
+    // Manifest order matches parsed scenario order, including pre-migration
+    // responses from an older server. Selection itself uses only procedure_ref.
+    const entry = selected.definition.manifest.scenarios[index];
     output.innerHTML = procedureHTML(scenario, entry.path);
     releaseImages();
     if (canReadBlobs) hydrateImages(output);
@@ -204,11 +207,11 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   el("campaign-procedure-prev").addEventListener("click", () => changeProcedurePage(-PROCEDURE_PAGE_SIZE));
   el("campaign-procedure-next").addEventListener("click", () => changeProcedurePage(PROCEDURE_PAGE_SIZE));
   el("campaign-procedure-list").addEventListener("click", event => {
-    const button = event.target.closest("[data-procedure-id]");
+    const button = event.target.closest("[data-procedure-ref]");
     if (!button) return;
-    selectedProcedure = button.dataset.procedureId;
-    for (const item of el("campaign-procedure-list").querySelectorAll("[data-procedure-id]")) {
-      item.setAttribute("aria-pressed", String(item.dataset.procedureId === selectedProcedure));
+    selectedProcedure = button.dataset.procedureRef;
+    for (const item of el("campaign-procedure-list").querySelectorAll("[data-procedure-ref]")) {
+      item.setAttribute("aria-pressed", String(item.dataset.procedureRef === selectedProcedure));
     }
     paintProcedure();
     el("campaign-inspection-title").focus();
@@ -217,7 +220,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     const previous = selectedProcedure;
     closeProcedure();
     paintProcedures();
-    const button = [...el("campaign-procedure-list").querySelectorAll("[data-procedure-id]")].find(item => item.dataset.procedureId === previous);
+    const button = [...el("campaign-procedure-list").querySelectorAll("[data-procedure-ref]")].find(item => item.dataset.procedureRef === previous);
     button?.focus();
   });
   return { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
