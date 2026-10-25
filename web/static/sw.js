@@ -29,7 +29,8 @@
 // v19: compact procedure rows, wrapping only when space requires it.
 // v20: left-align the contents of procedure list buttons.
 // v21: compact procedure table matching the Search view.
-const VERSION = "v21";
+// v22: cell-owned procedure spacing and aligned text baselines.
+const VERSION = "v22";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -40,7 +41,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=21",
+  "/app.css?v=22",
   "/app.js",
   "/blobref.js",
   "/access.js",

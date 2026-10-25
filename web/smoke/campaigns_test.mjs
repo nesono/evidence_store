@@ -112,6 +112,7 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 10);
   assert.deepEqual(await page.eval(`[...document.querySelectorAll('#campaign-procedure-table th')].map(th => th.textContent)`), ["Title", "Procedure reference"]);
   assert.equal(await page.eval(`document.querySelectorAll('#campaign-procedure-list tr:first-child td').length`), 2);
+  await assertTableGeometry(false);
   assert.equal(await page.eval(`document.getElementById('campaign-procedure-inspection').hidden`), true);
   await page.eval(`document.getElementById('campaign-procedure-next').click()`);
   assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 3);
@@ -168,7 +169,30 @@ test("phone navigation opens campaigns; viewer can browse but cannot import", as
   assert.equal(await page.eval(`document.querySelector('[data-phone=more]').classList.contains('active')`), true);
   await page.eval(`document.querySelector('.campaign-package').click()`);
   await page.waitFor(`!document.getElementById('campaign-detail').hidden`);
+  await assertTableGeometry(true);
   await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
   assert.equal(await page.eval(`document.documentElement.scrollWidth <= window.innerWidth`), true);
   assert.deepEqual(page.problems, []);
 });
+
+async function assertTableGeometry(phone) {
+  const geometry = await page.eval(`(() => {
+    const table = document.getElementById('campaign-procedure-table');
+    const textRect = el => { const range = document.createRange(); range.selectNodeContents(el); const r = range.getBoundingClientRect(); return { x: r.x, y: r.y, height: r.height }; };
+    const headers = [...table.querySelectorAll('th')].map(textRect);
+    const rows = [...table.querySelectorAll('tbody tr[data-procedure-ref]')].map(row => ({
+      height: row.getBoundingClientRect().height,
+      cells: [...row.cells].map(cell => textRect(cell.querySelector('button') || cell)),
+      padding: getComputedStyle(row.querySelector('button')).padding,
+    }));
+    return { headers, rows };
+  })()`);
+  for (const row of geometry.rows) {
+    assert.equal(row.padding, '0px', 'cell spacing must not be doubled by button padding');
+    row.cells.forEach((cell, i) => assert.ok(Math.abs(cell.x - geometry.headers[i].x) < 1,
+      `column ${i + 1} text must align with its header`));
+    assert.ok(Math.abs((row.cells[0].y + row.cells[0].height / 2) - (row.cells[1].y + row.cells[1].height / 2)) < 2,
+      'title and reference text must be vertically aligned');
+    assert.ok(phone ? row.height >= 44 : row.height < 34, 'row height should be touch-sized on phones and compact on desktop');
+  }
+}
