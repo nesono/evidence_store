@@ -53,6 +53,10 @@ func (brokenIO) Write([]byte) (int, error) { return 0, errors.New("write failed"
 
 func TestIOErrors(t *testing.T) {
 	var out, stderr bytes.Buffer
+	if status := run([]string{"--help"}, strings.NewReader(""), brokenIO{}, &stderr); status != 1 || !strings.Contains(stderr.String(), "write help") {
+		t.Fatalf("help write failure not reported: %d, %s", status, stderr.String())
+	}
+	stderr.Reset()
 	if status := run([]string{"-"}, brokenIO{}, &out, &stderr); status != 1 || !strings.Contains(stderr.String(), "read failed") {
 		t.Fatalf("read failure not reported: %d, %s", status, stderr.String())
 	}
