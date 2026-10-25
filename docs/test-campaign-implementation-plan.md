@@ -1,8 +1,14 @@
 # Test campaigns — first implementation proposal
 
-Status: proposed, not implemented. Companion to the
+Status: implementation in progress; full campaign workflow remains proposed. Companion to the
 [campaign design](test-campaign-packages-design.md). This defines a v1 to
 exercise with V&V before freezing a schema or implementing the full workflow.
+
+Implementation has started with the [procedure validator](campaign-procedure-validation.md).
+The archive importer and execution workflow below remain planned. Before the
+archive contract is implemented, reconcile its embedded revision examples with
+[#200](https://github.com/nesono/evidence_store/issues/200), which places the
+revision-to-package association outside the content-addressed archive.
 
 ## Recommendation
 
