@@ -26,7 +26,8 @@
 // v16: campaign package browser and definition previews.
 // v17: distinct campaign overview and procedure detail regions.
 // v18: incrementally filtered, paginated procedure list.
-const VERSION = "v18";
+// v19: compact procedure rows, wrapping only when space requires it.
+const VERSION = "v19";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -37,7 +38,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=18",
+  "/app.css?v=19",
   "/app.js",
   "/blobref.js",
   "/access.js",
