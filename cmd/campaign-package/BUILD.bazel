@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "campaign_package_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/nesono/evidence-store/cmd/campaign-package",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/campaign"],
+)
+
+go_binary(
+    name = "campaign-package",
+    embed = [":campaign_package_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "campaign_package_test",
+    srcs = ["main_test.go"],
+    embed = [":campaign_package_lib"],
+    deps = ["//internal/campaign"],
+)

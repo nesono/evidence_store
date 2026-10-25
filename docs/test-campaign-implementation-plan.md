@@ -4,11 +4,11 @@ Status: implementation in progress; full campaign workflow remains proposed. Com
 [campaign design](test-campaign-packages-design.md). This defines a v1 to
 exercise with V&V before freezing a schema or implementing the full workflow.
 
-Implementation has started with the [procedure validator](campaign-procedure-validation.md).
-The archive importer and execution workflow below remain planned. Before the
-archive contract is implemented, reconcile its embedded revision examples with
-[#200](https://github.com/nesono/evidence_store/issues/200), which places the
-revision-to-package association outside the content-addressed archive.
+Implemented: the [procedure validator](campaign-procedure-validation.md) and
+[package builder/validator](campaign-package-format.md). Server import and the
+execution workflow remain planned. The package format document is the implemented
+v1 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
+product revision associations live outside the content-addressed archive.
 
 ## Recommendation
 
@@ -83,7 +83,7 @@ campaign.tar.gz
 ```
 
 The following is an illustrative format example, not an approved test or an
-import of historical results. The example commit is a placeholder.
+import of historical results.
 
 ```yaml
 format_version: 1
@@ -95,7 +95,6 @@ campaign:
   planned_end: "2026-10-05"
 source:
   repository: https://example.org/team/scenarios
-  revision: "0123456789abcdef0123456789abcdef01234567"
 scenarios:
   - id: reverse-up-nominal
     path: scenarios/reverse-up-nominal/scenario.yaml
@@ -104,8 +103,9 @@ scenarios:
 - `format_version` is required at the root. Reject unsupported versions.
 - `campaign.id` and name are required; planned location/dates are optional.
   Dates are quoted ISO calendar dates; actual attempt times use RFC3339 UTC.
-- `source.repository` is a canonical URL including host, and `revision` a full
-  immutable revision. The package SHA-256 is computed from archive bytes by
+- `source.repository` is a canonical URL including host. Product revision
+  provenance is associated with the package digest in an external build/release
+  record, following #200. The package SHA-256 is computed from archive bytes by
   the importer; it is not embedded in the manifest it would hash.
 - `scenarios` is a nonempty ordered list with unique IDs and definition paths.
   This is the complete selected test set and default order.
@@ -115,10 +115,9 @@ scenarios:
 - Multiple packages may share a campaign ID. New bytes create a new immutable
   import; no "replace existing campaign" operation. Identical bytes deduplicate.
 
-An optional `source.inputs` list records external generation inputs as
-`name`, `uri`, `version`, and `sha256` (64 lowercase hex digits). An optional
-`source.generator` records `name`, `version`, and `target`. These are declared
-provenance, never instructions for Evidence Store to fetch or execute anything.
+External generation inputs and generator/toolchain provenance should be retained
+with the build/release record. V1 accepts only `source.repository` in the archive;
+it contains no instructions for Evidence Store to fetch or execute anything.
 
 ### Scenario metadata
 
@@ -160,8 +159,9 @@ or content-derived parameter key and retain the parent reference. Never use its
 position in a Cartesian product as identity.
 
 `traceability` entries have `kind` (`functional_scenario`, `logical_scenario`,
-or `requirement`), `id`, `repository`, `revision`, `path`, and optional
-`entry_version`. They are explicit source-authored links. A path may include a
+or `requirement`), `id`, `repository`, `path`, and optional
+`entry_version`. They are explicit source-authored links; source-checkout revision
+provenance belongs to the external build record. A path may include a
 fragment. Evidence Store preserves and displays them, without resolving a
 requirements graph. Omit unknown links. An `lsc_id` metadata value is useful for
 multiple concrete children; omit it if it merely duplicates `procedure_ref`.
@@ -344,8 +344,9 @@ Source-side process (proposed targets, not existing commands):
    directories), uid/gid 0, empty owner names, fixed mtime 0, and no host paths.
    Pin compression settings and gzip header time/name. Serialize generated YAML
    deterministically; forbid wall-clock timestamps/random IDs in generated
-   content. If a source revision is embedded, pass it as an explicit build input,
-   not ambient workspace status. Verify identical bytes across two clean builds.
+   content. Record the product revision and resulting package digest outside the
+   archive, not through ambient workspace stamping. Verify identical bytes across
+   two clean builds.
 5. Generate a printable Markdown/HTML briefing from the same definitions.
    Field forms and the paper handout must not become independently maintained
    test specifications. Retain package and digest alongside the relevant release
@@ -419,6 +420,12 @@ evidence core fields. `repo`/`rcs_ref` identify the primary SUT; the explicit
 package source identifies the procedure repository if different. For mixed
 vehicle builds, keep role-specific build context in metadata as well. Source
 revision is never a substitute for the deployed SUT revision.
+
+Following #200, a session normally targets one product revision linked to its
+package through an external build/release record. Changing the product revision
+starts another session. A procedure/software mismatch is an explicit override
+with a reason, not an ordinary per-attempt default change. Per-vehicle component
+context supplements that product identity rather than silently replacing it.
 
 Reserve `metadata.campaign` for a versioned execution snapshot: package digest,
 scenario ID, session/attempt IDs, source provenance, effective procedure,

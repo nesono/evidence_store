@@ -1,0 +1,11 @@
+format_version: 1
+campaign:
+  id: equipment-patrol
+  name: Equipment patrol
+source:
+  repository: https://example.org/team/scenarios
+scenarios:
+  - id: display
+    path: scenarios/display/scenario.yaml
+  - id: recording
+    path: scenarios/recording/scenario.yaml

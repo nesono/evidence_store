@@ -5,7 +5,9 @@ Related issue: [#127 — Add test campaign support](https://github.com/nesono/ev
 Updated proposal following [#199](https://github.com/nesono/evidence_store/issues/199)
 (procedure selection and inputs), [#198](https://github.com/nesono/evidence_store/issues/198)
 (check progress), and [#201](https://github.com/nesono/evidence_store/issues/201)
-(independent evidence-search sorting). Campaign support is not implemented yet.
+(independent evidence-search sorting). Procedure and package validation tools are
+implemented; server import and execution remain planned. The
+[package format](campaign-package-format.md) documents the implemented v1 subset.
 The [first implementation plan](test-campaign-implementation-plan.md) specifies
 the proposed v1 format, field contract, delivery slices, and a worked example.
 These refinements supersede the earlier separate `observations.yaml` proposal.
@@ -239,7 +241,6 @@ For example:
 
     source:
       repository: https://example.org/team/scenarios
-      revision: "0123456789abcdef0123456789abcdef01234567"
 
     scenarios:
       - id: network-loss-nominal
@@ -248,8 +249,8 @@ For example:
       - id: emergency-stop-nominal
         path: scenarios/emergency-stop-nominal/scenario.yaml
 
-The revision above is illustrative. Production packages use the full actual
-commit. List order supplies the initial execution order. Planned dates and
+Following #200, product revisions are associated with package digests in an
+external build/release record. List order supplies the initial execution order. Planned dates and
 location describe the plan, not when or where an execution actually happened.
 
 The package contains already-expanded Concrete Scenarios.
@@ -453,22 +454,23 @@ links; arbitrary local file uploads require a separate extension.
 
 ## Provenance
 
-Campaign packages preserve the origin of their scenarios.
+Campaign packages identify their scenario repository. Build/release records
+preserve the exact source revision alongside the resulting package digest.
 
 At minimum:
 
     source:
       repository: https://example.org/team/scenarios
-      revision: "0123456789abcdef0123456789abcdef01234567"
 
-This identifies the source repository revision from which the campaign was
-created.
+The product revision is intentionally outside the archive content, following
+[#200](https://github.com/nesono/evidence_store/issues/200). Unchanged scenario
+content can therefore be reused by multiple product revisions.
 
 The Evidence Store does not need to interpret how the scenarios were
 generated.
 
 When an external catalogue is the authoring master, record its version and
-content digest as a declared generation input. Include the reviewed executable
+content digest as a declared generation input in the external build record. Include the reviewed executable
 definition and any required assets. A link to a changing workbook is not an
 executable snapshot. Requirement/FSC/LSC references are source-authored
 traceability, not relationships inferred by Evidence Store from similar names.
@@ -478,9 +480,10 @@ traceability, not relationships inferred by Evidence Store from similar names.
 ## SUT Context and Future Release Traceability
 
 The existing evidence API already requires `repo`, `branch`, and `rcs_ref`.
-Capture those as the actual software under test, with reusable session
-defaults and per-attempt confirmation. Never fill the SUT revision from the
-scenario package's source revision. Record vehicle and operator-station
+Capture those as the actual software under test. Per #200, the normal session
+targets one product revision associated with its scenario package; changing the
+product revision starts another session. A deliberate mismatch requires an
+explicit override and reason. Record vehicle and operator-station
 identities as execution context, including per-vehicle revisions if they differ.
 
 Automatic deployed-build discovery and release-to-package binding remain

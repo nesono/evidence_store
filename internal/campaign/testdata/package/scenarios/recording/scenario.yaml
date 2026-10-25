@@ -1,0 +1,9 @@
+id: recording
+title: Check recording
+procedure_ref: patrol/recording
+description: procedure.md
+parameters:
+  recording_duration_s: 10
+defaults:
+  evidence_type: manual_test
+  tags: [patrol]
