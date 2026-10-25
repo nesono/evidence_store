@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=15">
+    <link rel="stylesheet" href="app.css?v=16">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -40,6 +40,7 @@
                 <li id="search-tab-item"><a href="#" class="nav-tab active" data-tab="search" data-label="Search">Search</a></li>
                 <li id="analytics-tab-item"><a href="#" class="nav-tab" data-tab="analytics" data-label="Analytics">Analytics</a></li>
                 <li id="add-tab-item"><a href="#" class="nav-tab" data-tab="add" data-label="Add Result">Add Result</a></li>
+                <li id="campaigns-tab-item"><a href="#" class="nav-tab" data-tab="campaigns" data-label="Campaigns">Campaigns</a></li>
                 <!-- Hidden rather than greyed, unlike the tabs above it.
                      Those name things an ordinary user might reasonably want
                      and be told to go and ask for; this one is somebody else's
@@ -73,6 +74,42 @@
     </header>
 
     <main class="container">
+        <section id="tab-campaigns" class="tab-content" hidden>
+            <h2>Campaign packages</h2>
+            <p>Import a package and review its procedures. This is an online definition browser; test execution and response capture are not available here yet.</p>
+            <form id="campaign-import-form">
+                <label for="campaign-file">Campaign archive <small>(.tar.gz, at most 16 MiB)</small></label>
+                <input id="campaign-file" type="file" accept=".tar.gz,.tgz,application/gzip">
+                <button id="campaign-import" type="submit">Import package</button>
+            </form>
+            <p id="campaign-import-permission" hidden>Importing packages requires evidence:write and blob:write permissions.</p>
+            <p id="campaign-import-status" role="status" aria-live="polite"></p>
+            <div class="campaign-layout">
+                <aside aria-label="Imported packages">
+                    <button id="campaign-refresh" type="button" class="secondary outline">Refresh</button>
+                    <p id="campaign-list-status" role="status" aria-live="polite"></p>
+                    <ul id="campaign-list" class="campaign-list"></ul>
+                    <div class="campaign-pagination">
+                        <button id="campaign-prev" type="button" class="secondary outline" disabled>Previous</button>
+                        <span id="campaign-page"></span>
+                        <button id="campaign-next" type="button" class="secondary outline" disabled>Next</button>
+                    </div>
+                </aside>
+                <div>
+                    <p id="campaign-detail-status" role="status" aria-live="polite">Select an imported package to view its procedures.</p>
+                    <section id="campaign-detail" aria-label="Selected campaign package" hidden>
+                        <div id="campaign-package-info"></div>
+                        <button id="campaign-download" type="button" class="secondary outline">Download original package</button>
+                        <label for="campaign-procedure-search">Find a procedure in this package</label>
+                        <input id="campaign-procedure-search" type="search" placeholder="Title, ID, or procedure reference">
+                        <label for="campaign-procedure">Procedure</label>
+                        <select id="campaign-procedure"></select>
+                        <p id="campaign-procedure-count" role="status"></p>
+                        <section id="campaign-procedure-preview" aria-label="Procedure definition preview"></section>
+                    </section>
+                </div>
+            </div>
+        </section>
         <section id="tab-add" class="tab-content" hidden>
             <h4>Add Manual Test Result</h4>
             <!-- novalidate: the form checks itself (formcheck.js) and names every
@@ -613,6 +650,7 @@
                 <span data-mirror="auth-identity"></span>
             </p>
             <ul class="more-list">
+                <li><button type="button" class="secondary" data-tab="campaigns">Campaigns</button></li>
                 <li><button type="button" class="secondary" data-tab="analytics">Analytics</button></li>
                 <li><button type="button" class="secondary" data-tab="access">Admin</button></li>
                 <li><button type="button" class="secondary" data-proxy="install-app">Install the app</button></li>

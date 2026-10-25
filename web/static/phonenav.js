@@ -24,7 +24,7 @@ export function phoneStartTab({ hashTab = null, hasLinkState = false, isPhone = 
 
 // Tabs that live in the More sheet rather than the bar. When one is showing,
 // More is the bar's current item.
-const SHEET_TABS = new Set(["analytics", "access"]);
+const SHEET_TABS = new Set(["analytics", "access", "campaigns"]);
 
 export function mountPhoneNav({ openOutbox }) {
   const bar = document.getElementById("phone-nav");

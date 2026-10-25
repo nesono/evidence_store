@@ -3907,3 +3907,33 @@ label > .input-with-button {
 #results-body:has(.empty-state) { display: table-caption; caption-side: bottom; }
 #results-body tr:has(.empty-state),
 #results-body .empty-state { display: block; }
+
+/* Immutable campaign browsing: list and definition on desktop, stacked on a
+   phone. Digest/source strings may be long and must not widen the viewport. */
+.campaign-layout { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr); gap: 1.5rem; }
+.campaign-layout > *, .campaign-layout aside { min-width: 0; }
+.campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+.campaign-list li { margin-bottom: 0.75rem; }
+.campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
+.campaign-package[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.campaign-package code, .campaign-metadata dd { overflow-wrap: anywhere; word-break: break-word; }
+.campaign-package code { font-size: var(--text-2xs); }
+.campaign-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.campaign-metadata { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.4rem 1rem; }
+.campaign-metadata dd { margin: 0; }
+.campaign-metadata dt { font-weight: 600; }
+.campaign-control { padding: 0.75rem; margin-block: 0.75rem; border: 1px solid var(--color-line); border-radius: 0.25rem; }
+.campaign-control label, .campaign-control small { display: block; }
+.campaign-control input, .campaign-control select, .campaign-control textarea { margin-block: 0.5rem; }
+.campaign-preview-notice { border-left: 3px solid var(--color-line); padding: 0.75rem; }
+#campaign-procedure-preview pre { max-width: 100%; overflow: auto; }
+#campaign-procedure-preview { overflow-wrap: anywhere; margin-block: 1.5rem; }
+#campaign-procedure-preview .test-log { margin-block: 0.5rem; }
+#campaign-detail > label { margin-top: 1rem; }
+#campaign-import-form { max-width: 36rem; }
+@media (max-width: 767px) {
+  .campaign-layout { grid-template-columns: minmax(0, 1fr); }
+  .campaign-metadata { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+  .campaign-metadata dd { margin-bottom: 0.5rem; }
+  #tab-campaigns button { min-height: 44px; }
+}

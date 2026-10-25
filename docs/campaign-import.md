@@ -1,9 +1,9 @@
 # Importing campaign packages
 
 Campaign archives can now be imported into the server, listed, inspected, and
-downloaded. The server reuses the [package validator](campaign-package-format.md)
-before publishing anything. Procedure selection, campaign execution, and
-product-revision associations are subsequent implementation slices.
+downloaded, including through the [Campaigns tab](campaign-browser.md). The
+server reuses the [package validator](campaign-package-format.md) before publishing
+anything. Execution capture and product-revision associations follow separately.
 
 ## Import
 

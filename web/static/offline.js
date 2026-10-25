@@ -132,7 +132,7 @@ export function startConnectionIndicator(el = document.getElementById("health-st
 // TABS is the set of tab names a URL may name. The manifest's Add Result
 // shortcut opens "/#add", and a shortcut that lands on the wrong tab is worse
 // than no shortcut.
-const TABS = ["search", "analytics", "add", "access"];
+const TABS = ["search", "analytics", "add", "access", "campaigns"];
 
 // tabFromHash reads which tab a URL asks for, or null for anything else.
 // Deliberately strict: an unknown fragment selects nothing rather than

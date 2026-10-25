@@ -7,7 +7,8 @@ Updated proposal following [#199](https://github.com/nesono/evidence_store/issue
 (check progress), and [#201](https://github.com/nesono/evidence_store/issues/201)
 (independent evidence-search sorting). Procedure and package validation tools are
 implemented, as is [server import with CAS persistence](campaign-import.md);
-execution remains planned. The
+the [Campaigns tab](campaign-browser.md) provides upload and read-only procedure
+previews. Execution remains planned. The
 [package format](campaign-package-format.md) documents the implemented v1 subset.
 The [first implementation plan](test-campaign-implementation-plan.md) specifies
 the proposed v1 format, field contract, delivery slices, and a worked example.
