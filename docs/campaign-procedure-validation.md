@@ -62,13 +62,11 @@ This validates procedure declarations, not campaign archives, execution answers,
 asset availability, or test results. No server endpoints or database migrations
 are introduced. The sample procedures are generic format fixtures.
 
-Next, integrate this parser with package validation/import and asset lifetime
-tracking, then add procedure selection and draft capture. Before implementing
-the archive manifest, reconcile the plan with
-[#200](https://github.com/nesono/evidence_store/issues/200): revision-to-package
-associations belong outside content-addressed archives. This parser does not
-encode a manifest or revision association, so it does not lock in the earlier
-manifest example.
+The [campaign package tools](campaign-package-format.md) now integrate this
+parser with deterministic archive creation and package validation. Server import,
+asset lifetime tracking, procedure selection and draft capture follow next.
+Following [#200](https://github.com/nesono/evidence_store/issues/200), product
+revision-to-package associations live outside content-addressed archives.
 
 Tests:
 

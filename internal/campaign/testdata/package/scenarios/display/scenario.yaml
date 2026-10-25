@@ -1,0 +1,9 @@
+id: display
+title: Check operator display
+procedure_ref: patrol/display
+description: procedure.md
+defaults:
+  evidence_type: manual_test
+  tags: [patrol]
+  metadata:
+    cluster: Commissioning

@@ -3,17 +3,24 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "campaign",
     srcs = [
+        "archive.go",
         "declaration.go",
+        "directory.go",
+        "package.go",
+        "package_files.go",
         "procedure.go",
     ],
     importpath = "github.com/nesono/evidence-store/internal/campaign",
     visibility = ["//:__subpackages__"],
-    deps = ["@in_gopkg_yaml_v3//:yaml_v3"],
+    deps = [
+        "//internal/model",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
 )
 
 go_test(
     name = "campaign_test",
-    srcs = ["procedure_test.go"],
-    embedsrcs = glob(["testdata/*.md"]),
+    srcs = ["package_test.go", "procedure_test.go"],
+    embedsrcs = glob(["testdata/*.md", "testdata/package/**"]),
     embed = [":campaign"],
 )
