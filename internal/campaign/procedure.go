@@ -71,28 +71,53 @@ func errorAt(line int, message string, args ...any) error {
 // fences. Other fenced code is preserved as prose, including examples enclosed
 // by longer fences. Unknown or malformed test-* controls fail closed.
 func ParseProcedure(source string) (*Procedure, error) {
-	if len(source) > MaxProcedureBytes {
-		return nil, errorAt(1, "procedure exceeds %d bytes", MaxProcedureBytes)
-	}
-	if !utf8.ValidString(source) || strings.ContainsRune(source, '\x00') {
-		return nil, errorAt(1, "procedure must be UTF-8 without NUL bytes")
-	}
-	if strings.TrimSpace(source) == "" {
-		return nil, errorAt(1, "procedure is empty")
+	if err := validateProcedureSource(source); err != nil {
+		return nil, err
 	}
 	p := &Procedure{SchemaVersion: 1, Source: source, Blocks: []Block{}}
 	lines := strings.SplitAfter(source, "\n")
-	seen := make(map[string]int)
-	boundResult := false
+	controls := controlRegistry{seen: make(map[string]int)}
 	proseStart := 0
-	var ordinary fence
-	flush := func(end int) {
-		text := strings.Join(lines[proseStart:end], "")
-		if text != "" {
-			p.Blocks = append(p.Blocks, Block{Kind: "markdown", Line: proseStart + 1, Markdown: text})
+	for {
+		start, err := nextControl(lines, proseStart)
+		if err != nil {
+			return nil, err
 		}
+		if start == len(lines) {
+			appendMarkdown(p, lines, proseStart, len(lines))
+			return p, nil
+		}
+		block, end, err := parseControl(lines, start)
+		if err != nil {
+			return nil, err
+		}
+		if err := controls.add(block); err != nil {
+			return nil, err
+		}
+		appendMarkdown(p, lines, proseStart, start)
+		p.Blocks = append(p.Blocks, block)
+		proseStart = end + 1
 	}
-	for i := 0; i < len(lines); i++ {
+}
+
+func validateProcedureSource(source string) error {
+	if len(source) > MaxProcedureBytes {
+		return errorAt(1, "procedure exceeds %d bytes", MaxProcedureBytes)
+	}
+	if !utf8.ValidString(source) || strings.ContainsRune(source, '\x00') {
+		return errorAt(1, "procedure must be UTF-8 without NUL bytes")
+	}
+	if strings.TrimSpace(source) == "" {
+		return errorAt(1, "procedure is empty")
+	}
+	return nil
+}
+
+// nextControl skips ordinary fenced code, so examples are never interpreted as
+// live declarations. It returns len(lines) when the remaining text is all prose.
+func nextControl(lines []string, start int) (int, error) {
+	var ordinary fence
+	for i := start; i < len(lines); i++ {
 		line := lineText(lines[i])
 		if ordinary.width > 0 {
 			if ordinary.closes(line) {
@@ -109,48 +134,67 @@ func ParseProcedure(source string) (*Procedure, error) {
 			continue
 		}
 		if line != "```test-field" && line != "```test-check" {
-			return nil, errorAt(i+1, "expected a top-level ```test-field or ```test-check fence")
+			return 0, errorAt(i+1, "expected a top-level ```test-field or ```test-check fence")
 		}
-		start := i
-		for i++; i < len(lines) && lineText(lines[i]) != "```"; i++ {
-		}
-		if i == len(lines) {
-			return nil, errorAt(start+1, "unclosed %s declaration", f.info)
-		}
-		body := strings.Join(lines[start+1:i], "")
-		if len(body) > maxDeclarationBytes {
-			return nil, errorAt(start+1, "declaration exceeds %d bytes", maxDeclarationBytes)
-		}
-		block, err := parseDeclaration(f.info, body, start+2)
-		if err != nil {
-			return nil, err
-		}
-		block.Line = start + 1
-		id := ""
-		if block.Field != nil {
-			id = block.Field.ID
-			if block.Field.Bind != "" {
-				if boundResult {
-					return nil, errorAt(start+1, "execution.result may be bound only once")
-				}
-				boundResult = true
-			}
-		} else {
-			id = block.Check.ID
-		}
-		if prior, exists := seen[id]; exists {
-			return nil, errorAt(start+1, "duplicate control id %q (first declared at line %d)", id, prior)
-		}
-		seen[id] = start + 1
-		if len(seen) > maxControls {
-			return nil, errorAt(start+1, "procedure exceeds %d controls", maxControls)
-		}
-		flush(start)
-		p.Blocks = append(p.Blocks, block)
-		proseStart = i + 1
+		return i, nil
 	}
-	flush(len(lines))
-	return p, nil
+	return len(lines), nil
+}
+
+func parseControl(lines []string, start int) (Block, int, error) {
+	kind := strings.TrimPrefix(lineText(lines[start]), "```")
+	end := start + 1
+	for end < len(lines) && lineText(lines[end]) != "```" {
+		end++
+	}
+	if end == len(lines) {
+		return Block{}, 0, errorAt(start+1, "unclosed %s declaration", kind)
+	}
+	body := strings.Join(lines[start+1:end], "")
+	if len(body) > maxDeclarationBytes {
+		return Block{}, 0, errorAt(start+1, "declaration exceeds %d bytes", maxDeclarationBytes)
+	}
+	block, err := parseDeclaration(kind, body, start+2)
+	if err != nil {
+		return Block{}, 0, err
+	}
+	block.Line = start + 1
+	return block, end, nil
+}
+
+func appendMarkdown(p *Procedure, lines []string, start, end int) {
+	text := strings.Join(lines[start:end], "")
+	if text == "" {
+		return
+	}
+	p.Blocks = append(p.Blocks, Block{Kind: "markdown", Line: start + 1, Markdown: text})
+}
+
+// controlRegistry holds the constraints shared by all controls in a procedure.
+type controlRegistry struct {
+	seen        map[string]int
+	boundResult bool
+}
+
+func (r *controlRegistry) add(block Block) error {
+	var id string
+	if block.Field != nil {
+		id = block.Field.ID
+	} else {
+		id = block.Check.ID
+	}
+	if block.Field != nil && block.Field.Bind != "" && r.boundResult {
+		return errorAt(block.Line, "execution.result may be bound only once")
+	}
+	if prior, exists := r.seen[id]; exists {
+		return errorAt(block.Line, "duplicate control id %q (first declared at line %d)", id, prior)
+	}
+	if len(r.seen) >= maxControls {
+		return errorAt(block.Line, "procedure exceeds %d controls", maxControls)
+	}
+	r.seen[id] = block.Line
+	r.boundResult = r.boundResult || (block.Field != nil && block.Field.Bind != "")
+	return nil
 }
 
 func lineText(line string) string {
