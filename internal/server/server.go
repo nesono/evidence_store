@@ -82,6 +82,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	inheritanceAPI := api.NewInheritanceHandler(inheritanceStore)
 	analyticsAPI := api.NewAnalyticsHandler(evidenceStore, cfg)
 	blobAPI := api.NewBlobHandler(blobs, cfg.Blob.MaxBytes, cfg.Blob.SigningKey)
+	campaignAPI := api.NewCampaignHandler(store.NewCampaignStore(pool), blobs)
 	r.Get("/media/{ref}", blobAPI.Playback)
 	r.Head("/media/{ref}", blobAPI.Playback)
 	// Mounted whether or not EVIDENCE_AUTH_DB is on. Issuing keys before
@@ -172,6 +173,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence", evidenceAPI.List)
 		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence/distinct", evidenceAPI.Distinct)
 		r.With(auth.Require(auth.PermEvidenceRead)).Get("/evidence/{id}", evidenceAPI.Get)
+
+		r.With(auth.Require(auth.PermEvidenceWrite), auth.Require(auth.PermBlobWrite)).Post("/campaigns/import", campaignAPI.Import)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaigns", campaignAPI.List)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaigns/{id}", campaignAPI.Get)
+		r.With(auth.Require(auth.PermEvidenceRead), auth.Require(auth.PermBlobRead)).Get("/campaigns/{id}/package", campaignAPI.Download)
+		r.With(auth.Require(auth.PermEvidenceRead), auth.Require(auth.PermBlobRead)).Head("/campaigns/{id}/package", campaignAPI.Download)
 
 		// Declaring that one branch inherits another's evidence rewrites what
 		// the store answers about code nobody tested. DESIGN.md section 8 has

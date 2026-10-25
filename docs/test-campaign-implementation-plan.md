@@ -5,8 +5,9 @@ Status: implementation in progress; full campaign workflow remains proposed. Com
 exercise with V&V before freezing a schema or implementing the full workflow.
 
 Implemented: the [procedure validator](campaign-procedure-validation.md) and
-[package builder/validator](campaign-package-format.md). Server import and the
-execution workflow remain planned. The package format document is the implemented
+[package builder/validator](campaign-package-format.md), and
+[server import with CAS persistence](campaign-import.md). The execution workflow
+remains planned. The package format document is the implemented
 v1 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
 product revision associations live outside the content-addressed archive.
 

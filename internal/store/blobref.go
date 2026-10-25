@@ -13,7 +13,7 @@ import (
 	"github.com/nesono/evidence-store/internal/blob"
 )
 
-// BlobRefStore answers which blobs are still reachable from evidence. It is the
+// BlobRefStore answers which blobs are still reachable from evidence or campaigns. It is the
 // half of blob lifetime that lives in Postgres; the bytes are the object
 // store's business.
 type BlobRefStore struct {
@@ -24,10 +24,18 @@ func NewBlobRefStore(pool *pgxpool.Pool) *BlobRefStore {
 	return &BlobRefStore{pool: pool}
 }
 
-// Referenced returns the subset of digests some evidence record still points
+// Referenced returns the subset of digests some evidence record or campaign points
 // at. The sweep asks in batches rather than fetching every reference, because
 // the number of stored objects is the thing that grows.
 func (s *BlobRefStore) Referenced(ctx context.Context, digests []blob.Digest) (map[blob.Digest]bool, error) {
+	return referencedBlobs(ctx, s.pool, digests)
+}
+
+type blobRefQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func referencedBlobs(ctx context.Context, q blobRefQuerier, digests []blob.Digest) (map[blob.Digest]bool, error) {
 	referenced := make(map[blob.Digest]bool, len(digests))
 	if len(digests) == 0 {
 		return referenced, nil
@@ -38,7 +46,8 @@ func (s *BlobRefStore) Referenced(ctx context.Context, digests []blob.Digest) (m
 		values[i] = string(d)
 	}
 
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT digest FROM blob_ref WHERE digest = ANY($1)`, values)
+	rows, err := q.Query(ctx, `SELECT digest FROM blob_ref WHERE digest = ANY($1)
+		UNION SELECT digest FROM campaign_blob_ref WHERE digest = ANY($1)`, values)
 	if err != nil {
 		return nil, fmt.Errorf("query blob refs: %w", err)
 	}
@@ -52,6 +61,32 @@ func (s *BlobRefStore) Referenced(ctx context.Context, digests []blob.Digest) (m
 		referenced[blob.Digest(d)] = true
 	}
 	return referenced, rows.Err()
+}
+
+// One database-wide advisory lock coordinates campaign imports with deletion.
+// Imports hold a shared transaction lock through CAS writes and reference commit.
+const campaignSweepLock int64 = 0x43414d50424c4f42
+
+// WithSweepLock keeps a campaign import from acquiring an object's reference
+// between the sweep's reachability query and its deletion. Transaction locks
+// release automatically on failures and across separate server/worker processes.
+func (s *BlobRefStore) WithSweepLock(ctx context.Context, digests []blob.Digest, sweep func(map[blob.Digest]bool) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, campaignSweepLock); err != nil {
+		return err
+	}
+	referenced, err := referencedBlobs(ctx, tx, digests)
+	if err != nil {
+		return err
+	}
+	if err := sweep(referenced); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // ForEvidence returns the digests one record references.
