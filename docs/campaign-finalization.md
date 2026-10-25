@@ -8,8 +8,12 @@ procedure reference, type, tags, and result through the existing Search view.
 
 1. Start or resume an attempt, record answers and actual software context, then
    **Save draft**. Finalization acts on that saved revision, not unsaved form data.
-2. Enter the **actual finish time** as RFC3339 including timezone, for example
-   `2026-10-25T14:30:00Z`. It is deliberately not defaulted to the upload time.
+2. Set the **actual finish time** using **Now**, **Draft created** (the attempt's
+   original creation time), or the **UTC date/time picker**. The RFC3339 text
+   field remains editable, including pasted timezone offsets such as
+   `2026-10-25T14:30:00+02:00`; the picker displays that instant in UTC. Nothing
+   is selected automatically. Your selection survives saving the same draft
+   in the open dialog; it is persisted with the evidence on finalization.
 3. Select **Finalize as evidence** and confirm. Validation errors leave the draft
    editable; save corrections and try again.
 4. On success the attempt becomes read-only. **Open evidence record** opens its

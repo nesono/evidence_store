@@ -25,6 +25,7 @@ go_library(
         "static/editing.js",
         "static/evidencetype.js",
         "static/formcheck.js",
+        "static/finishtime.js",
         "static/icon-192.png",
         "static/icon-512.png",
         "static/icon.svg",

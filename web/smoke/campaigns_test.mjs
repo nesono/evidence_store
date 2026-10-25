@@ -51,7 +51,7 @@ async function handle(req, res) {
         return json(res,a,201);
       }
       if(req.method==="POST") {
-        const a={...body,owner:"user:tester",revision:1,updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
+        const a={...body,owner:"user:tester",revision:1,created_at:"2026-10-24T09:15:23.123456Z",updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
         attempts.set(a.id,a);return json(res,a,201);
       }
       const a=attempts.get(url.pathname.split("/").pop());
@@ -185,8 +185,11 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-attempt-list-status').textContent.includes('No saved drafts')`);
   await page.eval(`document.getElementById('campaign-attempt-start').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  await page.eval(`document.getElementById('campaign-finished-created').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z");
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.repo.value='example/software';f.querySelector('[data-answer=status]').value='FAIL';f.querySelector('[data-answer=operator]').value='tester';f.dispatchEvent(new Event('input'));f.requestSubmit();})()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 2')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z", "saving must preserve the selected finish time");
   await page.eval(`document.getElementById('campaign-draft-close').click()`);
   await page.goto(`${base}/?resume=1#campaigns`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
@@ -204,11 +207,16 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.notes.value`),"keep my edit");
   await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-reload').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 3')`);
-  await page.eval(`document.getElementById('campaign-finished-at').value='2026-10-25T12:30:00Z';document.getElementById('campaign-draft-finalize').click()`);
+  await page.eval(`document.getElementById('campaign-finished-now').click()`);
+  assert.ok(Math.abs(Date.now() - Date.parse(await page.eval(`document.getElementById('campaign-finished-at').value`))) < 5000);
+  await page.eval(`document.getElementById('campaign-finished-picker').value='2026-10-25T12:30';document.getElementById('campaign-finished-picker').dispatchEvent(new Event('input'));`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-25T12:30:00.000Z");
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable')`);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').disabled`),true);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-save').disabled`),true);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-finalize').disabled`),true);
+  assert.equal(await page.eval(`['campaign-finished-now','campaign-finished-created','campaign-finished-picker'].every(id=>document.getElementById(id).disabled)`),true);
   assert.equal(await page.eval(`document.getElementById('campaign-final-evidence').hidden`),false);
   assert.match(await page.eval(`document.getElementById('campaign-final-evidence').href`),/detail=example-evidence/);
   await page.eval(`document.getElementById('campaign-draft-close').click()`);

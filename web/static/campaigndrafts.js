@@ -3,6 +3,7 @@ import { API_BASE, apiFetchNoRedirect, mayDo } from "./common.js";
 import { escapeHTML as esc, renderMarkdown } from "./markdown.js";
 import { resolveAssetImages } from "./campaignview.js";
 import { hydrateImages, releaseImages } from "./images.js";
+import { mountFinishTime } from "./finishtime.js";
 
 export function draftControlsHTML(procedure, data, descriptionPath, assets) {
   return procedure.blocks
@@ -104,6 +105,7 @@ export function mountCampaignDrafts(root, me) {
     pendingFinalize = null,
     listVersion = 0,
     offset = 0;
+  const finishTime = mountFinishTime(root, () => attempt?.created_at);
   const allowed = mayDo(me, "evidence:write");
   el("campaign-attempt-tools").hidden = !allowed;
   const status = (text) => {
@@ -144,9 +146,10 @@ export function mountCampaignDrafts(root, me) {
     el("campaign-attempt-start").disabled = value;
     el("campaign-draft-save").disabled = value || finalized;
     el("campaign-draft-finalize").disabled = value || finalized || dirty;
-    el("campaign-finished-at").disabled = value || finalized;
+    finishTime.lock(value || finalized);
   }
   function showAttempt(row) {
+    const previousFinish = attempt?.id === row.id ? el("campaign-finished-at").value : "";
     attempt = row;
     pendingSave = null;
     pendingFinalize = null;
@@ -172,7 +175,7 @@ export function mountCampaignDrafts(root, me) {
           : "Finalized evidence has expired; its answers are no longer retained."
         : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
     );
-    el("campaign-finished-at").value = row.finished_at || "";
+    finishTime.set(row.finished_at || previousFinish);
     const link = el("campaign-final-evidence");
     link.hidden = !row.evidence_id;
     link.href = row.evidence_id
