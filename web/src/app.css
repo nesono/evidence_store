@@ -3915,7 +3915,7 @@ label > .input-with-button {
 .campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
 .campaign-list li { margin-bottom: 0.75rem; }
 .campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
-.campaign-procedure-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1rem; width: 100%; text-align: left; overflow-wrap: anywhere; }
+.campaign-procedure-item { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; gap: 0.25rem 1rem; width: 100%; text-align: left; overflow-wrap: anywhere; }
 .campaign-procedure-item > strong, .campaign-procedure-item > code { min-width: 0; max-width: 100%; }
 .campaign-procedure-item[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
 #campaign-procedure-inspection { margin-top: 1.5rem; }

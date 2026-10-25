@@ -27,7 +27,8 @@
 // v17: distinct campaign overview and procedure detail regions.
 // v18: incrementally filtered, paginated procedure list.
 // v19: compact procedure rows, wrapping only when space requires it.
-const VERSION = "v19";
+// v20: left-align the contents of procedure list buttons.
+const VERSION = "v20";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -38,7 +39,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=19",
+  "/app.css?v=20",
   "/app.js",
   "/blobref.js",
   "/access.js",
