@@ -40,6 +40,7 @@ async function handle(req, res) {
   if (url.pathname === "/version") return json(res, { version: "dev" });
   if (url.pathname === "/auth/config") return json(res, { sso_enabled: false });
   if (url.pathname === "/api/v1/me") return json(res, { authenticated: true, subject: "user:tester", permissions: role === "writer" ? permissions : permissions.slice(0, 3) });
+  if (url.pathname === "/api/v1/weather") return json(res,{summary:"Rain, 8 °C",observed_at:"2026-10-24T09:00:00Z"});
   if(url.pathname.startsWith("/api/v1/campaign-attempts")) {
     if(req.method==="POST" || req.method==="PUT") {
       const chunks=[];for await(const chunk of req) chunks.push(chunk);
@@ -187,6 +188,11 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
   await page.eval(`document.getElementById('campaign-finished-created').click()`);
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.procedure_ref.readOnly`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.source.readOnly`),true);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.location.value='52.5, 13.4';document.getElementById('draft-weather-lookup').click();})()`);
+  await page.waitFor(`document.getElementById('campaign-draft-form').elements.weather_conditions.value === 'Rain, 8 °C'`);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.tags.value='vehicle, regression';f.elements.observations.value='Test log narrative';document.getElementById('draft-custom-add').click();document.querySelector('.draft-custom-key').value='vehicle_id';document.querySelector('.draft-custom-value').value='vehicle-a';})()`);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.repo.value='example/software';f.querySelector('[data-answer=status]').value='FAIL';f.querySelector('[data-answer=operator]').value='tester';f.dispatchEvent(new Event('input'));f.requestSubmit();})()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 2')`);
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z", "saving must preserve the selected finish time");
@@ -201,6 +207,10 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
   assert.equal(await page.eval(`document.querySelector('#campaign-draft-form [data-answer=status]').value`),"FAIL");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.repo.value`),"example/software");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.location.value`),"52.5, 13.4");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.weather_conditions.value`),"Rain, 8 °C");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.observations.value`),"Test log narrative");
+  assert.equal(await page.eval(`document.querySelector('.draft-custom-value').value`),"vehicle-a");
   [...attempts.values()][0].revision++;
   await page.eval(`const f=document.getElementById('campaign-draft-form');f.elements.notes.value='keep my edit';f.dispatchEvent(new Event('input'));f.requestSubmit()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Not saved')`);

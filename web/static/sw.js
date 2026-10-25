@@ -34,7 +34,8 @@
 // v24: floating circular close control on attempt drafts.
 // v25: immutable campaign finalization and evidence summaries.
 // v26: finish-time shortcuts and synchronized UTC picker.
-const VERSION = "v26";
+// v27: full manual-result context for campaign capture.
+const VERSION = "v27";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -45,7 +46,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=26",
+  "/app.css?v=27",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -56,6 +57,7 @@ const SHELL = [
   "/campaigndrafts.js",
   "/campaignresult.js",
   "/finishtime.js",
+  "/draftmanual.js",
   "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",

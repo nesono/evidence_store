@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=26">
+    <link rel="stylesheet" href="app.css?v=27">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -150,15 +150,58 @@
                     <p>Online draft capture. Save explicitly before closing. A draft is not finalized evidence.</p>
                     <form id="campaign-draft-form">
                         <fieldset id="campaign-draft-fields">
-                            <h3>Actual software under test</h3>
+                            <details id="draft-software-context">
+                                <summary id="draft-software-summary">Software under test</summary>
+                                <p>Reused from your last saved attempt in this campaign. Confirm the actual deployed build; edit these values to override. Changes apply to this attempt and seed subsequent new attempts, never existing records.</p>
+                                <div class="grid">
+                                    <label>Repository<input name="repo" type="text" placeholder="org/repo" list="repos-list"></label>
+                                    <label>Branch<input name="branch" type="text"></label>
+                                    <label>Deployed revision<input name="rcs_ref" type="text" placeholder="Actual commit or release"></label>
+                                </div>
+                            </details>
                             <div class="grid">
-                                <label>Repository<input name="repo" type="text" placeholder="org/repo"></label>
-                                <label>Branch<input name="branch" type="text"></label>
-                                <label>Deployed revision<input name="rcs_ref" type="text" placeholder="Actual commit or release"></label>
+                                <label>Procedure (fixed)<input name="procedure_ref" type="text" readonly></label>
+                                <label>Evidence type<select name="evidence_type"><option value="ci">CI</option><option value="manual_test">Manual Test</option><option value="demonstration">Demonstration</option></select></label>
+                                <label>Username/Source-URL<input name="source" type="text"></label>
                             </div>
                             <div id="campaign-draft-controls"></div>
-                            <label>Overall assessment (provisional)<select name="result"><option value="">Not assessed</option><option>PASS</option><option>FAIL</option><option>ERROR</option><option>SKIPPED</option></select></label>
+                            <fieldset>
+                                <legend>Result (provisional until finalized)</legend>
+                                <label><input type="radio" name="result" value="PASS"> PASS</label>
+                                <label><input type="radio" name="result" value="FAIL"> FAIL</label>
+                                <label><input type="radio" name="result" value="ERROR"> ERROR</label>
+                                <label><input type="radio" name="result" value="SKIPPED"> SKIPPED</label>
+                            </fieldset>
+                            <label>Tags<input name="tags" type="text" placeholder="regression, vehicle"></label>
+                            <label>Location <small>(coordinates or place name)</small>
+                                <span class="input-with-button"><input name="location" type="text" placeholder="52.51631, 13.37771 or Test track"><button id="draft-locate" type="button" class="secondary outline">Locate</button></span>
+                            </label>
+                            <small id="draft-location-status" role="status"></small>
+                            <label>Weather
+                                <span class="input-with-button"><input name="weather_conditions" type="text" placeholder="Observed conditions"><button id="draft-weather-lookup" type="button" class="secondary outline">Look up</button><button id="draft-weather-write" type="button" class="secondary outline">Write it down</button></span>
+                            </label>
+                            <small id="draft-weather-status" role="status"></small>
+                            <div id="draft-weather-compose" hidden>
+                                <div class="grid">
+                                    <input id="draft-wc-description" placeholder="Conditions" aria-label="Conditions">
+                                    <input id="draft-wc-temperature" type="number" step="0.1" placeholder="°C" aria-label="Temperature °C">
+                                    <input id="draft-wc-wind" type="number" placeholder="km/h" aria-label="Wind km/h">
+                                    <input id="draft-wc-humidity" type="number" min="0" max="100" placeholder="Humidity %" aria-label="Humidity percent">
+                                    <input id="draft-wc-precipitation" type="number" step="0.1" min="0" placeholder="Rain mm" aria-label="Precipitation mm">
+                                </div>
+                                <button id="draft-weather-apply" type="button" class="secondary outline">Use conditions</button>
+                            </div>
                             <label>Tester notes<textarea name="notes" rows="3"></textarea></label>
+                            <label>Test log <small>(Markdown, paste/drop images and videos)</small><textarea name="observations" rows="8" placeholder="What you observed during the test"></textarea></label>
+                            <div class="test-log-tools">
+                                <input id="draft-photo-input" type="file" accept="image/*,video/mp4,video/webm" multiple hidden>
+                                <button id="draft-add-photo" type="button" class="secondary outline">Add photo / video</button>
+                                <button id="draft-log-preview-toggle" type="button" class="secondary outline" aria-expanded="false" aria-controls="draft-log-preview">Preview test log</button>
+                            </div>
+                            <div id="draft-log-preview" class="test-log" hidden></div>
+                            <h3>Custom metadata</h3>
+                            <div id="draft-custom-fields"></div>
+                            <button id="draft-custom-add" type="button" class="secondary outline">Add field</button>
                         </fieldset>
                         <p id="campaign-draft-status" role="status" aria-live="polite"></p>
                         <button id="campaign-draft-save" type="submit">Save draft</button>

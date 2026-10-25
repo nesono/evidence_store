@@ -74,6 +74,11 @@ func (s *CampaignStore) FinalizeAttempt(ctx context.Context, id uuid.UUID, owner
 	if err := finalAssetRefs(ctx, tx, result.Evidence.ID, scenario.Assets); err != nil {
 		return nil, false, err
 	}
+	// Evidence now owns log attachments. Releasing the draft roots in the same
+	// transaction ensures evidence expiry can really release its media later.
+	if _, err := tx.Exec(ctx, `DELETE FROM campaign_draft_blob_ref WHERE attempt_id=$1`, a.ID); err != nil {
+		return nil, false, err
+	}
 	a, err = scanAttempt(tx.QueryRow(ctx, `UPDATE campaign_attempt SET finalized_at=now(), finished_at=$2,
 		finalized_revision=revision, revision=revision+1, updated_at=now(), evidence_id=$3 WHERE id=$1 RETURNING `+attemptColumns, a.ID, finished, result.Evidence.ID))
 	if err != nil {
@@ -97,6 +102,14 @@ func attemptEvidence(a *CampaignAttempt, p *CampaignPackage, scenario campaign.P
 		metadata[key] = value
 	}
 	metadata["tags"] = scenario.Definition.Defaults.Tags
+	if a.Data.Metadata != nil {
+		// The saved form is the complete effective metadata (including deliberate
+		// deletions of defaults), not a patch to reapply to package defaults.
+		metadata = make(map[string]any)
+		for key, value := range a.Data.Metadata {
+			metadata[key] = value
+		}
+	}
 	metadata["notes"] = a.Data.Notes
 	metadata["procedure_modified"] = false
 	metadata["campaign"] = map[string]any{
@@ -111,9 +124,16 @@ func attemptEvidence(a *CampaignAttempt, p *CampaignPackage, scenario campaign.P
 	}
 	// No client submission token is needed: the locked attempt is the unique
 	// finalization identity. Each rerun is a fresh attempt and evidence record.
+	typeName, source := a.Data.EvidenceType, a.Data.Source
+	if typeName == "" {
+		typeName = scenario.Definition.Defaults.EvidenceType
+	}
+	if source == "" {
+		source = a.Owner
+	}
 	return &model.EvidenceCreate{Repo: a.Data.Repo, Branch: a.Data.Branch, RCSRef: a.Data.RCSRef,
-		ProcedureRef: a.ProcedureRef, EvidenceType: scenario.Definition.Defaults.EvidenceType,
-		Source: a.Owner, Result: model.EvidenceResult(a.Data.Result), FinishedAt: model.FlexibleTime{Time: finished}, Metadata: encoded}, nil
+		ProcedureRef: a.ProcedureRef, EvidenceType: typeName,
+		Source: source, Result: model.EvidenceResult(a.Data.Result), FinishedAt: model.FlexibleTime{Time: finished}, Metadata: encoded}, nil
 }
 
 func finalAssetRefs(ctx context.Context, tx pgx.Tx, evidenceID uuid.UUID, assets map[string]string) error {

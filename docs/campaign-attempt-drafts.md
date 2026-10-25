@@ -10,13 +10,19 @@ read-only; capture opens in a separate dialog clearly labeled as a draft.
    a server-owned draft with a new UUID. Only declared ordinary input defaults
    are copied. Checks, notes, actual software context, and overall assessment
    start empty.
-2. Enter the actual software repository, branch and deployed revision. These are
-   editable draft context, never inferred from the package source. Release/package
-   associations and session-wide revision policy will be implemented separately.
+2. Software repository, branch and deployed revision reuse your last saved
+   software context for this imported campaign. Enter them once initially; expand
+   **Software under test** to override them. The procedure reference is fixed.
+   Context reuse is owner-scoped and does not infer deployment from package source.
+   Release/package associations and session-wide revision policy follow separately.
 3. Fill fields and checks alongside the instructions. Measurements are numbers
    in the declared unit. A NOT_EXECUTED check needs a reason. Evidence fields
-   accept one external HTTPS link per line; file uploads and CAS attachments
-   require draft-owned blob references and follow later.
+   accept one external HTTPS link per line. The separate **Test log** supports
+   Markdown and photo/video attachments, with the same editor and upload controls
+   as Add Result. Location (including Locate), weather lookup/manual composition,
+   tags, evidence type, source, notes, and custom metadata use the manual-test form
+   conventions. Package metadata/tags/type initialize new attempts; observations,
+   results, notes, and weather are never copied from earlier attempts.
 4. Choose **Save draft**. Only a confirmed server response shows “Saved on server”
    and the current revision. Required acquisition inputs can remain unanswered.
    The overall assessment is provisional; even PASS is not published as evidence
@@ -52,8 +58,13 @@ use authentication for separate users' drafts.
   `{revision, operation_id, data}`. `revision` is the last server revision and
   `operation_id` a nonzero client UUID. A successful edit increments the revision.
 
-`data` contains `repo`, `branch`, `rcs_ref`, `notes`, `result` and `answers` (an
-object keyed by field/check IDs). Result is empty or one of PASS/FAIL/ERROR/SKIPPED.
+`data` contains `repo`, `branch`, `rcs_ref`, `notes`, `result`, `answers` (an
+object keyed by field/check IDs), optional `evidence_type`, `source`, and
+`metadata`. Metadata carries the ordinary manual fields: tags, observations,
+location/accuracy, weather/reading time, and custom keys. It is the complete saved
+metadata, so removed defaults stay removed. Source follows the same `source:any`
+override rule as Add Result; ordinary contributors are pinned to their subject.
+Result is empty or one of PASS/FAIL/ERROR/SKIPPED.
 Text/choices are strings, measurements finite numbers, checks
 `{outcome, reason?}`, and evidence links arrays of `{uri, label}`. Unknown control
 IDs, bound results inside `answers`, unsupported values and malformed payloads
@@ -74,11 +85,15 @@ based on a stale revision, returns 409. This prevents silent last-writer-wins
 behavior across devices. Older retries after a newer edit also conflict.
 
 Migration 18 adds the attempt table and owner/package/procedure lookup index.
+Migration 20 adds draft-owned blob references. Saving validates that log images
+exist in CAS and publishes their references under the sweep lock. Replacing a log
+releases removed references; finalization transfers attachment ownership to
+evidence in the same transaction. Unsaved uploads remain subject to orphan grace.
 There is no automatic draft expiry or deletion API in this slice. Unfinalized drafts
 do not insert evidence records, appear in evidence search, compute campaign
 progress, or claim requirement coverage. [Finalization](campaign-finalization.md)
 now publishes saved attempts as immutable evidence; execution sessions, procedure
-editing, file attachment lifetime, and offline persistence follow in subsequent slices.
+editing, and offline persistence follow in subsequent slices.
 
 Verification covers typed validation, default initialization, API ownership,
 creation/save retries, stale and simultaneous saves, migration rollback/reapply,

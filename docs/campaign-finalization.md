@@ -80,8 +80,10 @@ Offline attempt synchronization and batch finalization remain follow-up work.
 ## Evidence snapshot and retention
 
 Core evidence fields come from the saved attempt's actual software context,
-owner, result, and supplied finish time. Evidence type/tags/custom defaults come
-from the imported procedure. `metadata.notes` contains the tester's notes.
+permitted source attribution, result, and supplied finish time. Evidence type,
+tags, and custom metadata start from the imported procedure and can be overridden
+in the manual-result form. `procedure_ref` is immutable. Location, weather,
+test log and its attachments, and `metadata.notes` retain the tester's entries.
 `metadata.procedure_modified` is false because editing procedures is not yet
 supported. `metadata.campaign` contains a versioned snapshot of package digest,
 campaign key/UUID, procedure reference, attempt UUID, source repository,
@@ -90,11 +92,12 @@ instructions/field definitions, asset mapping and structured answers.
 Search renders a check-count summary and expandable executed instructions/answers.
 The raw snapshot remains available in technical metadata. This is a captured
 definition, not a request to fetch a changing source repository. External evidence
-links remain links; draft file uploads still require a separate implementation.
+links remain links; test-log photos/videos use the existing CAS media upload path.
 
-Setup assets gain evidence-owned CAS references in the finalization transaction,
-in addition to their package references. Sweeping is coordinated through the
-same shared lock used for campaign publication.
+Setup assets and test-log attachments gain evidence-owned CAS references in the
+finalization transaction. Setup assets also keep their package references. Sweeping is coordinated through the
+same shared lock used for campaign publication. Draft-owned log references are
+released only after evidence references are established in that transaction.
 
 Migration 19 adds finalization fields and an evidence foreign key. When evidence
 retention deletes a record, a database trigger clears the attempt's duplicate

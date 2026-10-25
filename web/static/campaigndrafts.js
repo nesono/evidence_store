@@ -4,6 +4,7 @@ import { escapeHTML as esc, renderMarkdown } from "./markdown.js";
 import { resolveAssetImages } from "./campaignview.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { mountFinishTime } from "./finishtime.js";
+import { mountDraftManual, readManualMetadata } from "./draftmanual.js";
 
 export function draftControlsHTML(procedure, data, descriptionPath, assets) {
   return procedure.blocks
@@ -50,6 +51,11 @@ export function readDraftForm(form, previousAnswers = {}) {
   const data = { answers: {} };
   for (const name of ["repo", "branch", "rcs_ref", "notes", "result"])
     data[name] = form.elements.namedItem(name).value;
+  if (form.elements.namedItem("evidence_type")) {
+    data.evidence_type = form.elements.namedItem("evidence_type").value;
+    data.source = form.elements.namedItem("source").value;
+    data.metadata = readManualMetadata(form);
+  }
   for (const input of form.querySelectorAll("[data-answer]")) {
     if (input.validity?.badInput)
       throw new Error("Correct the invalid input before saving.");
@@ -111,6 +117,18 @@ export function mountCampaignDrafts(root, me) {
   const status = (text) => {
     el("campaign-draft-status").textContent = text;
   };
+  const manual = mountDraftManual(root, me, {
+    changed: () => {
+      if (!attempt?.finalized_at) {
+        dirty = true;
+        el("campaign-draft-finalize").disabled = true;
+        status("Unsaved changes — Save draft to store them.");
+      }
+    },
+    status,
+    contextID: () => attempt?.id,
+    editable: () => !!attempt && !busy && !attempt.finalized_at,
+  });
   async function request(path, options = {}) {
     const response = await apiFetchNoRedirect(API_BASE + path, options);
     if (!response.ok) {
@@ -149,7 +167,8 @@ export function mountCampaignDrafts(root, me) {
     finishTime.lock(value || finalized);
   }
   function showAttempt(row) {
-    const previousFinish = attempt?.id === row.id ? el("campaign-finished-at").value : "";
+    const previousFinish =
+      attempt?.id === row.id ? el("campaign-finished-at").value : "";
     attempt = row;
     pendingSave = null;
     pendingFinalize = null;
@@ -161,6 +180,9 @@ export function mountCampaignDrafts(root, me) {
       `${row.procedure_ref} · Attempt ${row.id} · Owner ${row.owner}`;
     for (const name of ["repo", "branch", "rcs_ref", "notes", "result"])
       form.elements.namedItem(name).value = row.data[name] || "";
+    for (const radio of form.querySelectorAll('[name="result"]'))
+      radio.checked = radio.value === row.data.result;
+    manual.restore(row, scenario.definition);
     const base = entry.path.slice(0, entry.path.lastIndexOf("/") + 1);
     el("campaign-draft-controls").innerHTML = draftControlsHTML(
       scenario.procedure,
@@ -282,6 +304,7 @@ export function mountCampaignDrafts(root, me) {
     setBusy(true);
     status("Saving draft…");
     try {
+      await manual.prepare(data);
       const row = await send(
         `/campaign-attempts/${attempt.id}`,
         "PUT",
@@ -297,6 +320,10 @@ export function mountCampaignDrafts(root, me) {
     }
   }
   function close() {
+    if (manual.pending()) {
+      status("Wait for pending lookups or attachments before closing.");
+      return;
+    }
     if (
       busy ||
       (dirty &&

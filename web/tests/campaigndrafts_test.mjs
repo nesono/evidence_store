@@ -45,7 +45,7 @@ test("form captures typed answers and preserves labels on previously saved links
     },
   ];
   const form = {
-    elements: { namedItem: () => ({ value: "" }) },
+    elements: { namedItem: name => name === "evidence_type" ? null : ({ value: "" }) },
     querySelectorAll: (selector) =>
       selector === "[data-answer]"
         ? inputs
