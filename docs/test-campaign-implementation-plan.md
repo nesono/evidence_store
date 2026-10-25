@@ -22,7 +22,7 @@ simulation language or a replacement for the source's requirements format.
 
 ## Evidence informing the proposal
 
-Reviewed on 2026-10-18:
+Initial review on 2026-10-18; daily-patrol sample reviewed on 2026-10-25:
 
 - [#199](https://github.com/nesono/evidence_store/issues/199): package-backed
   picker, reproducible source-side generation, editable execution copies,
@@ -33,42 +33,32 @@ Reviewed on 2026-10-18:
   now on the base branch for this proposal.
 - [#198](https://github.com/nesono/evidence_store/issues/198): keep the four
   core verdicts; report individual check outcomes instead of a core PARTIAL.
-- The supplied `2026-10-05_guselried-green_briefing 2.md`: eight planned LSCs,
+- A supplied field-test briefing: eight planned scenarios,
   an improvised reverse-driving variant, repeated setup metadata, blank
   per-check outcomes, a skipped test, and a disputed PARTIAL/possible-new-test
   assessment. Summary claims are not enough to reconstruct check outcomes.
-- Source repository at commit
-  `411b120ed14b77642d541ee2ecd62b52a0379d89`:
-  [V&V README](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/vnv/README.md),
-  [V&V structure rules](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/vnv/repo_structure.yaml),
-  [ROCO2 scenario status](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/sys_eng/roco2/scenarios/README.md),
-  [project context](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/sys_eng/roco2/project_context.md),
-  [ROCO2 index](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/sys_eng/roco2/index.md),
-  [reversing requirements](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/sys_eng/roco2/04_sysreq/roco2_convoy_reversing.sysreq.md),
-  and [simulation scenarios](https://quantumsystems.ghe.com/Quantum-Systems/talos_project/blob/411b120ed14b77642d541ee2ecd62b52a0379d89/talos/autonomy/simulation/scenario_testing/scenarios/README.md).
+- The daily-patrol sample discussed in [#197](https://github.com/nesono/evidence_store/issues/197):
+  grouped procedures, per-check outcomes and references, per-day roles and
+  operational measurements, and explicit reasons for not running a patrol.
+  This document retains generic design implications rather than the attachment.
 
-At that revision, `vnv/` contains its README and structure rules, not the
-catalogue or planned tools. The Excel master is on SharePoint; its contents and
-the full LSC catalogue were not available in the supplied repository. The
-briefing is the concrete manual-scenario sample used here. TWG code search was
-unavailable for this site; repository inspection used GitHub's API directly.
+The reviewed examples are workflow samples, not an approved full catalogue.
+Package authors remain responsible for the authoritative definitions and
+reviewed acceptance criteria. Internal repository links, revisions, and source
+documents are not reproduced in this proposal.
 
 There are source discrepancies to resolve during package authoring:
 
-- V&V's older README points to `sys_eng/roco`, while the ROCO2 index explicitly
-  identifies that material as outdated. Use the reviewed baseline, not whichever
-  link happens to be easiest to follow.
+- Use the reviewed baseline when older documentation and newer specifications
+  disagree. A convenient link does not establish authority.
 - Source docs disagree about JSON/YAML interchange and some vehicle-role
   conventions. Preserve explicit `vehicle_constellation`, `sut_control`,
   `leader_control`, and role assignments; do not infer these from a generic
   "mode" or bake product-specific rules into Evidence Store.
-- The briefing expects immediate reverse-gear mirroring in places; current
-  SYS-REQ-020 describes a distance-triggered start, and simulation `acc_35`
-  explicitly exercises not switching immediately with the leader. This needs
-  a V&V decision, not an automatic scenario rewrite.
-- SYS-REQ-021's distance tolerance and SYS-REQ-022's speed are still TBD/TBC.
-  LSC-47_2's briefing checks do not explicitly check the advertised overspeed
-  limit. Do not invent thresholds or claim requirement coverage from its title.
+- Conflicting trigger conditions or reused scenario identifiers need an authoring
+  decision, not an automatic scenario rewrite or merge based on a shared ID.
+- Resolve unspecified tolerances and ensure checks actually assess the named
+  behavior. Do not invent thresholds or claim requirement coverage from a title.
 - Legacy V&V reporting treats PASS/PARTIAL differently from Evidence Store's
   proposed check model. Existing milestone calculations need an explicit
   reporting-policy decision; a check pass fraction is not capability coverage.
@@ -343,7 +333,7 @@ Source-side process (proposed targets, not existing commands):
    source inputs or maintained authoring overlays.
 3. CI regenerates and checks no diff. Build individual targets and a package
    target consuming only declared files with a pinned toolchain. Keep acquisition
-   of SharePoint inputs separate from the hermetic package build.
+   of external catalogue inputs separate from the hermetic package build.
 4. Archive entries use sorted POSIX paths, fixed file modes (0644 files/0755
    directories), uid/gid 0, empty owner names, fixed mtime 0, and no host paths.
    Pin compression settings and gzip header time/name. Serialize generated YAML
@@ -355,11 +345,10 @@ Source-side process (proposed targets, not existing commands):
    test specifications. Retain package and digest alongside the relevant release
    artifacts; automatic release ingestion can follow manual upload later.
 
-The source's current `vnv/repo_structure.yaml` does not allow campaign folders
-or `.md` procedures under `test_specs`. A source-repository follow-up must agree
-the layout and update its rules before adding these files. Packaged images can
-be deterministic renders of source-controlled diagrams or pinned external
-inputs, consistent with its policy against committing binary master documents.
+Package authors should agree the source-repository layout and update any
+structure rules before adding campaign files. Packaged images can be
+deterministic renders of source-controlled diagrams or pinned external inputs,
+consistent with the source repository's policy for binary documents.
 
 Importer requirements for a usable v1:
 
@@ -538,17 +527,17 @@ Meaningful implementation checks:
   server-side ordering across pages, URL round trips, ID tie-breakers and pagination
   reset are separate tests; sorting a table must not reorder a campaign.
 
-## Applying the design to the supplied briefing
+## Applying the design to the field-test briefing
 
 | Observed case | Representation / next authoring step |
 |---|---|
-| Eight planned LSCs, repeated date/site/tags | One package with ordered entries; session context seeds compatible inputs |
-| LSC-33_2 and LSC-33_3 slope directions | Separate concrete definitions with stable IDs, complete steps and checks |
-| Ad hoc `LSC-33_3xxxxx` neutral rollback variant | Separate modified attempt based on LSC-33_3; retain changed instructions and flag; propose a stable new source variant after review |
-| LSC-54_2 PARTIAL / rain false positives | Preserve the observation and legacy wording; assess each actual check; no invented PASS values or silent new requirement |
-| LSC-67_6 / LSC-82_6 multi-step lock controls | Separate S-OCS/L-OCS definitions; author stable per-stage checks if stage progress matters; do not claim old aggregate results prove each stage |
-| LSC-82_6 SKIPPED | Explicit skipped attempt with reason and NOT_EXECUTED checks, if confirmed by tester |
-| LSC-17_3 has no reported verdict and uncertain location | Pending/draft, not inferred SKIPPED; choose actual location at execution |
+| Eight planned scenarios, repeated date/site/tags | One package with ordered entries; session context seeds compatible inputs |
+| Opposite slope directions | Separate concrete definitions with stable IDs, complete steps and checks |
+| Ad hoc rollback variant | Separate modified attempt based on the original procedure; retain changed instructions and flag; propose a stable new source variant after review |
+| PARTIAL assessment with rain-related false positives | Preserve the observation and legacy wording; assess each actual check; no invented PASS values or silent new requirement |
+| Multi-step lock controls from different operator stations | Separate definitions; author stable per-stage checks if stage progress matters; do not claim old aggregate results prove each stage |
+| Explicitly skipped test | Explicit skipped attempt with reason and NOT_EXECUTED checks, if confirmed by tester |
+| Missing verdict and uncertain location | Pending/draft, not inferred SKIPPED; choose actual location at execution |
 | Summary PASS with blank detailed criteria/build fields | Preserve as historical narrative until reviewed; no fabricated per-check results, timestamps, deployed commit or vehicle assignment |
 
 Do not import the annotated briefing itself as a clean package: it mixes planned
@@ -556,3 +545,37 @@ instructions and results. Prepare definitions from reviewed source material and
 retain the annotated original as historical evidence. Any legacy result migration
 is separate and preserves its original vocabulary, uncertainty and provenance.
 The first campaign pilot can proceed without automating that migration.
+
+## Applying the design to the daily-patrol sample
+
+The additional sample combines several checks in each procedure and stores
+verdicts, logical-scenario references, comments, and issue keys as parallel
+comma- or pipe-separated strings. This exposes useful requirements, but those
+strings should not become the campaign response format: reordering a check or
+entering a delimiter in a comment could silently associate the wrong values.
+
+| Sample feature | Proposed representation |
+|---|---|
+| One procedure contains several related checks | Keep a grouped procedure when it is executed and assessed as one unit; use stable check IDs and Markdown headings. Split independently rerunnable cases into separate concrete procedures. |
+| Parallel verdict/comment/reference lists | Store answers by check ID. Put a check's comment in an adjacent text field and its issue links in an adjacent evidence-reference field, each with a stable related ID. Never join answers by array position. |
+| Different logical-scenario references per check, including no reference | Preserve explicit traceability beside the relevant check; absent is empty, not a synthetic `none` scenario. V1 may use source-authored Markdown links; structured per-check traceability needs an agreed schema before automated coverage reporting. |
+| Legacy per-check partial/blocked/not-run vocabulary | Preserve original wording during any migration; review the actual outcome. New attempts use the agreed check outcomes, reasons, and separate overall assessment. An untouched prefilled not-run value is not an explicit skip decision. |
+| Roles and operating measurements entered once per day | One execution session per patrol occurrence; retain shared context and collect operational measurements in a designated setup/summary procedure. Package definitions remain reusable across dates. |
+| Whole patrol or selected procedures not run | Record a reason and an explicit set of affected scenario IDs at the session level; expand an explicit whole-patrol action to the selected package's full scenario set. Pending work alone is not evidence that the patrol was skipped. |
+| No vehicle, one vehicle, or multiple vehicle roles | Declare the actual inputs needed by each procedure; do not require vehicle fields on administrative/setup-only procedures or derive roles from an ambiguous generic mode. |
+| Human-facing evidence type and log template | Normalize the type to `manual_test` during source-side preparation, put instructions in `procedure.md`, and leave tester Notes empty. |
+
+For the first usable session, a **Skip selected** action should create explicit
+SKIPPED attempts with the same recorded reason and NOT_EXECUTED checks, using
+normal attempt identities and finalization. A partly run patrol selects only
+the unexecuted procedures; it must not replace results already captured. This
+avoids inventing executable procedures whose only purpose is to encode a reason
+for not running other procedures. The existing required evidence context still
+applies; if it is unknown, retain the session annotation without fabricating a
+SUT revision or producing incomplete evidence. Session annotations can record
+the operational reason while the executable test results remain absent.
+
+Extend the pilot review with a grouped commissioning procedure, per-day context,
+and whole/partial-patrol skip handling. Verify that reordering checks does not
+change answer associations and that recurring patrols start with fresh answers.
+These are design additions for review; implementation follows that review.
