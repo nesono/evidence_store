@@ -31,7 +31,8 @@
 // v21: compact procedure table matching the Search view.
 // v22: cell-owned procedure spacing and aligned text baselines.
 // v23: online campaign attempt drafts.
-const VERSION = "v23";
+// v24: floating circular close control on attempt drafts.
+const VERSION = "v24";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -42,7 +43,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=23",
+  "/app.css?v=24",
   "/app.js",
   "/blobref.js",
   "/access.js",
