@@ -11,6 +11,7 @@ go_test(
         "blobs_test.go",
         "campaigns_test.go",
         "campaign_drafts_test.go",
+        "campaign_finalize_test.go",
         "clusters_integration_test.go",
         "distinct_test.go",
         "expiry_sweep_test.go",

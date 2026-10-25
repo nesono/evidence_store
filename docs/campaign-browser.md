@@ -63,8 +63,9 @@ The selected procedure displays:
 The inspection is a **read-only definition preview**, visibly labeled as such.
 Contributors can now choose **Start new attempt**, or resume a saved draft, to
 open the separate [draft capture dialog](campaign-attempt-drafts.md). Its typed
-inputs are editable and explicitly saved on the server. Drafts are not finalized
-evidence and do not prefill the independent Add Result form.
+inputs are editable and explicitly saved on the server. Saved drafts can then be
+[finalized as immutable evidence](campaign-finalization.md). They do not prefill
+the independent Add Result form.
 
 ## Connectivity
 

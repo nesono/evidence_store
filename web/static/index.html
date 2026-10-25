@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=24">
+    <link rel="stylesheet" href="app.css?v=25">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -76,7 +76,7 @@
     <main class="container">
         <section id="tab-campaigns" class="tab-content" hidden>
             <h2>Campaign packages</h2>
-            <p>Import a package, review its procedures, and start a draft to record your observations. Drafts can be saved online and resumed; finalizing test evidence follows separately.</p>
+            <p>Import a package, review its procedures, and record observations in a draft. Save and resume drafts online, then finalize completed attempts as evidence.</p>
             <form id="campaign-import-form">
                 <label for="campaign-file">Campaign archive <small>(.tar.gz, at most 16 MiB)</small></label>
                 <input id="campaign-file" type="file" accept=".tar.gz,.tgz,application/gzip">
@@ -164,6 +164,14 @@
                         <button id="campaign-draft-save" type="submit">Save draft</button>
                         <button id="campaign-draft-reload" type="button" class="secondary outline">Reload saved draft</button>
                     </form>
+                    <section aria-label="Finalize saved attempt">
+                        <h3>Finalize saved attempt</h3>
+                        <p>Save your edits first. Finalization publishes the saved result as immutable evidence.</p>
+                        <label for="campaign-finished-at">Actual finish time (RFC3339, including timezone)</label>
+                        <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z">
+                        <button id="campaign-draft-finalize" type="button">Finalize as evidence</button>
+                        <a id="campaign-final-evidence" target="_blank" rel="noopener noreferrer" hidden>Open evidence record</a>
+                    </section>
                 </article>
                 </div>
             </dialog>

@@ -19,7 +19,8 @@ read-only; capture opens in a separate dialog clearly labeled as a draft.
    require draft-owned blob references and follow later.
 4. Choose **Save draft**. Only a confirmed server response shows “Saved on server”
    and the current revision. Required acquisition inputs can remain unanswered.
-   The overall assessment is provisional; even PASS is not published as evidence.
+   The overall assessment is provisional; even PASS is not published as evidence
+   until [finalization](campaign-finalization.md).
 5. Close the dialog, reload, and select the same procedure to resume a saved draft.
    The list is newest first, 25 entries per page, scoped to the current owner,
    imported package UUID, and procedure reference. Refresh retrieves saved drafts.
@@ -73,11 +74,11 @@ based on a stale revision, returns 409. This prevents silent last-writer-wins
 behavior across devices. Older retries after a newer edit also conflict.
 
 Migration 18 adds the attempt table and owner/package/procedure lookup index.
-There is no automatic draft expiry or deletion API in this slice. These drafts
+There is no automatic draft expiry or deletion API in this slice. Unfinalized drafts
 do not insert evidence records, appear in evidence search, compute campaign
-progress, or claim requirement coverage. Finalization, execution sessions,
-procedure editing, file attachment lifetime, and offline persistence follow in
-subsequent slices.
+progress, or claim requirement coverage. [Finalization](campaign-finalization.md)
+now publishes saved attempts as immutable evidence; execution sessions, procedure
+editing, file attachment lifetime, and offline persistence follow in subsequent slices.
 
 Verification covers typed validation, default initialization, API ownership,
 creation/save retries, stale and simultaneous saves, migration rollback/reapply,

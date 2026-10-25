@@ -15,22 +15,26 @@ import (
 var ErrAttemptConflict = errors.New("attempt changed or request identity was reused")
 
 type CampaignAttempt struct {
-	ID           uuid.UUID          `json:"id"`
-	CampaignID   uuid.UUID          `json:"campaign_id"`
-	ProcedureRef string             `json:"procedure_ref"`
-	Owner        string             `json:"owner"`
-	Revision     int64              `json:"revision"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
-	Data         campaign.DraftData `json:"data"`
+	ID                uuid.UUID          `json:"id"`
+	CampaignID        uuid.UUID          `json:"campaign_id"`
+	ProcedureRef      string             `json:"procedure_ref"`
+	Owner             string             `json:"owner"`
+	Revision          int64              `json:"revision"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
+	Data              campaign.DraftData `json:"data"`
+	FinalizedAt       *time.Time         `json:"finalized_at,omitempty"`
+	FinishedAt        *time.Time         `json:"finished_at,omitempty"`
+	FinalizedRevision *int64             `json:"finalized_revision,omitempty"`
+	EvidenceID        *uuid.UUID         `json:"evidence_id,omitempty"`
 }
 
-const attemptColumns = `id, campaign_id, procedure_ref, owner, revision, created_at, updated_at, data`
+const attemptColumns = `id, campaign_id, procedure_ref, owner, revision, created_at, updated_at, data, finalized_at, finished_at, finalized_revision, evidence_id`
 
 func scanAttempt(row pgx.Row) (*CampaignAttempt, error) {
 	var a CampaignAttempt
 	var data []byte
-	if err := row.Scan(&a.ID, &a.CampaignID, &a.ProcedureRef, &a.Owner, &a.Revision, &a.CreatedAt, &a.UpdatedAt, &data); err != nil {
+	if err := row.Scan(&a.ID, &a.CampaignID, &a.ProcedureRef, &a.Owner, &a.Revision, &a.CreatedAt, &a.UpdatedAt, &data, &a.FinalizedAt, &a.FinishedAt, &a.FinalizedRevision, &a.EvidenceID); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &a.Data); err != nil {
@@ -82,6 +86,9 @@ func (s *CampaignStore) SaveAttempt(ctx context.Context, id uuid.UUID, owner str
 	a, err := scanAttempt(tx.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND owner=$2 FOR UPDATE`, id, owner))
 	if err != nil {
 		return nil, err
+	}
+	if a.FinalizedAt != nil {
+		return nil, ErrAttemptConflict
 	}
 	var sameOperation, samePayload bool
 	err = tx.QueryRow(ctx, `SELECT COALESCE(last_operation_id=$2,false),

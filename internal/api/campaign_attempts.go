@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -166,13 +167,52 @@ func (h *CampaignHandler) ListAttempts(w http.ResponseWriter, r *http.Request) {
 }
 
 func attemptError(w http.ResponseWriter, err error) {
+	var invalid *store.FinalizationError
+	if errors.As(err, &invalid) {
+		writeError(w, 422, invalid.Error())
+		return
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, 404, "attempt or campaign not found")
 		return
 	}
 	if errors.Is(err, store.ErrAttemptConflict) {
-		writeError(w, 409, "draft changed; reload the saved draft before applying your changes")
+		writeError(w, 409, "attempt changed or is finalized; reload the saved attempt")
 		return
 	}
 	campaignError(w, err)
+}
+
+func (h *CampaignHandler) FinalizeAttempt(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, 400, "invalid attempt id")
+		return
+	}
+	var req struct {
+		Revision   int64     `json:"revision"`
+		FinishedAt time.Time `json:"finished_at"`
+	}
+	if !readAttemptJSON(w, r, &req) {
+		return
+	}
+	if req.Revision < 1 || req.FinishedAt.IsZero() {
+		writeError(w, 422, "revision and finished_at (RFC3339) are required")
+		return
+	}
+	// PostgreSQL timestamps are microsecond-precision; normalize before both
+	// comparison and insertion so nanosecond RFC3339 requests remain retryable.
+	a, created, err := h.store.FinalizeAttempt(r.Context(), id, attemptOwner(r), req.Revision, req.FinishedAt.UTC().Truncate(time.Microsecond))
+	if err != nil {
+		attemptError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	if a.EvidenceID != nil {
+		w.Header().Set("Location", "/api/v1/evidence/"+a.EvidenceID.String())
+	}
+	writeJSON(w, status, a)
 }

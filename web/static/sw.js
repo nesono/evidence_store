@@ -32,7 +32,8 @@
 // v22: cell-owned procedure spacing and aligned text baselines.
 // v23: online campaign attempt drafts.
 // v24: floating circular close control on attempt drafts.
-const VERSION = "v24";
+// v25: immutable campaign finalization and evidence summaries.
+const VERSION = "v25";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -43,7 +44,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=24",
+  "/app.css?v=25",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -52,6 +53,7 @@ const SHELL = [
   "/common.js",
   "/campaigns.js",
   "/campaigndrafts.js",
+  "/campaignresult.js",
   "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",

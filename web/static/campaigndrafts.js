@@ -101,6 +101,7 @@ export function mountCampaignDrafts(root, me) {
     busy = false,
     pendingCreate = null,
     pendingSave = null,
+    pendingFinalize = null,
     listVersion = 0,
     offset = 0;
   const allowed = mayDo(me, "evidence:write");
@@ -132,7 +133,8 @@ export function mountCampaignDrafts(root, me) {
     });
   function setBusy(value) {
     busy = value;
-    el("campaign-draft-fields").disabled = value;
+    const finalized = !!attempt?.finalized_at;
+    el("campaign-draft-fields").disabled = value || finalized;
     for (const id of [
       "campaign-draft-save",
       "campaign-draft-close",
@@ -140,14 +142,18 @@ export function mountCampaignDrafts(root, me) {
     ])
       el(id).disabled = value;
     el("campaign-attempt-start").disabled = value;
+    el("campaign-draft-save").disabled = value || finalized;
+    el("campaign-draft-finalize").disabled = value || finalized || dirty;
+    el("campaign-finished-at").disabled = value || finalized;
   }
   function showAttempt(row) {
     attempt = row;
     pendingSave = null;
+    pendingFinalize = null;
     dirty = false;
     const { scenario, entry } = context;
     el("campaign-draft-title").textContent =
-      `Draft: ${scenario.definition.title}`;
+      `${row.finalized_at ? "Finalized" : "Draft"}: ${scenario.definition.title}`;
     el("campaign-draft-identity").textContent =
       `${row.procedure_ref} · Attempt ${row.id} · Owner ${row.owner}`;
     for (const name of ["repo", "branch", "rcs_ref", "notes", "result"])
@@ -155,13 +161,26 @@ export function mountCampaignDrafts(root, me) {
     const base = entry.path.slice(0, entry.path.lastIndexOf("/") + 1);
     el("campaign-draft-controls").innerHTML = draftControlsHTML(
       scenario.procedure,
-      row.data,
+      { ...row.data, answers: row.data.answers || {} },
       base + scenario.definition.description,
       scenario.assets,
     );
     status(
-      `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
+      row.finalized_at
+        ? row.evidence_id
+          ? "Finalized as immutable evidence."
+          : "Finalized evidence has expired; its answers are no longer retained."
+        : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
     );
+    el("campaign-finished-at").value = row.finished_at || "";
+    const link = el("campaign-final-evidence");
+    link.hidden = !row.evidence_id;
+    link.href = row.evidence_id
+      ? `/?detail=${encodeURIComponent(row.evidence_id)}&view=record`
+      : "#";
+    if (row.finalized_at && !row.evidence_id)
+      el("campaign-draft-controls").replaceChildren();
+    setBusy(busy);
     if (!dialog.open) dialog.showModal();
     if (mayDo(me, "blob:read")) hydrateImages(el("campaign-draft-controls"));
     else
@@ -189,11 +208,11 @@ export function mountCampaignDrafts(root, me) {
       el("campaign-attempt-list").innerHTML = page.attempts
         .map(
           (a) =>
-            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">Resume draft · ${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
+            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.finalized_at ? (a.evidence_id ? "View finalized attempt" : "View expired attempt") : "Resume draft"} · ${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
         )
         .join("");
       el("campaign-attempt-list-status").textContent = page.attempts.length
-        ? "Your saved drafts (newest first)"
+        ? "Your attempts (newest first)"
         : "No saved drafts for this procedure.";
       el("campaign-attempt-prev").disabled = offset === 0;
       el("campaign-attempt-next").disabled = !page.has_more;
@@ -240,7 +259,7 @@ export function mountCampaignDrafts(root, me) {
   }
   async function save(event) {
     event.preventDefault();
-    if (!attempt || busy) return;
+    if (!attempt || busy || attempt.finalized_at) return;
     let data;
     try {
       data = readDraftForm(form, attempt.data.answers);
@@ -289,6 +308,49 @@ export function mountCampaignDrafts(root, me) {
     el("campaign-draft-controls").replaceChildren();
     releaseImages();
   }
+
+  async function finalize() {
+    if (!attempt || busy || dirty || attempt.finalized_at) return;
+    const raw = el("campaign-finished-at").value.trim();
+    if (
+      !raw ||
+      !/(Z|[+-]\d{2}:\d{2})$/.test(raw) ||
+      !Number.isFinite(Date.parse(raw))
+    ) {
+      status(
+        "Enter the actual finish time as RFC3339 with a timezone, e.g. 2026-10-25T14:30:00Z.",
+      );
+      return;
+    }
+    const finished_at = new Date(raw).toISOString();
+    if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
+      pendingFinalize = { revision: attempt.revision, finished_at };
+    if (
+      !confirm(
+        "Finalize this saved attempt as immutable evidence? Further changes require a new attempt.",
+      )
+    )
+      return;
+    setBusy(true);
+    status("Finalizing saved attempt…");
+    try {
+      showAttempt(
+        await send(
+          `/campaign-attempts/${attempt.id}/finalize`,
+          "POST",
+          pendingFinalize,
+        ),
+      );
+      listDrafts();
+    } catch (error) {
+      status(
+        `Not finalized: ${error.message}. Retry with the same finish time if the response was lost.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  el("campaign-draft-finalize").addEventListener("click", finalize);
   el("campaign-attempt-start").addEventListener("click", start);
   el("campaign-attempt-refresh").addEventListener("click", () => listDrafts());
   el("campaign-attempt-prev").addEventListener("click", () =>
@@ -302,7 +364,9 @@ export function mountCampaignDrafts(root, me) {
     if (button) resume(button.dataset.attemptId);
   });
   form.addEventListener("input", () => {
+    if (attempt?.finalized_at) return;
     dirty = true;
+    el("campaign-draft-finalize").disabled = true;
     status("Unsaved changes — select Save draft to store them on the server.");
   });
   form.addEventListener("submit", save);

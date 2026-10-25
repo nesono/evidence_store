@@ -17,6 +17,7 @@ go_library(
         "static/common.js",
         "static/campaigns.js",
         "static/campaigndrafts.js",
+        "static/campaignresult.js",
         "static/campaignview.js",
         "static/datalists.js",
         "static/datepicker.js",

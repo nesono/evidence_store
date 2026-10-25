@@ -183,6 +183,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 		r.With(auth.Require(auth.PermEvidenceWrite)).Get("/campaign-attempts", campaignAPI.ListAttempts)
 		r.With(auth.Require(auth.PermEvidenceWrite)).Get("/campaign-attempts/{id}", campaignAPI.GetAttempt)
 		r.With(auth.Require(auth.PermEvidenceWrite)).Put("/campaign-attempts/{id}", campaignAPI.SaveAttempt)
+		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/campaign-attempts/{id}/finalize", campaignAPI.FinalizeAttempt)
 
 		// Declaring that one branch inherits another's evidence rewrites what
 		// the store answers about code nobody tested. DESIGN.md section 8 has

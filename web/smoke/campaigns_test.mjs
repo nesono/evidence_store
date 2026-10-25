@@ -44,6 +44,12 @@ async function handle(req, res) {
     if(req.method==="POST" || req.method==="PUT") {
       const chunks=[];for await(const chunk of req) chunks.push(chunk);
       const body=JSON.parse(Buffer.concat(chunks));
+      if(url.pathname.endsWith('/finalize')) {
+        const a=attempts.get(url.pathname.split('/').at(-2));
+        if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
+        a.finalized_at=new Date().toISOString();a.finished_at=body.finished_at;a.evidence_id="example-evidence";a.revision++;
+        return json(res,a,201);
+      }
       if(req.method==="POST") {
         const a={...body,owner:"user:tester",revision:1,updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
         attempts.set(a.id,a);return json(res,a,201);
@@ -196,7 +202,16 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.eval(`const f=document.getElementById('campaign-draft-form');f.elements.notes.value='keep my edit';f.dispatchEvent(new Event('input'));f.requestSubmit()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Not saved')`);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.notes.value`),"keep my edit");
-  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-close').click()`);
+  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-reload').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 3')`);
+  await page.eval(`document.getElementById('campaign-finished-at').value='2026-10-25T12:30:00Z';document.getElementById('campaign-draft-finalize').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').disabled`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-save').disabled`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-finalize').disabled`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-final-evidence').hidden`),false);
+  assert.match(await page.eval(`document.getElementById('campaign-final-evidence').href`),/detail=example-evidence/);
+  await page.eval(`document.getElementById('campaign-draft-close').click()`);
   assert.deepEqual(page.problems,[]);
 });
 
