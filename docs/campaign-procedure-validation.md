@@ -63,8 +63,9 @@ asset availability, or test results. No server endpoints or database migrations
 are introduced. The sample procedures are generic format fixtures.
 
 The [campaign package tools](campaign-package-format.md) now integrate this
-parser with deterministic archive creation and package validation. Server import,
-asset lifetime tracking, procedure selection and draft capture follow next.
+parser with deterministic archive creation and package validation.
+[Server import](campaign-import.md) persists archives and assets in CAS with
+reachability tracking. Procedure selection and draft capture follow next.
 Following [#200](https://github.com/nesono/evidence_store/issues/200), product
 revision-to-package associations live outside content-addressed archives.
 

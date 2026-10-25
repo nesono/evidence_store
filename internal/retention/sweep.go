@@ -10,7 +10,7 @@ import (
 // sweepBatch is how many objects are checked for reachability per query.
 const sweepBatch = 500
 
-// SweepBlobs deletes blobs no evidence record references any more.
+// SweepBlobs deletes blobs no evidence record or campaign references any more.
 //
 // Blobs are content-addressed and shared, so they cannot be deleted with the
 // record that used them — a screenshot pasted into two runs outlives the first.
@@ -36,25 +36,23 @@ func (w *Worker) SweepBlobs(ctx context.Context) (int, error) {
 		if len(batch) == 0 {
 			return nil
 		}
-		referenced, err := w.blobRefs.Referenced(ctx, batch)
-		if err != nil {
-			return err
-		}
-		for _, d := range batch {
-			if referenced[d] {
-				continue
+		return w.blobRefs.WithSweepLock(ctx, batch, func(referenced map[blob.Digest]bool) error {
+			for _, d := range batch {
+				if referenced[d] {
+					continue
+				}
+				if err := w.blobs.Delete(ctx, d); err != nil {
+					// Something else may have deleted it, or the store may be
+					// having a bad day. Neither is a reason to abandon the pass:
+					// the object is still unreferenced and comes up again next time.
+					w.logger.Warn("failed to delete unreferenced blob", "error", err, "digest", d)
+					continue
+				}
+				deleted++
 			}
-			if err := w.blobs.Delete(ctx, d); err != nil {
-				// Something else may have deleted it, or the store may be
-				// having a bad day. Neither is a reason to abandon the pass:
-				// the object is still unreferenced and comes up again next time.
-				w.logger.Warn("failed to delete unreferenced blob", "error", err, "digest", d)
-				continue
-			}
-			deleted++
-		}
-		batch = batch[:0]
-		return nil
+			batch = batch[:0]
+			return nil
+		})
 	}
 
 	err := w.blobs.List(ctx, func(o blob.Object) error {

@@ -22,20 +22,34 @@ const (
 // ReadPackage checks the entire gzip stream, archive paths, definitions, and
 // declared dependencies. Nothing is extracted to disk or fetched from a URL.
 func ReadPackage(input io.Reader) (*Package, error) {
+	p, _, err := ReadPackageAssets(input)
+	return p, err
+}
+
+// ReadPackageAssets returns validated setup-asset bytes keyed by digest for CAS
+// ingestion. The returned map contains only declared assets, never arbitrary
+// archive entries; shared assets appear once.
+func ReadPackageAssets(input io.Reader) (*Package, map[string][]byte, error) {
 	data, err := readBounded(input, MaxArchiveBytes)
 	if err != nil {
-		return nil, fmt.Errorf("read archive: %w", err)
+		return nil, nil, fmt.Errorf("read archive: %w", err)
 	}
 	files, err := unpack(data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	p, err := validateFiles(files)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	p.Digest = contentDigest(data)
-	return p, nil
+	assets := make(map[string][]byte)
+	for _, scenario := range p.Scenarios {
+		for name, digest := range scenario.Assets {
+			assets[digest] = files[name]
+		}
+	}
+	return p, assets, nil
 }
 
 func readBounded(r io.Reader, limit int64) ([]byte, error) {

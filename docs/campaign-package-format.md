@@ -3,7 +3,8 @@
 The package builder and validator extend the
 [procedure validator](campaign-procedure-validation.md) with an offline,
 deterministic archive format. This is the implemented v1 authoring contract.
-Server import, storage, and execution screens follow separately.
+[Server import and CAS storage](campaign-import.md) are available. Execution
+screens follow separately.
 
 ## Build and inspect a package
 
@@ -174,6 +175,6 @@ bazel test //internal/campaign:campaign_test //cmd/campaign-package:campaign_pac
 Tests cover deterministic headers and bytes, round-trip parsing, changed-content
 digests, input selection, invalid definitions, missing/unsupported assets, path
 escapes and links, duplicate/conflicting entries, corrupt/trailing gzip streams,
-and expansion limits. The next slice can consume `ReadPackage` to publish an
-immutable package only after validation, with transactional metadata and explicit
-blob references for the archive and setup assets.
+and expansion limits. The server consumes the same validation boundary to publish
+an immutable package with transactional metadata and explicit blob references
+for the archive and setup assets; see [campaign import](campaign-import.md).
