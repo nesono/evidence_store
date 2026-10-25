@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCampaignAPI } from "../static/campaigns.js";
-import { MAX_CAMPAIGN_BYTES, matchingScenarios, packageInfoHTML, packageListHTML, procedureHTML, resolveAssetImages, uploadProblem } from "../static/campaignview.js";
+import { MAX_CAMPAIGN_BYTES, matchingScenarios, packageInfoHTML, packageListHTML, procedurePage, procedureListHTML, procedureHTML, resolveAssetImages, uploadProblem } from "../static/campaignview.js";
 import { tabFromHash } from "../static/offline.js";
 
 test("campaign upload validates selection, empty files and the compressed limit", () => {
@@ -59,6 +59,17 @@ test("procedure filtering is case insensitive across title, identity and referen
   assert.deepEqual(matchingScenarios(rows, " STATUS "), [rows[0]]);
   assert.deepEqual(matchingScenarios(rows, "patrol/record"), [rows[1]]);
   assert.deepEqual(matchingScenarios(rows, "none"), []);
+});
+
+test("procedure pages bound the visible list and search the full campaign", () => {
+  const rows = Array.from({ length: 23 }, (_, i) => ({ definition: { id: `check-${i}`, title: `Check ${i}`, procedure_ref: `patrol/${i}` } }));
+  assert.deepEqual(procedurePage(rows, "", 0), { rows: rows.slice(0, 10), total: 23 });
+  assert.deepEqual(procedurePage(rows, "", 20), { rows: rows.slice(20), total: 23 });
+  assert.deepEqual(procedurePage(rows, "check-22"), { rows: [rows[22]], total: 1 });
+  const html = procedureListHTML([{ definition: { id: 'id" autofocus', title: "<script>", procedure_ref: "test/ref" } }], null);
+  assert.ok(!html.includes("<script>"));
+  assert.ok(html.includes("&quot;"));
+  assert.ok(html.includes('aria-pressed="false"'));
 });
 
 test("asset paths resolve relative to the description and only to valid CAS digests", () => {

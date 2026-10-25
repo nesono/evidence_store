@@ -4,6 +4,7 @@ import { formatTime } from "./common.js";
 import { escapeHTML as esc, renderMarkdown } from "./markdown.js";
 
 export const MAX_CAMPAIGN_BYTES = 16 * 1024 * 1024;
+export const PROCEDURE_PAGE_SIZE = 10;
 
 export function uploadProblem(file) {
   if (!file) return "Choose a campaign .tar.gz file.";
@@ -16,6 +17,18 @@ export function matchingScenarios(scenarios, query) {
   const text = query.trim().toLowerCase();
   return scenarios.filter(({ definition: d }) =>
     [d.id, d.title, d.procedure_ref].some(value => String(value).toLowerCase().includes(text)));
+}
+
+export function procedurePage(scenarios, query, offset = 0) {
+  const matches = matchingScenarios(scenarios, query);
+  return { rows: matches.slice(offset, offset + PROCEDURE_PAGE_SIZE), total: matches.length };
+}
+
+export function procedureListHTML(rows, selectedID) {
+  if (!rows.length) return '<li class="empty-state">No matching procedures.</li>';
+  return rows.map(({ definition: d }) => `<li><button type="button" class="secondary outline campaign-procedure-item" data-procedure-id="${esc(d.id)}" aria-pressed="${d.id === selectedID}">
+    <strong>${esc(d.title)}</strong><span>Scenario ID: ${esc(d.id)}</span><code>${esc(d.procedure_ref)}</code>
+  </button></li>`).join("");
 }
 
 export function packageListHTML(rows, selectedID) {

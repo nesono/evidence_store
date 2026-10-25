@@ -25,7 +25,8 @@
 // v15: fixed sort-indicator space and single-line table headers.
 // v16: campaign package browser and definition previews.
 // v17: distinct campaign overview and procedure detail regions.
-const VERSION = "v17";
+// v18: incrementally filtered, paginated procedure list.
+const VERSION = "v18";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -36,7 +37,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=17",
+  "/app.css?v=18",
   "/app.js",
   "/blobref.js",
   "/access.js",

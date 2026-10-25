@@ -2,7 +2,7 @@
 // capture will use a separate draft lifecycle rather than this preview screen.
 import { API_BASE, apiFetch, mayDo } from "./common.js";
 import { hydrateImages, releaseImages } from "./images.js";
-import { matchingScenarios, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
+import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
 
 export function createCampaignAPI(request = apiFetch) {
   async function checked(path, options) {
@@ -38,6 +38,7 @@ export function showCampaigns() { view?.show(); }
 export function createCampaignView(root, me, api = createCampaignAPI()) {
   const el = id => root.querySelector(`#${id}`);
   let rows = [], offset = 0, hasMore = false, selected = null;
+  let procedureOffset = 0, selectedProcedure = null;
   let listVersion = 0, detailVersion = 0, loaded = false, loading = false, importing = false;
   const canImport = mayDo(me, "evidence:write") && mayDo(me, "blob:write");
   const canReadBlobs = mayDo(me, "blob:read");
@@ -81,27 +82,28 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
 
   function paintProcedures() {
     if (!selected) return;
-    const select = el("campaign-procedure");
-    const previous = select.value;
-    const filtered = matchingScenarios(selected.definition.scenarios, el("campaign-procedure-search").value);
-    select.replaceChildren();
-    for (const scenario of filtered) {
-      const option = document.createElement("option");
-      option.value = scenario.definition.id;
-      option.textContent = `${scenario.definition.title} — ${scenario.definition.procedure_ref}`;
-      select.append(option);
-    }
-    if (filtered.some(s => s.definition.id === previous)) select.value = previous;
-    select.disabled = !filtered.length;
-    status("campaign-procedure-count", `${filtered.length} matching procedures`);
-    paintProcedure();
+    const page = procedurePage(selected.definition.scenarios, el("campaign-procedure-search").value, procedureOffset);
+    el("campaign-procedure-list").innerHTML = procedureListHTML(page.rows, selectedProcedure);
+    el("campaign-procedure-prev").disabled = procedureOffset === 0;
+    el("campaign-procedure-next").disabled = procedureOffset + page.rows.length >= page.total;
+    status("campaign-procedure-count", page.total
+      ? `Procedures ${procedureOffset + 1}–${procedureOffset + page.rows.length} of ${page.total} matching`
+      : "0 matching procedures");
+  }
+
+  function closeProcedure() {
+    selectedProcedure = null;
+    el("campaign-procedure-inspection").hidden = true;
+    el("campaign-procedure-preview").replaceChildren();
+    releaseImages();
   }
 
   function paintProcedure() {
     if (!selected) return;
     const output = el("campaign-procedure-preview");
-    const scenario = selected.definition.scenarios.find(s => s.definition.id === el("campaign-procedure").value);
-    if (!scenario) { output.textContent = "No matching procedures."; releaseImages(); return; }
+    const scenario = selected.definition.scenarios.find(s => s.definition.id === selectedProcedure);
+    if (!scenario) { closeProcedure(); return; }
+    el("campaign-procedure-inspection").hidden = false;
     const entry = selected.definition.manifest.scenarios.find(e => e.id === scenario.definition.id);
     output.innerHTML = procedureHTML(scenario, entry.path);
     releaseImages();
@@ -113,10 +115,11 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     selected = row;
     el("campaign-detail").hidden = false;
     el("campaign-package-info").innerHTML = packageInfoHTML(row);
-    el("campaign-procedure-context").textContent = `Part of campaign: ${row.definition.manifest.campaign.name}. Instructions and fields below apply only to the selected procedure.`;
+    el("campaign-procedure-context").textContent = `Procedures in campaign: ${row.definition.manifest.campaign.name}. Select a procedure to inspect its instructions and fields.`;
     el("campaign-download").hidden = !canReadBlobs;
     el("campaign-procedure-search").value = "";
-    el("campaign-procedure").replaceChildren();
+    procedureOffset = 0;
+    closeProcedure();
     status("campaign-detail-status", "");
     paintProcedures();
     paintList();
@@ -126,8 +129,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     const version = ++detailVersion;
     selected = null;
     el("campaign-detail").hidden = true;
-    el("campaign-procedure-preview").replaceChildren();
-    releaseImages();
+    closeProcedure();
     paintList();
     status("campaign-detail-status", "Loading package…");
     try {
@@ -189,7 +191,34 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   });
   el("campaign-import-form").addEventListener("submit", importPackage);
   el("campaign-download").addEventListener("click", downloadPackage);
-  el("campaign-procedure-search").addEventListener("input", paintProcedures);
-  el("campaign-procedure").addEventListener("change", paintProcedure);
+  el("campaign-procedure-search").addEventListener("input", () => {
+    procedureOffset = 0;
+    closeProcedure();
+    paintProcedures();
+  });
+  function changeProcedurePage(delta) {
+    procedureOffset = Math.max(0, procedureOffset + delta);
+    closeProcedure();
+    paintProcedures();
+  }
+  el("campaign-procedure-prev").addEventListener("click", () => changeProcedurePage(-PROCEDURE_PAGE_SIZE));
+  el("campaign-procedure-next").addEventListener("click", () => changeProcedurePage(PROCEDURE_PAGE_SIZE));
+  el("campaign-procedure-list").addEventListener("click", event => {
+    const button = event.target.closest("[data-procedure-id]");
+    if (!button) return;
+    selectedProcedure = button.dataset.procedureId;
+    for (const item of el("campaign-procedure-list").querySelectorAll("[data-procedure-id]")) {
+      item.setAttribute("aria-pressed", String(item.dataset.procedureId === selectedProcedure));
+    }
+    paintProcedure();
+    el("campaign-inspection-title").focus();
+  });
+  el("campaign-procedure-close").addEventListener("click", () => {
+    const previous = selectedProcedure;
+    closeProcedure();
+    paintProcedures();
+    const button = [...el("campaign-procedure-list").querySelectorAll("[data-procedure-id]")].find(item => item.dataset.procedureId === previous);
+    button?.focus();
+  });
   return { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
 }

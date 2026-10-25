@@ -16,8 +16,8 @@ directly. The tab requires `evidence:read`, matching the backend read endpoints.
 5. Select a package to open its **Campaign overview**: campaign identity,
    procedure count, and nominal planning context. Expand **Package source and
    import details** for the full digest, repository, and import attribution.
-   A separate **Procedure detail** region contains search, selection, and the
-   selected procedure's instructions, with its parent campaign named explicitly.
+   A separate **Procedures** region contains a searchable list. Select a list
+   item to open its **Procedure detail**, with its parent campaign named explicitly.
    Source identity is not a deployed
    software version or a build-provenance claim.
 
@@ -39,8 +39,17 @@ putting credentials in a link URL.
 
 ## Procedure preview
 
-Search within the selected package by title, scenario ID, or procedure reference.
-The procedure dropdown preserves manifest order. Its selected procedure displays:
+Opening a campaign shows a list of up to **10 procedures per page**, in manifest
+order, without automatically opening a procedure. Search filters the whole
+campaign immediately as you type, matching title, scenario ID, or procedure
+reference; typing resets pagination to the first matching page. Use **Previous
+procedures** and **Next procedures** to browse more matches. Counts show the
+visible range and total matches. An empty search restores the full list.
+
+Select a procedure to open its detail below the list. Changing the search or
+procedure page closes the previous detail so it cannot be confused with the new
+matches. **Close procedure detail** returns keyboard focus to its list item.
+The selected procedure displays:
 
 - Setup, steps, and criteria rendered with the existing safe Markdown renderer.
 - Package-local setup images resolved through the validated asset map and fetched

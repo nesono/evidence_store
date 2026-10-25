@@ -21,6 +21,15 @@ function packageRow(id) {
 let httpServer, chrome, page, base;
 let role = "writer", listFails = false, uploads = 0, imageRequests = 0, downloads = 0, delayA = false;
 const rows = Array.from({ length: 26 }, (_, i) => packageRow(`package-${i}`));
+// A campaign larger than one procedure page exercises incremental filtering
+// over the whole package, rather than only the visible list.
+for (const row of rows) {
+  const original = row.definition.scenarios[0];
+  for (let i = 1; i <= 12; i++) {
+    row.definition.scenarios.push({ ...original, definition: { ...original.definition, id: `check-${i}`, title: `Equipment check ${i}`, procedure_ref: `patrol/check-${i}` } });
+    row.definition.manifest.scenarios.push({ id: `check-${i}`, path: "scenarios/display/scenario.yaml" });
+  }
+}
 const permissions = ["evidence:read", "blob:read", "analytics:read", "evidence:write", "blob:write"];
 const json = (res, value, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(value)); };
 
@@ -100,14 +109,26 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   assert.equal(await page.eval(`document.querySelector('.campaign-overview #campaign-procedure-search') === null`), true);
   assert.equal(await page.eval(`document.querySelector('.campaign-procedure-detail #campaign-procedure-search') !== null`), true);
   assert.equal(await page.eval(`document.querySelector('.campaign-provenance').open`), false);
+  assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 10);
+  assert.equal(await page.eval(`document.getElementById('campaign-procedure-inspection').hidden`), true);
+  await page.eval(`document.getElementById('campaign-procedure-next').click()`);
+  assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 3);
+  await page.eval(`document.getElementById('campaign-procedure-search').value='DISPLAY'; document.getElementById('campaign-procedure-search').dispatchEvent(new Event('input'))`);
+  assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 1);
+  assert.equal(await page.eval(`document.getElementById('campaign-procedure-prev').disabled`), true);
+  await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
+  assert.equal(await page.eval(`document.activeElement.id`), "campaign-inspection-title");
   assert.equal(await page.eval(`document.querySelectorAll('#campaign-procedure-preview input:disabled, #campaign-procedure-preview select:disabled').length`), 2);
   assert.equal(await page.eval(`!!window.unsafeCampaign`), false);
   await page.waitFor(`document.querySelector('#campaign-procedure-preview img')?.getAttribute('src')`);
   assert.ok(imageRequests > 0);
   await page.eval(`document.getElementById('campaign-procedure-search').value='missing'; document.getElementById('campaign-procedure-search').dispatchEvent(new Event('input'))`);
-  assert.equal(await page.eval(`document.getElementById('campaign-procedure').disabled`), true);
+  assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 0);
+  assert.equal(await page.eval(`document.getElementById('campaign-procedure-inspection').hidden`), true);
   await page.eval(`document.getElementById('campaign-procedure-search').value='DISPLAY'; document.getElementById('campaign-procedure-search').dispatchEvent(new Event('input'))`);
-  assert.equal(await page.eval(`document.getElementById('campaign-procedure').options.length`), 1);
+  assert.equal(await page.eval(`document.querySelectorAll('.campaign-procedure-item').length`), 1);
+  await page.eval(`document.querySelector('.campaign-procedure-item').click(); document.getElementById('campaign-procedure-close').click()`);
+  assert.equal(await page.eval(`document.activeElement.classList.contains('campaign-procedure-item')`), true);
   await page.send("Browser.setDownloadBehavior", { behavior: "deny" });
   await page.eval(`document.getElementById('campaign-download').click()`);
   await page.waitFor(`!document.getElementById('campaign-download').disabled`);
@@ -145,6 +166,7 @@ test("phone navigation opens campaigns; viewer can browse but cannot import", as
   assert.equal(await page.eval(`document.querySelector('[data-phone=more]').classList.contains('active')`), true);
   await page.eval(`document.querySelector('.campaign-package').click()`);
   await page.waitFor(`!document.getElementById('campaign-detail').hidden`);
+  await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
   assert.equal(await page.eval(`document.documentElement.scrollWidth <= window.innerWidth`), true);
   assert.deepEqual(page.problems, []);
 });
