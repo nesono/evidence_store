@@ -43,7 +43,7 @@ before(async () => {
 beforeEach(async () => {
   await page.offline(false);
   await page.goto(BASE);
-  await page.waitFor(`document.querySelectorAll('.nav-tab').length === 4`,
+  await page.waitFor(`document.querySelectorAll('.nav-tab').length === 5`,
     { what: "the page to finish starting up" });
   await page.waitFor(`document.querySelectorAll('#results-body tr[data-id]').length > 0`,
     { what: "the first search to come back" });
@@ -72,7 +72,7 @@ test("the page starts up with every tab wired", async t => {
     rows: document.querySelectorAll('#results-body tr[data-id]').length,
   })`);
 
-  assert.deepEqual(state.tabs, ["search", "analytics", "add", "access"]);
+  assert.deepEqual(state.tabs, ["search", "analytics", "add", "campaigns", "access"]);
   assert.match(state.version, /^\d{4}\.\d{2}\.\d{2}\.\d{2}\.\d{2}$|^dev$/,
     "the footer should name the build");
   assert.ok(state.rows > 0, "the first search runs on load");

@@ -3907,3 +3907,59 @@ label > .input-with-button {
 #results-body:has(.empty-state) { display: table-caption; caption-side: bottom; }
 #results-body tr:has(.empty-state),
 #results-body .empty-state { display: block; }
+
+/* Immutable campaign browsing: list and definition on desktop, stacked on a
+   phone. Digest/source strings may be long and must not widen the viewport. */
+.campaign-layout { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr); gap: 1.5rem; }
+.campaign-layout > *, .campaign-layout aside { min-width: 0; }
+.campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+.campaign-list li { margin-bottom: 0.75rem; }
+.campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
+.campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
+#campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }
+#campaign-procedure-table th, #campaign-procedure-table td { padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2); border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+#campaign-procedure-table th { background: var(--color-ground); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+#campaign-procedure-table tr[data-procedure-ref] { cursor: pointer; }
+#campaign-procedure-table tr[data-procedure-ref]:hover td, #campaign-procedure-table tr.selected td { background: var(--color-ground-sunken); }
+#campaign-procedure-table tr.selected td:first-child { box-shadow: inset 3px 0 currentColor; }
+.campaign-procedure-reference { font-family: var(--font-mono); }
+/* The cell owns spacing. A normal button adds a second padding/height layer
+   and moves title text away from the reference column's baseline. */
+#campaign-procedure-table .campaign-procedure-item { display: inline; width: auto; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font: inherit; text-align: left; vertical-align: baseline; overflow-wrap: anywhere; }
+#campaign-procedure-table .campaign-procedure-item:hover { text-decoration: underline; }
+#campaign-procedure-table .campaign-procedure-item:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+#campaign-procedure-inspection { margin-top: 1.5rem; }
+.campaign-package[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.campaign-package code, .campaign-metadata dd { overflow-wrap: anywhere; word-break: break-word; }
+.campaign-package code { font-size: var(--text-2xs); }
+.campaign-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.campaign-metadata { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.4rem 1rem; }
+.campaign-metadata dd { margin: 0; }
+.campaign-metadata dt { font-weight: 600; }
+.campaign-control { padding: 0.75rem; margin-block: 0.75rem; border: 1px solid var(--color-line); border-radius: 0.25rem; }
+.campaign-control label, .campaign-control small { display: block; }
+.campaign-control input, .campaign-control select, .campaign-control textarea { margin-block: 0.5rem; }
+.campaign-preview-notice { border-left: 3px solid var(--color-line); padding: 0.75rem; }
+#campaign-procedure-preview pre { max-width: 100%; overflow: auto; }
+#campaign-procedure-preview { overflow-wrap: anywhere; margin-block: 1.5rem; }
+#campaign-procedure-preview .test-log { margin-block: 0.5rem; }
+#campaign-detail > label { margin-top: 1rem; }
+#campaign-detail { display: grid; gap: 1.5rem; }
+.campaign-overview, .campaign-procedure-detail { border: 1px solid var(--color-line); border-radius: 0.5rem; padding: 1rem; min-width: 0; }
+.campaign-overview { background: var(--color-ground); }
+.campaign-procedure-detail { border-top: 4px solid currentColor; }
+.campaign-level-heading { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+.campaign-scope { font-size: var(--text-ui); margin-bottom: 1rem; }
+.campaign-provenance { margin-block: 1rem; }
+.campaign-procedure-picker { border-bottom: 1px solid var(--color-line); padding-bottom: 0.5rem; }
+.campaign-procedure-picker > label { display: block; margin-top: 0.75rem; }
+#campaign-import-form { max-width: 36rem; }
+@media (max-width: 767px) {
+  .campaign-layout { grid-template-columns: minmax(0, 1fr); }
+  .campaign-metadata { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+  .campaign-metadata dd { margin-bottom: 0.5rem; }
+  #tab-campaigns button { min-height: 44px; }
+  /* The whole row is clickable; keep a touch-sized row without enlarging just
+     the title control and throwing off the second column. */
+  #campaign-procedure-table td { height: 44px; }
+}

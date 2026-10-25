@@ -23,7 +23,14 @@
 // v13: streaming video and image playback with scoped media URLs.
 // v14: multi-column search sorting and responsive controls.
 // v15: fixed sort-indicator space and single-line table headers.
-const VERSION = "v15";
+// v16: campaign package browser and definition previews.
+// v17: distinct campaign overview and procedure detail regions.
+// v18: incrementally filtered, paginated procedure list.
+// v19: compact procedure rows, wrapping only when space requires it.
+// v20: left-align the contents of procedure list buttons.
+// v21: compact procedure table matching the Search view.
+// v22: cell-owned procedure spacing and aligned text baselines.
+const VERSION = "v22";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -34,13 +41,15 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=15",
+  "/app.css?v=22",
   "/app.js",
   "/blobref.js",
   "/access.js",
   "/addform.js",
   "/analytics.js",
   "/common.js",
+  "/campaigns.js",
+  "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",
   "/datetime.js",

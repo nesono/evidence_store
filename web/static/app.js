@@ -16,6 +16,7 @@ import { beginCorrection, mountAddForm, pinSourceToCaller } from "./addform.js";
 import { mountMarkdownEditor } from "./markdownedit.js";
 import { PHONE_QUERY, mountPhoneNav, phoneStartTab } from "./phonenav.js";
 import { mountOutbox, openOutbox, runSync } from "./outboxview.js";
+import { mountCampaigns, showCampaigns } from "./campaigns.js";
 
 // Who is signed in. Learned from /me at startup and handed to the two views
 // that need it, so the answer has one home rather than a copy in each.
@@ -36,6 +37,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     document.getElementById(`tab-${target}`).hidden = false;
     if (target === "analytics") showAnalytics();
     if (target === "access") showAccess();
+    if (target === "campaigns") showCampaigns();
   });
 });
 
@@ -142,6 +144,7 @@ const TAB_PERMISSIONS = [
   ["search-tab-item", "evidence:read", "Searching evidence needs the viewer role"],
   ["analytics-tab-item", "analytics:read", "Analytics needs the viewer role"],
   ["add-tab-item", "evidence:write", "Filing a result needs the contributor role"],
+  ["campaigns-tab-item", "evidence:read", "Browsing campaigns needs the viewer role"],
 ];
 
 function markUnavailableTabs(me) {
@@ -288,6 +291,7 @@ async function loadIdentity() {
     methods: authConfig.login_methods,
   });
   mountAccess(me);
+  mountCampaigns(me);
   markUnavailableTabs(me);
   showIdentity(me);
   pinSourceToCaller(me);

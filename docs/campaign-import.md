@@ -1,9 +1,9 @@
 # Importing campaign packages
 
 Campaign archives can now be imported into the server, listed, inspected, and
-downloaded. The server reuses the [package validator](campaign-package-format.md)
-before publishing anything. Procedure selection, campaign execution, and
-product-revision associations are subsequent implementation slices.
+downloaded, including through the [Campaigns tab](campaign-browser.md). The
+server reuses the [package validator](campaign-package-format.md) before publishing
+anything. Execution capture and product-revision associations follow separately.
 
 ## Import
 
@@ -41,6 +41,11 @@ recorded as importer; with authentication disabled it is `anonymous`. A caller
 cannot supply an importer name through the archive or query parameters.
 
 The original archive is stored byte-for-byte in the existing CAS backend.
+
+Procedure selection uses `procedure_ref`, unique within a package. Format v2
+has no separate scenario IDs. Legacy v1 imports remain accepted, with their
+parsed definitions normalized to reference keys; migration 17 updates existing
+rows likewise. Original archives, digests, and imported UUIDs stay unchanged.
 Declared setup images are also stored individually by digest, so a shared image
 occupies one CAS object even across campaigns and evidence. The parsed
 definition is stored in PostgreSQL. IDs/grouping names inside the manifest do

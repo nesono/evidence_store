@@ -40,12 +40,14 @@ type PackageSource struct {
 }
 
 type ScenarioEntry struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
+	ProcedureRef string `json:"procedure_ref,omitempty"`
+	Path         string `json:"path"`
+	// ID is accepted only when reading a legacy v1 archive, then discarded.
+	ID string `json:"id,omitempty"`
 }
 
 type Scenario struct {
-	ID           string         `json:"id"`
+	ID           string         `json:"id,omitempty"` // Legacy v1 input only.
 	Title        string         `json:"title"`
 	ProcedureRef string         `json:"procedure_ref"`
 	Description  string         `json:"description"`
@@ -145,7 +147,7 @@ func parseManifest(data []byte) (Manifest, error) {
 	if err := decodePackageYAML(data, "manifest.yaml", &m); err != nil {
 		return m, err
 	}
-	if m.FormatVersion != 1 {
+	if m.FormatVersion != 1 && m.FormatVersion != 2 {
 		return m, fmt.Errorf("unsupported package format_version %d", m.FormatVersion)
 	}
 	if !packageID.MatchString(m.Campaign.ID) || strings.TrimSpace(m.Campaign.Name) == "" {
@@ -157,7 +159,7 @@ func parseManifest(data []byte) (Manifest, error) {
 	if err := validatePlanDates(m.Campaign); err != nil {
 		return m, err
 	}
-	return m, validateScenarioEntries(m.Scenarios)
+	return m, validateScenarioEntries(m.Scenarios, m.FormatVersion)
 }
 
 func validatePlanDates(c CampaignInfo) error {
@@ -175,19 +177,28 @@ func validatePlanDates(c CampaignInfo) error {
 	return nil
 }
 
-func validateScenarioEntries(entries []ScenarioEntry) error {
+func validateScenarioEntries(entries []ScenarioEntry, version int) error {
 	if len(entries) == 0 {
 		return fmt.Errorf("campaign must select at least one scenario")
 	}
 	ids, paths := map[string]bool{}, map[string]bool{}
 	for _, entry := range entries {
-		if !packageID.MatchString(entry.ID) || ids[entry.ID] {
-			return fmt.Errorf("invalid or duplicate scenario id %q", entry.ID)
+		key := entry.ProcedureRef
+		if version == 1 {
+			key = entry.ID
+			if !packageID.MatchString(key) || entry.ProcedureRef != "" {
+				return fmt.Errorf("v1 scenario entry requires a legacy id and no procedure_ref")
+			}
+		} else if entry.ID != "" || !validProcedureRef(key) {
+			return fmt.Errorf("v2 scenario entry requires procedure_ref and no id")
+		}
+		if ids[key] {
+			return fmt.Errorf("duplicate procedure identity %q", key)
 		}
 		if !archivePath(entry.Path) || entry.Path == "manifest.yaml" || paths[entry.Path] {
 			return fmt.Errorf("invalid or duplicate scenario path %q", entry.Path)
 		}
-		ids[entry.ID], paths[entry.Path] = true, true
+		ids[key], paths[entry.Path] = true, true
 	}
 	return nil
 }
@@ -197,8 +208,11 @@ func parseScenario(data []byte, entry ScenarioEntry) (Scenario, error) {
 	if err := decodePackageYAML(data, entry.Path, &s); err != nil {
 		return s, err
 	}
-	if s.ID != entry.ID || strings.TrimSpace(s.Title) == "" || strings.TrimSpace(s.ProcedureRef) == "" {
-		return s, fmt.Errorf("%s: matching id, title, and procedure_ref are required", entry.Path)
+	if s.ID != entry.ID || strings.TrimSpace(s.Title) == "" || !validProcedureRef(s.ProcedureRef) {
+		return s, fmt.Errorf("%s: title, procedure_ref, and matching legacy id (v1 only) are required", entry.Path)
+	}
+	if entry.ProcedureRef != "" && entry.ProcedureRef != s.ProcedureRef {
+		return s, fmt.Errorf("%s: procedure_ref must match the manifest", entry.Path)
 	}
 	if !model.ValidEvidenceType(s.Defaults.EvidenceType) {
 		return s, fmt.Errorf("%s: invalid defaults.evidence_type %q", entry.Path, s.Defaults.EvidenceType)
@@ -215,6 +229,10 @@ func parseScenario(data []byte, entry ScenarioEntry) (Scenario, error) {
 		}
 	}
 	return s, nil
+}
+
+func validProcedureRef(ref string) bool {
+	return ref != "" && strings.TrimSpace(ref) == ref && strings.IndexFunc(ref, unicode.IsControl) < 0
 }
 
 func validateDefaults(d Defaults) error {

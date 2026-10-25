@@ -6,9 +6,10 @@ exercise with V&V before freezing a schema or implementing the full workflow.
 
 Implemented: the [procedure validator](campaign-procedure-validation.md) and
 [package builder/validator](campaign-package-format.md), and
-[server import with CAS persistence](campaign-import.md). The execution workflow
+[server import with CAS persistence](campaign-import.md), and the
+[campaign package browser](campaign-browser.md). The execution workflow
 remains planned. The package format document is the implemented
-v1 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
+v2 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
 product revision associations live outside the content-addressed archive.
 
 ## Recommendation
@@ -70,7 +71,7 @@ There are source discrepancies to resolve during package authoring:
   proposed check model. Existing milestone calculations need an explicit
   reporting-policy decision; a check pass fraction is not capability coverage.
 
-## V1 package contract
+## Package contract
 
 ### Files and identity
 
@@ -87,7 +88,7 @@ The following is an illustrative format example, not an approved test or an
 import of historical results.
 
 ```yaml
-format_version: 1
+format_version: 2
 campaign:
   id: vehicle-patrol-example
   name: Vehicle patrol example
@@ -97,7 +98,7 @@ campaign:
 source:
   repository: https://example.org/team/scenarios
 scenarios:
-  - id: reverse-up-nominal
+  - procedure_ref: scenario/reverse-up-nominal
     path: scenarios/reverse-up-nominal/scenario.yaml
 ```
 
@@ -108,22 +109,21 @@ scenarios:
   provenance is associated with the package digest in an external build/release
   record, following #200. The package SHA-256 is computed from archive bytes by
   the importer; it is not embedded in the manifest it would hash.
-- `scenarios` is a nonempty ordered list with unique IDs and definition paths.
+- `scenarios` is a nonempty ordered list with unique procedure references and definition paths.
   This is the complete selected test set and default order.
-- Definition identity is `(source repository, scenario id)`; exact version is
-  `(package digest, scenario id)`. Check/field IDs are scoped to that definition.
-  Campaign IDs, scenario IDs, human titles, and execution IDs are distinct.
+- Exact procedure identity is `(package digest, procedure_ref)`. There is no
+  separate scenario ID. Check/field IDs are scoped to that definition. Campaign
+  keys, package UUIDs/digests, procedure references, and execution UUIDs are distinct.
 - Multiple packages may share a campaign ID. New bytes create a new immutable
   import; no "replace existing campaign" operation. Identical bytes deduplicate.
 
 External generation inputs and generator/toolchain provenance should be retained
-with the build/release record. V1 accepts only `source.repository` in the archive;
+with the build/release record. The format accepts only `source.repository` in the archive;
 it contains no instructions for Evidence Store to fetch or execute anything.
 
 ### Scenario metadata
 
 ```yaml
-id: reverse-up-nominal
 title: Reverse uphill from standstill
 procedure_ref: scenario/reverse-up-nominal
 description: procedure.md
@@ -142,7 +142,7 @@ defaults:
 traceability: []
 ```
 
-`id`, `title`, `procedure_ref`, `description`, and `defaults.evidence_type` are
+`title`, `procedure_ref`, `description`, and `defaults.evidence_type` are
 required. Parameters, tags, custom metadata, and traceability may be empty.
 Description is relative to `scenario.yaml`; Markdown asset paths are relative
 to the description. All paths must resolve inside the archive.
@@ -390,13 +390,13 @@ evidence record: it has neither a test result nor a finish time.
 | Entity | Minimum content |
 |---|---|
 | Campaign package | UUID, unique archive digest, manifest, source, imported by/at, original blob |
-| Packaged scenario | Package FK + scenario ID, procedure ref, order, definition, asset map |
+| Packaged scenario | Package FK + procedure ref, order, definition, asset map |
 | Campaign execution (session) | UUID, package FK, label, owner, actual context defaults, scenario order, revision |
 | Attempt | UUID, optional session FK, package/scenario FK, draft/finalized, effective snapshot, answers, actual context, submission UUID, optional prior-attempt link, revision |
 | Final evidence link | Unique attempt-to-evidence relation, committed with the evidence insert |
 
 Sessions reference one exact package. Validate an order update as a permutation
-of its scenario IDs. Attempt IDs provide history without defining "latest wins".
+of its procedure references. Attempt IDs provide history without defining "latest wins".
 Use optimistic revision checks for mutable drafts/order; report conflicts rather
 than overwriting another device. Start with one owner per session and no shared
 real-time editing. Packages are readable with evidence-read rights; import,
@@ -429,7 +429,7 @@ with a reason, not an ordinary per-attempt default change. Per-vehicle component
 context supplements that product identity rather than silently replacing it.
 
 Reserve `metadata.campaign` for a versioned execution snapshot: package digest,
-scenario ID, session/attempt IDs, source provenance, effective procedure,
+procedure reference, session/attempt IDs, source provenance, effective procedure,
 answers, and actual role context. Store `metadata.procedure_modified` as the
 #199 flag, verified against the effective definition. Validate reserved fields
 and prevent custom-metadata rows from overriding them. Ordinary metadata remains
@@ -455,7 +455,7 @@ All routes below are proposals, not current API documentation:
 | `GET /api/v1/campaigns/{id}` | Manifest, scenario list and readiness/download information |
 | `GET /api/v1/campaigns/{id}/package` | Download the retained immutable archive |
 | `GET /api/v1/procedures?campaign_id=...&q=...` | Search imported procedures; no runtime source fetch |
-| `GET /api/v1/campaigns/{id}/scenarios/{scenario_id}` | Definition, typed blocks and asset mapping |
+| `GET /api/v1/campaigns/{id}/procedure?procedure_ref=...` | Definition, typed blocks and asset mapping (reference encoded as a query value, since it may contain slashes) |
 | `POST /api/v1/campaign-executions` | Start a session from an exact package |
 | `GET/PATCH /api/v1/campaign-executions/{id}` | Read/update context and order with revision checks |
 | `POST /api/v1/campaign-attempts` | Start a standalone or session attempt |
@@ -575,7 +575,7 @@ entering a delimiter in a comment could silently associate the wrong values.
 | Different logical-scenario references per check, including no reference | Preserve explicit traceability beside the relevant check; absent is empty, not a synthetic `none` scenario. V1 may use source-authored Markdown links; structured per-check traceability needs an agreed schema before automated coverage reporting. |
 | Legacy per-check partial/blocked/not-run vocabulary | Preserve original wording during any migration; review the actual outcome. New attempts use the agreed check outcomes, reasons, and separate overall assessment. An untouched prefilled not-run value is not an explicit skip decision. |
 | Roles and operating measurements entered once per day | One execution session per patrol occurrence; retain shared context and collect operational measurements in a designated setup/summary procedure. Package definitions remain reusable across dates. |
-| Whole patrol or selected procedures not run | Record a reason and an explicit set of affected scenario IDs at the session level; expand an explicit whole-patrol action to the selected package's full scenario set. Pending work alone is not evidence that the patrol was skipped. |
+| Whole patrol or selected procedures not run | Record a reason and an explicit set of affected procedure references at the session level; expand an explicit whole-patrol action to the selected package's full scenario set. Pending work alone is not evidence that the patrol was skipped. |
 | No vehicle, one vehicle, or multiple vehicle roles | Declare the actual inputs needed by each procedure; do not require vehicle fields on administrative/setup-only procedures or derive roles from an ambiguous generic mode. |
 | Human-facing evidence type and log template | Normalize the type to `manual_test` during source-side preparation, put instructions in `procedure.md`, and leave tester Notes empty. |
 

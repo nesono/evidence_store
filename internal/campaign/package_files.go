@@ -19,7 +19,7 @@ func validateFiles(files map[string][]byte) (*Package, error) {
 	p := &Package{Manifest: manifest}
 	used := map[string]bool{"manifest.yaml": true}
 	refs := map[string]bool{}
-	for _, entry := range manifest.Scenarios {
+	for i, entry := range manifest.Scenarios {
 		s, err := loadScenario(files, entry, used)
 		if err != nil {
 			return nil, err
@@ -28,6 +28,11 @@ func validateFiles(files map[string][]byte) (*Package, error) {
 			return nil, fmt.Errorf("duplicate procedure_ref %q", s.Definition.ProcedureRef)
 		}
 		refs[s.Definition.ProcedureRef] = true
+		// Normalize v1 input to the same reference-keyed representation as v2.
+		// The format version still describes the original, unchanged archive.
+		p.Manifest.Scenarios[i].ProcedureRef = s.Definition.ProcedureRef
+		p.Manifest.Scenarios[i].ID = ""
+		s.Definition.ID = ""
 		p.Scenarios = append(p.Scenarios, s)
 	}
 	for name := range files {
