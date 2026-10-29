@@ -3913,7 +3913,7 @@ label > .input-with-button {
 .campaign-layout { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr); gap: 1.5rem; }
 .campaign-layout > *, .campaign-layout aside { min-width: 0; }
 .campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
-.campaign-list li { margin-bottom: 0.75rem; }
+.campaign-list li { list-style: none; margin-bottom: 0.75rem; }
 .campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
 .campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
 .campaign-draft-frame { position: relative; width: min(56rem, calc(100vw - 4rem)); margin: 2rem; }

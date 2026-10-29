@@ -35,7 +35,8 @@
 // v25: immutable campaign finalization and evidence summaries.
 // v26: finish-time shortcuts and synchronized UTC picker.
 // v27: full manual-result context for campaign capture.
-const VERSION = "v27";
+// v28: suppress inherited list-item bullets in campaign listings.
+const VERSION = "v28";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -46,7 +47,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=27",
+  "/app.css?v=28",
   "/app.js",
   "/blobref.js",
   "/access.js",
