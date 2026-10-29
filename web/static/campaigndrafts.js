@@ -116,12 +116,12 @@ export function mountCampaignDrafts(root, me) {
   el("campaign-attempt-tools").hidden = !allowed;
   const status = (text) => {
     el("campaign-draft-status").textContent = text;
+    el("campaign-finalize-status").textContent = text;
   };
   const manual = mountDraftManual(root, me, {
     changed: () => {
       if (!attempt?.finalized_at) {
         dirty = true;
-        el("campaign-draft-finalize").disabled = true;
         status("Unsaved changes — Save draft to store them.");
       }
     },
@@ -163,7 +163,7 @@ export function mountCampaignDrafts(root, me) {
       el(id).disabled = value;
     el("campaign-attempt-start").disabled = value;
     el("campaign-draft-save").disabled = value || finalized;
-    el("campaign-draft-finalize").disabled = value || finalized || dirty;
+    el("campaign-draft-finalize").disabled = value || finalized;
     finishTime.lock(value || finalized);
   }
   function showAttempt(row) {
@@ -340,7 +340,24 @@ export function mountCampaignDrafts(root, me) {
   }
 
   async function finalize() {
-    if (!attempt || busy || dirty || attempt.finalized_at) return;
+    if (!attempt || busy || attempt.finalized_at) return;
+    if (dirty) {
+      status("Save draft first: your latest changes have not reached the server. Then select Finalize as evidence again.");
+      el("campaign-draft-save").focus();
+      return;
+    }
+    const missingContext = ["repo", "branch", "rcs_ref"].filter(name => !String(attempt.data[name] || "").trim());
+    if (missingContext.length) {
+      status("Cannot finalize: enter the actual repository, branch and deployed revision under Software under test, then Save draft.");
+      el("draft-software-context").open = true;
+      form.elements.namedItem(missingContext[0]).focus();
+      return;
+    }
+    if (!attempt.data.result) {
+      status("Cannot finalize: choose an overall Result (PASS, FAIL, ERROR or SKIPPED), then Save draft. Individual check outcomes do not set the overall result.");
+      form.querySelector('[name="result"]').focus();
+      return;
+    }
     const raw = el("campaign-finished-at").value.trim();
     if (
       !raw ||
@@ -350,6 +367,7 @@ export function mountCampaignDrafts(root, me) {
       status(
         "Enter the actual finish time as RFC3339 with a timezone, e.g. 2026-10-25T14:30:00Z.",
       );
+      el("campaign-finished-at").focus();
       return;
     }
     const finished_at = new Date(raw).toISOString();
@@ -396,7 +414,6 @@ export function mountCampaignDrafts(root, me) {
   form.addEventListener("input", () => {
     if (attempt?.finalized_at) return;
     dirty = true;
-    el("campaign-draft-finalize").disabled = true;
     status("Unsaved changes — select Save draft to store them on the server.");
   });
   form.addEventListener("submit", save);

@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=28">
+    <link rel="stylesheet" href="app.css?v=29">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -220,6 +220,7 @@
                         <input id="campaign-finished-picker" type="datetime-local" step="0.001">
                         <small>The picker uses UTC. You can also edit or paste a timestamp with a timezone above. Draft created uses the original attempt creation time.</small>
                         <button id="campaign-draft-finalize" type="button">Finalize as evidence</button>
+                        <p id="campaign-finalize-status" role="status" aria-live="polite"></p>
                         <a id="campaign-final-evidence" target="_blank" rel="noopener noreferrer" hidden>Open evidence record</a>
                     </section>
                 </article>

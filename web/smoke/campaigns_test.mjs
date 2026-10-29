@@ -243,6 +243,17 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.notes.value`),"keep my edit");
   await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-reload').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 3')`);
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-status').textContent`), /actual repository, branch and deployed revision/);
+  assert.equal(await page.eval(`document.getElementById('draft-software-context').open`),true);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.branch.value='main';f.elements.rcs_ref.value='deployed-build';f.dispatchEvent(new Event('input'));document.getElementById('campaign-draft-finalize').click();})()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-status').textContent`), /Save draft first/);
+  await page.eval(`document.getElementById('campaign-draft-form').requestSubmit()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 4')`);
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-status').textContent`), /overall Result/);
+  await page.eval(`document.querySelector('#campaign-draft-form [name=result][value=FAIL]').click();document.getElementById('campaign-draft-form').requestSubmit()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 5')`);
   await page.eval(`document.getElementById('campaign-finished-now').click()`);
   assert.ok(Math.abs(Date.now() - Date.parse(await page.eval(`document.getElementById('campaign-finished-at').value`))) < 5000);
   await page.eval(`document.getElementById('campaign-finished-picker').value='2026-10-25T12:30';document.getElementById('campaign-finished-picker').dispatchEvent(new Event('input'));`);

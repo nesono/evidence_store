@@ -8,6 +8,10 @@ procedure reference, type, tags, and result through the existing Search view.
 
 1. Start or resume an attempt, record answers and actual software context, then
    **Save draft**. Finalization acts on that saved revision, not unsaved form data.
+   If edits are unsaved, selecting Finalize explains that Save draft is needed.
+   Missing software context or overall result opens/focuses the relevant field;
+   individual check outcomes do not implicitly select an overall result. Status
+   and server validation errors are also displayed beside the Finalize button.
 2. Set the **actual finish time** using **Now**, **Draft created** (the attempt's
    original creation time), or the **UTC date/time picker**. The RFC3339 text
    field remains editable, including pasted timezone offsets such as
