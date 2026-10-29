@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=31">
+    <link rel="stylesheet" href="app.css?v=32">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -219,11 +219,15 @@
                         <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                         <div class="campaign-finish-tools">
                             <button id="campaign-finished-now" type="button" class="secondary outline">Now</button>
-                            <button id="campaign-finished-created" type="button" class="secondary outline" title="Use the original creation time of this attempt">Draft created</button>
+                            <button id="campaign-finished-created" type="button" class="secondary outline" title="Use the original creation time of this attempt">Created</button>
+                            <button id="campaign-finished-pick" type="button" class="secondary outline" aria-expanded="false" aria-controls="campaign-finished-picker-panel">Pick date</button>
+                            <div id="campaign-finished-picker-panel" hidden>
+                                <label for="campaign-finished-picker">Date and time (UTC)</label>
+                                <input id="campaign-finished-picker" type="datetime-local" step="0.001">
+                                <button id="campaign-finished-picker-done" type="button" class="secondary outline">Done</button>
+                            </div>
                         </div>
-                        <label for="campaign-finished-picker">Choose date and time (UTC)</label>
-                        <input id="campaign-finished-picker" type="datetime-local" step="0.001">
-                        <small>The picker uses UTC. You can also edit or paste a timestamp with a timezone above. Draft created uses the original attempt creation time.</small>
+                        <small>Pick date uses UTC. Created uses the original attempt creation time. You can also edit or paste a timestamp above.</small>
                         <button id="campaign-draft-finalize" type="button">Finalize as evidence</button>
                         <p id="campaign-finalize-status" role="status" aria-live="polite"></p>
                         <ul id="campaign-finalize-blockers" aria-label="Required before finalization" hidden></ul>

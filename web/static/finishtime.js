@@ -17,7 +17,15 @@ export function mountFinishTime(root, createdAt, changed = () => {}) {
   const picker = root.querySelector("#campaign-finished-picker");
   const now = root.querySelector("#campaign-finished-now");
   const created = root.querySelector("#campaign-finished-created");
+  const pick = root.querySelector("#campaign-finished-pick");
+  const panel = root.querySelector("#campaign-finished-picker-panel");
+  const done = root.querySelector("#campaign-finished-picker-done");
+  function closePicker() {
+    panel.hidden = true;
+    pick.setAttribute("aria-expanded", "false");
+  }
   function set(value) {
+    closePicker();
     field.value = value || "";
     picker.value = finishPickerValue(field.value);
     changed();
@@ -26,10 +34,25 @@ export function mountFinishTime(root, createdAt, changed = () => {}) {
   picker.addEventListener("input", () => { field.value = finishTimeFromPicker(picker.value); changed(); });
   now.addEventListener("click", () => set(new Date().toISOString()));
   created.addEventListener("click", () => set(createdAt()));
+  pick.addEventListener("click", () => {
+    if (!panel.hidden) { closePicker(); return; }
+    picker.value = finishPickerValue(field.value);
+    panel.hidden = false;
+    pick.setAttribute("aria-expanded", "true");
+    picker.focus();
+  });
+  done.addEventListener("click", () => { closePicker(); field.focus(); });
+  panel.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault(); event.stopPropagation();
+    closePicker(); pick.focus();
+  });
   return {
     set,
     lock(disabled) {
       field.disabled = picker.disabled = now.disabled = disabled;
+      pick.disabled = done.disabled = disabled;
+      if (disabled) closePicker();
       created.disabled = disabled || !finishPickerValue(createdAt() || "");
     },
   };

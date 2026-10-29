@@ -261,10 +261,16 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 5')`);
   await page.eval(`document.getElementById('campaign-finished-now').click()`);
   assert.ok(Math.abs(Date.now() - Date.parse(await page.eval(`document.getElementById('campaign-finished-at').value`))) < 5000);
-  await page.eval(`document.getElementById('campaign-finished-picker').value='2026-10-25T12:30';document.getElementById('campaign-finished-picker').dispatchEvent(new Event('input'));`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
+  await page.eval(`document.getElementById('campaign-finished-pick').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), false);
+  await page.eval(`document.getElementById('campaign-finished-picker').value='2026-10-25T12:30';document.getElementById('campaign-finished-picker').dispatchEvent(new Event('input'));document.getElementById('campaign-finished-picker-done').click();`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-25T12:30:00.000Z");
+  await page.eval(`window.finalizeConfirmations=0;window.confirm=()=>{window.finalizeConfirmations++;return false;}`);
   await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
   await page.waitFor(`!document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(await page.eval(`window.finalizeConfirmations`),0,"finalize must not require another confirmation");
   await page.waitFor(`document.querySelector('[data-attempt-id]')?.textContent.startsWith('Final: ')`);
   await page.eval(`document.querySelector('[data-attempt-id]').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable')`);

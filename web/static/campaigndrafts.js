@@ -400,12 +400,6 @@ export function mountCampaignDrafts(root, me) {
     const finished_at = new Date(raw).toISOString();
     if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
       pendingFinalize = { revision: attempt.revision, finished_at };
-    if (
-      !confirm(
-        "Finalize this saved attempt as immutable evidence? Further changes require a new attempt.",
-      )
-    )
-      return;
     setBusy(true);
     status("Finalizing saved attempt…");
     try {

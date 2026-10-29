@@ -39,7 +39,8 @@
 // v29: actionable finalization validation beside the action.
 // v30: required-field guidance and close-on-finalization.
 // v31: distinguish check outcomes from the overall procedure verdict.
-const VERSION = "v31";
+// v32: one finish-time field with Now / Created / Pick date actions.
+const VERSION = "v32";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -50,7 +51,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=31",
+  "/app.css?v=32",
   "/app.js",
   "/blobref.js",
   "/access.js",

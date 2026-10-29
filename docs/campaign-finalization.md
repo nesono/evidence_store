@@ -13,13 +13,16 @@ procedure reference, type, tags, and result through the existing Search view.
    attention. Individual checks do not implicitly select an overall result.
    Incomplete drafts remain saveable; blockers prevent sending finalization.
    Server validation errors are also displayed beside the Finalize button.
-2. Set the **actual finish time** using **Now**, **Draft created** (the attempt's
-   original creation time), or the **UTC date/time picker**. The RFC3339 text
+2. Set the **actual finish time** using **Now**, **Created** (the attempt's
+   original creation time), or **Pick date**, which opens a compact UTC date/time
+   picker beneath the buttons. **Done** closes the picker. All three actions
+   update the same editable timestamp box. The RFC3339 text
    field remains editable, including pasted timezone offsets such as
    `2026-10-25T14:30:00+02:00`; the picker displays that instant in UTC. Nothing
    is selected automatically. Your selection survives saving the same draft
    in the open dialog; it is persisted with the evidence on finalization.
-3. Select **Finalize as evidence** and confirm. Validation errors leave the draft
+3. Select **Finalize as evidence**. It submits directly without a second confirmation.
+   Validation errors leave the draft
    editable; save corrections and try again.
 4. On success the dialog closes and the attempt list refreshes. Entries use
    **Draft:**, **Final:**, or **Expired:** prefixes. Reopen a final attempt to
