@@ -38,7 +38,8 @@
 // v28: suppress inherited list-item bullets in campaign listings.
 // v29: actionable finalization validation beside the action.
 // v30: required-field guidance and close-on-finalization.
-const VERSION = "v30";
+// v31: distinguish check outcomes from the overall procedure verdict.
+const VERSION = "v31";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -49,7 +50,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=30",
+  "/app.css?v=31",
   "/app.js",
   "/blobref.js",
   "/access.js",

@@ -3951,6 +3951,14 @@ label > .input-with-button {
 .campaign-control { padding: 0.75rem; margin-block: 0.75rem; border: 1px solid var(--color-line); border-radius: 0.25rem; }
 .campaign-control label, .campaign-control small { display: block; }
 .campaign-control input, .campaign-control select, .campaign-control textarea { margin-block: 0.5rem; }
+.campaign-step-results { margin-top: 1.5rem; }
+.campaign-check { border-left: 3px solid var(--color-line); }
+.campaign-check-scope { font-size: var(--text-xs); font-weight: 600; color: var(--color-ink-muted); margin-bottom: 0.5rem; }
+#campaign-overall-result { min-width: 0; margin-block: 1.5rem; padding: 1rem; border: 2px solid var(--color-accent); border-radius: var(--radius-md); background: var(--color-ground-sunken); }
+#campaign-overall-result legend { font-size: var(--text-lg); font-weight: 600; padding-inline: 0.5rem; }
+#campaign-overall-result > label { display: flex; align-items: flex-start; gap: 0.5rem; padding-block: 0.5rem; }
+#campaign-overall-result > label input { flex: none; margin-top: 0.25rem; }
+#campaign-overall-result > label small { display: block; color: var(--color-ink-muted); }
 .campaign-preview-notice { border-left: 3px solid var(--color-line); padding: 0.75rem; }
 #campaign-procedure-preview pre { max-width: 100%; overflow: auto; }
 #campaign-procedure-preview { overflow-wrap: anywhere; margin-block: 1.5rem; }

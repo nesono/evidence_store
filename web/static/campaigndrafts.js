@@ -17,11 +17,15 @@ export function draftControlsHTML(procedure, data, descriptionPath, assets) {
       const value = data.answers[f.id];
       const attrs = `id="${id}" data-answer="${esc(f.id)}"`;
       if (b.check)
-        return `<div class="campaign-control"><label for="${id}">${esc(f.label)} <small>(required to finalize)</small></label>
-      <select ${attrs} data-type="check" aria-required="true">${optionsHTML(["PASS", "FAIL", "NOT_EXECUTED"], value?.outcome)}</select>
+        return `<div class="campaign-control campaign-check"><p class="campaign-check-scope">Individual check</p>
+      <label for="${id}">${esc(f.label)} <small>(required to finalize)</small></label>
+      <select ${attrs} data-type="check" aria-required="true" aria-describedby="${id}-scope">${optionsHTML(["PASS", "FAIL", "NOT_EXECUTED"], value?.outcome, {
+        "": "This check: not answered", PASS: "This check: passed", FAIL: "This check: failed", NOT_EXECUTED: "This check: not executed",
+      })}</select>
+      <small id="${id}-scope">Applies only to this check, not to the whole procedure.</small>
       <label for="${id}-reason">Reason / observation <small>(required when NOT_EXECUTED)</small></label><input id="${id}-reason" data-reason="${esc(f.id)}" value="${esc(value?.reason || "")}"></div>`;
       if (f.bind)
-        return `<p>Overall assessment is recorded in the result field below.</p>`;
+        return `<p>Record the verdict for the whole attempt in <strong>Overall procedure result</strong> below.</p>`;
       let input;
       if (f.type === "choice")
         input = `<select ${attrs} data-type="choice">${optionsHTML(f.options, value)}</select>`;
@@ -36,13 +40,13 @@ export function draftControlsHTML(procedure, data, descriptionPath, assets) {
     .join("");
 }
 
-function optionsHTML(options, value) {
+function optionsHTML(options, value, labels = {}) {
   return (
-    `<option value="">Not answered</option>` +
+    `<option value="">${esc(labels[""] || "Not answered")}</option>` +
     options
       .map(
         (v) =>
-          `<option value="${esc(v)}"${v === value ? " selected" : ""}>${esc(v)}</option>`,
+          `<option value="${esc(v)}"${v === value ? " selected" : ""}>${esc(labels[v] || v)}</option>`,
       )
       .join("")
   );

@@ -6,6 +6,11 @@ read-only; capture opens in a separate dialog clearly labeled as a draft.
 
 ## Using a draft
 
+**Procedure steps and individual checks** contains outcomes for single checks,
+labeled “This check” in each dropdown. The separate bordered **Overall procedure
+result** section is the verdict for the entire attempt, not a step or campaign.
+It must be selected explicitly; check outcomes never automatically set it.
+
 1. Select a procedure and choose **Start new attempt**. This immediately creates
    a server-owned draft with a new UUID. Only declared ordinary input defaults
    are copied. Checks, notes, actual software context, and overall assessment

@@ -32,6 +32,8 @@ test("draft controls keep stable field IDs and escape entered values", () => {
   assert.ok(html.includes('data-answer="measurement"'));
   assert.ok(html.includes('value="0"'));
   assert.ok(html.includes('value="FAIL" selected'));
+  assert.ok(html.includes('This check: failed'));
+  assert.ok(html.includes('Applies only to this check, not to the whole procedure.'));
   assert.ok(!html.includes("<script>"));
 });
 

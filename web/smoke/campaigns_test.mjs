@@ -190,6 +190,11 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.procedure_ref.readOnly`),true);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.source.readOnly`),true);
+  assert.match(await page.eval(`document.querySelector('#campaign-overall-result legend').textContent`), /Overall procedure result/);
+  assert.equal(await page.eval(`document.querySelector('#campaign-step-results-title').textContent`), "Procedure steps and individual checks");
+  await page.eval(`(() => { const check=document.querySelector('#campaign-draft-controls [data-type=check]');check.value='PASS';check.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  assert.equal(await page.eval(`document.querySelector('#campaign-overall-result input:checked')`),null,"passing a check must not select the overall result");
+  assert.match(await page.eval(`document.querySelector('#campaign-draft-controls [data-type=check]').selectedOptions[0].textContent`), /This check: passed/);
   await page.eval(`(() => {
     window.savedGeolocation = navigator.geolocation;
     Object.defineProperty(navigator, 'geolocation', {configurable:true, value:{getCurrentPosition(success) {window.pendingPosition=success;}}});
