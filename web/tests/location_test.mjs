@@ -18,6 +18,17 @@ import {
 
 // --- parseCoordinates ---
 
+test("an insecure deployment explains why browser location cannot work", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "isSecureContext");
+  Object.defineProperty(globalThis, "isSecureContext", { configurable: true, value: false });
+  try {
+    await assert.rejects(requestPosition({ getCurrentPosition() { assert.fail("must not request GPS over insecure HTTP"); } }), /HTTPS.*coordinates manually/);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "isSecureContext", original);
+    else delete globalThis.isSecureContext;
+  }
+});
+
 test("parses a comma-separated decimal pair", () => {
   assert.deepEqual(parseCoordinates("52.5163, 13.3777"), { lat: 52.5163, lon: 13.3777 });
 });

@@ -72,6 +72,11 @@ export function mapURL({ lat, lon }) {
 // parameter so this can be driven by a fake; in the browser it defaults to the
 // real one.
 export function requestPosition(geolocation = globalThis.navigator?.geolocation) {
+  if (globalThis.isSecureContext === false) {
+    return Promise.reject(new Error(
+      "Browser location needs HTTPS (or localhost). Open this deployment over HTTPS, or enter coordinates manually for weather lookup.",
+    ));
+  }
   if (!geolocation) {
     return Promise.reject(
       new Error("This browser cannot report a position — type the location instead."),

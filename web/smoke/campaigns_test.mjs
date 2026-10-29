@@ -190,8 +190,34 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.procedure_ref.readOnly`),true);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.source.readOnly`),true);
-  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.location.value='52.5, 13.4';document.getElementById('draft-weather-lookup').click();})()`);
+  await page.eval(`(() => {
+    window.savedGeolocation = navigator.geolocation;
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:{getCurrentPosition(success) {window.pendingPosition=success;}}});
+    document.getElementById('campaign-draft-form').elements.location.value='52.50000, 13.40000';
+    document.getElementById('draft-locate').click();
+    document.getElementById('draft-weather-lookup').click();
+  })()`);
+  assert.match(await page.eval(`document.getElementById('draft-location-status').textContent`), /Locating/);
   await page.waitFor(`document.getElementById('campaign-draft-form').elements.weather_conditions.value === 'Rain, 8 °C'`);
+  await page.eval(`window.pendingPosition({coords:{latitude:52.5,longitude:13.4,accuracy:3}})`);
+  await page.waitFor(`document.getElementById('draft-location-status').textContent.includes('Device position')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.location.dataset.accuracyM`), '3', 'weather lookup must not invalidate pending GPS request');
+  await page.eval(`(() => {
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:{getCurrentPosition(success, failure) {failure({code:1});}}});
+    document.getElementById('draft-locate').click();
+  })()`);
+  await page.waitFor(`document.getElementById('draft-location-status').textContent.includes('permission was denied')`);
+  assert.equal(await page.eval(`document.getElementById('draft-locate').disabled`), false);
+  await page.eval(`(() => {
+    document.getElementById('campaign-draft-form').elements.location.value='Test track';
+    document.getElementById('draft-weather-lookup').click();
+  })()`);
+  await page.waitFor(`document.getElementById('draft-weather-status').textContent.includes('permission was denied')`);
+  await page.eval(`(() => {
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:window.savedGeolocation});
+    const input=document.getElementById('campaign-draft-form').elements.location;
+    input.value='52.5, 13.4';input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.tags.value='vehicle, regression';f.elements.observations.value='Test log narrative';document.getElementById('draft-custom-add').click();document.querySelector('.draft-custom-key').value='vehicle_id';document.querySelector('.draft-custom-value').value='vehicle-a';})()`);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.repo.value='example/software';f.querySelector('[data-answer=status]').value='FAIL';f.querySelector('[data-answer=operator]').value='tester';f.dispatchEvent(new Event('input'));f.requestSubmit();})()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 2')`);

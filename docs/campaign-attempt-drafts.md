@@ -38,6 +38,14 @@ failure or expired authentication leaves inputs in place and reports “Not save
 A conflict likewise preserves edits; copy anything needed before using **Reload
 saved draft**, which explicitly discards local changes after confirmation.
 
+**Locate** needs browser location permission and a secure context (HTTPS, or
+localhost on the same device). Plain HTTP on a LAN hostname/IP cannot use browser
+location. **Look up** uses entered coordinates directly; with only a place name
+or an empty location, it requests the device position and has the same browser
+requirements. Progress, permission errors, and failures appear beside the relevant
+field. GPS and weather requests run independently; a result never replaces text
+that was edited while it was pending.
+
 ## API
 
 All routes require `evidence:write` and existing authentication/session-CSRF

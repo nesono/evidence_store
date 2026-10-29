@@ -106,6 +106,7 @@ export function mountDraftManual(
     field = (name) => form.elements.namedItem(name);
   let generation = 0,
     operations = 0;
+  const requests = new Map();
   const canAttach = mayDo(me, "blob:write");
   const canSource = !me?.authenticated || mayDo(me, "source:any");
   field("source").readOnly = !canSource;
@@ -182,27 +183,43 @@ export function mountDraftManual(
     event.target.value = "";
   });
 
-  async function lookup(button, work, apply) {
+  function lookupStatus(target, message, error = false) {
+    target.textContent = message;
+    target.classList.toggle("location-status-error", error);
+  }
+
+  async function lookup(button, target, message, work, apply) {
     if (!editable()) return;
-    const token = ++generation,
-      id = contextID();
+    const token = {}, view = generation, id = contextID();
+    requests.set(button, token);
     operations++;
     button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    lookupStatus(target, message);
     try {
       const result = await work();
-      if (token === generation && id === contextID() && editable())
+      if (requests.get(button) === token && view === generation && id === contextID() && editable())
         apply(result);
     } catch (error) {
-      if (token === generation && id === contextID()) status(error.message);
+      if (requests.get(button) === token && view === generation && id === contextID())
+        lookupStatus(target, error.message, true);
     } finally {
       operations--;
-      button.disabled = false;
+      if (requests.get(button) === token) {
+        requests.delete(button);
+        button.removeAttribute("aria-busy");
+        button.disabled = !editable();
+      }
     }
   }
   el("draft-locate").addEventListener("click", (event) => {
     const before = field("location").value;
-    lookup(event.currentTarget, requestPosition, (fix) => {
-      if (field("location").value !== before) return;
+    const target = el("draft-location-status");
+    lookup(event.currentTarget, target, "Locating this device…", requestPosition, (fix) => {
+      if (field("location").value !== before) {
+        lookupStatus(target, "Location changed while locating; kept your entered value.");
+        return;
+      }
       write(field("location"), formatCoordinates(fix.lat, fix.lon));
       field("location").dataset.fromDevice = field("location").value;
       field("location").dataset.accuracyM = fix.accuracy;
@@ -216,11 +233,13 @@ export function mountDraftManual(
       finished = el("campaign-finished-at").value;
     const when = finished ? parseUserDateTime(finished) : new Date();
     if (!when) {
-      status("Correct the finish time before looking up weather.");
+      lookupStatus(el("draft-weather-status"), "Correct the finish time before looking up weather.", true);
       return;
     }
     lookup(
       event.currentTarget,
+      el("draft-weather-status"),
+      "Looking up weather (using device location if no coordinates are entered)…",
       async () => {
         const point = await weatherPoint(location, requestPosition);
         return {
@@ -233,8 +252,10 @@ export function mountDraftManual(
           location !== field("location").value ||
           weather !== field("weather_conditions").value ||
           finished !== el("campaign-finished-at").value
-        )
+        ) {
+          lookupStatus(el("draft-weather-status"), "Location, weather, or finish time changed during lookup. Kept your entries; select Look up again.");
           return;
+        }
         write(field("weather_conditions"), reading.summary);
         field("weather_conditions").dataset.fromService = reading.summary;
         if (reading.observed_at)
