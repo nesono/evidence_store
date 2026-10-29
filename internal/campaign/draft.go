@@ -16,12 +16,15 @@ import (
 // DraftData is unfinished work, not evidence. Required acquisition fields and
 // checks may be absent. Result is an explicit provisional assessment only.
 type DraftData struct {
-	Repo    string                     `json:"repo"`
-	Branch  string                     `json:"branch"`
-	RCSRef  string                     `json:"rcs_ref"`
-	Notes   string                     `json:"notes"`
-	Result  string                     `json:"result"`
-	Answers map[string]json.RawMessage `json:"answers"`
+	Repo         string                     `json:"repo"`
+	Branch       string                     `json:"branch"`
+	RCSRef       string                     `json:"rcs_ref"`
+	Notes        string                     `json:"notes"`
+	Result       string                     `json:"result"`
+	Answers      map[string]json.RawMessage `json:"answers"`
+	EvidenceType string                     `json:"evidence_type,omitempty"`
+	Source       string                     `json:"source,omitempty"`
+	Metadata     map[string]json.RawMessage `json:"metadata"`
 }
 
 // InitialDraft copies input defaults, never check outcomes or an overall result.
@@ -36,6 +39,12 @@ func InitialDraft(p *Procedure) DraftData {
 }
 
 func ValidateDraft(p *Procedure, d DraftData) error {
+	if d.EvidenceType != "" && !model.ValidEvidenceType(d.EvidenceType) {
+		return fmt.Errorf("invalid evidence_type")
+	}
+	if err := validateDraftMetadata(d.Metadata); err != nil {
+		return err
+	}
 	if d.Answers == nil {
 		return fmt.Errorf("answers must be an object")
 	}
@@ -58,6 +67,32 @@ func ValidateDraft(p *Procedure, d DraftData) error {
 		}
 		if err := validateAnswer(b, raw); err != nil {
 			return fmt.Errorf("answer %q: %w", id, err)
+		}
+	}
+	return nil
+}
+
+func validateDraftMetadata(metadata map[string]json.RawMessage) error {
+	for key, raw := range metadata {
+		if slices.Contains([]string{"campaign", "procedure_modified", "repo", "branch", "rcs_ref", "procedure_ref", "source", "result", "notes", "finished_at"}, key) {
+			return fmt.Errorf("metadata %q is reserved", key)
+		}
+		switch key {
+		case "observations", "location", "weather_conditions", "weather_observed_at":
+			var value string
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &value) != nil {
+				return fmt.Errorf("metadata %q must be text", key)
+			}
+		case "tags", "photo_uris", "video_uris":
+			var value []string
+			if json.Unmarshal(raw, &value) != nil {
+				return fmt.Errorf("metadata %q must be an array of strings", key)
+			}
+		case "location_accuracy_m":
+			var value float64
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &value) != nil || value < 0 {
+				return fmt.Errorf("location_accuracy_m must be a nonnegative number")
+			}
 		}
 	}
 	return nil

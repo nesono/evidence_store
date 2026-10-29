@@ -32,6 +32,8 @@ test("draft controls keep stable field IDs and escape entered values", () => {
   assert.ok(html.includes('data-answer="measurement"'));
   assert.ok(html.includes('value="0"'));
   assert.ok(html.includes('value="FAIL" selected'));
+  assert.ok(html.includes('This check: failed'));
+  assert.ok(html.includes('Applies only to this check, not to the whole procedure.'));
   assert.ok(!html.includes("<script>"));
 });
 
@@ -45,7 +47,7 @@ test("form captures typed answers and preserves labels on previously saved links
     },
   ];
   const form = {
-    elements: { namedItem: () => ({ value: "" }) },
+    elements: { namedItem: name => name === "evidence_type" ? null : ({ value: "" }) },
     querySelectorAll: (selector) =>
       selector === "[data-answer]"
         ? inputs

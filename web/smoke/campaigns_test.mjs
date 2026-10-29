@@ -40,12 +40,19 @@ async function handle(req, res) {
   if (url.pathname === "/version") return json(res, { version: "dev" });
   if (url.pathname === "/auth/config") return json(res, { sso_enabled: false });
   if (url.pathname === "/api/v1/me") return json(res, { authenticated: true, subject: "user:tester", permissions: role === "writer" ? permissions : permissions.slice(0, 3) });
+  if (url.pathname === "/api/v1/weather") return json(res,{summary:"Rain, 8 °C",observed_at:"2026-10-24T09:00:00Z"});
   if(url.pathname.startsWith("/api/v1/campaign-attempts")) {
     if(req.method==="POST" || req.method==="PUT") {
       const chunks=[];for await(const chunk of req) chunks.push(chunk);
       const body=JSON.parse(Buffer.concat(chunks));
+      if(url.pathname.endsWith('/finalize')) {
+        const a=attempts.get(url.pathname.split('/').at(-2));
+        if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
+        a.finalized_at=new Date().toISOString();a.finished_at=body.finished_at;a.evidence_id="example-evidence";a.revision++;
+        return json(res,a,201);
+      }
       if(req.method==="POST") {
-        const a={...body,owner:"user:tester",revision:1,updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
+        const a={...body,owner:"user:tester",revision:1,created_at:"2026-10-24T09:15:23.123456Z",updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
         attempts.set(a.id,a);return json(res,a,201);
       }
       const a=attempts.get(url.pathname.split("/").pop());
@@ -179,8 +186,47 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-attempt-list-status').textContent.includes('No saved drafts')`);
   await page.eval(`document.getElementById('campaign-attempt-start').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  await page.eval(`document.getElementById('campaign-finished-created').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.procedure_ref.readOnly`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.source.readOnly`),true);
+  assert.match(await page.eval(`document.querySelector('#campaign-overall-result legend').textContent`), /Overall procedure result/);
+  assert.equal(await page.eval(`document.querySelector('#campaign-step-results-title').textContent`), "Procedure steps and individual checks");
+  await page.eval(`(() => { const check=document.querySelector('#campaign-draft-controls [data-type=check]');check.value='PASS';check.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  assert.equal(await page.eval(`document.querySelector('#campaign-overall-result input:checked')`),null,"passing a check must not select the overall result");
+  assert.match(await page.eval(`document.querySelector('#campaign-draft-controls [data-type=check]').selectedOptions[0].textContent`), /This check: passed/);
+  await page.eval(`(() => {
+    window.savedGeolocation = navigator.geolocation;
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:{getCurrentPosition(success) {window.pendingPosition=success;}}});
+    document.getElementById('campaign-draft-form').elements.location.value='52.50000, 13.40000';
+    document.getElementById('draft-locate').click();
+    document.getElementById('draft-weather-lookup').click();
+  })()`);
+  assert.match(await page.eval(`document.getElementById('draft-location-status').textContent`), /Locating/);
+  await page.waitFor(`document.getElementById('campaign-draft-form').elements.weather_conditions.value === 'Rain, 8 °C'`);
+  await page.eval(`window.pendingPosition({coords:{latitude:52.5,longitude:13.4,accuracy:3}})`);
+  await page.waitFor(`document.getElementById('draft-location-status').textContent.includes('Device position')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.location.dataset.accuracyM`), '3', 'weather lookup must not invalidate pending GPS request');
+  await page.eval(`(() => {
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:{getCurrentPosition(success, failure) {failure({code:1});}}});
+    document.getElementById('draft-locate').click();
+  })()`);
+  await page.waitFor(`document.getElementById('draft-location-status').textContent.includes('permission was denied')`);
+  assert.equal(await page.eval(`document.getElementById('draft-locate').disabled`), false);
+  await page.eval(`(() => {
+    document.getElementById('campaign-draft-form').elements.location.value='Test track';
+    document.getElementById('draft-weather-lookup').click();
+  })()`);
+  await page.waitFor(`document.getElementById('draft-weather-status').textContent.includes('permission was denied')`);
+  await page.eval(`(() => {
+    Object.defineProperty(navigator, 'geolocation', {configurable:true, value:window.savedGeolocation});
+    const input=document.getElementById('campaign-draft-form').elements.location;
+    input.value='52.5, 13.4';input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.tags.value='vehicle, regression';f.elements.observations.value='Test log narrative';document.getElementById('draft-custom-add').click();document.querySelector('.draft-custom-key').value='vehicle_id';document.querySelector('.draft-custom-value').value='vehicle-a';})()`);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.repo.value='example/software';f.querySelector('[data-answer=status]').value='FAIL';f.querySelector('[data-answer=operator]').value='tester';f.dispatchEvent(new Event('input'));f.requestSubmit();})()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 2')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z", "saving must preserve the selected finish time");
   await page.eval(`document.getElementById('campaign-draft-close').click()`);
   await page.goto(`${base}/?resume=1#campaigns`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
@@ -192,11 +238,49 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
   assert.equal(await page.eval(`document.querySelector('#campaign-draft-form [data-answer=status]').value`),"FAIL");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.repo.value`),"example/software");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.location.value`),"52.5, 13.4");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.weather_conditions.value`),"Rain, 8 °C");
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.observations.value`),"Test log narrative");
+  assert.equal(await page.eval(`document.querySelector('.draft-custom-value').value`),"vehicle-a");
   [...attempts.values()][0].revision++;
   await page.eval(`const f=document.getElementById('campaign-draft-form');f.elements.notes.value='keep my edit';f.dispatchEvent(new Event('input'));f.requestSubmit()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Not saved')`);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.notes.value`),"keep my edit");
-  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-close').click()`);
+  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-reload').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 3')`);
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /Deployed revision is required/);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').open`),true);
+  await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.branch.value='main';f.elements.rcs_ref.value='deployed-build';f.dispatchEvent(new Event('input'));document.getElementById('campaign-draft-finalize').click();})()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /Save draft first/);
+  await page.eval(`document.getElementById('campaign-draft-form').requestSubmit()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 4')`);
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /overall Result/);
+  await page.eval(`document.querySelector('#campaign-draft-form [name=result][value=FAIL]').click();document.getElementById('campaign-draft-form').requestSubmit()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 5')`);
+  await page.eval(`document.getElementById('campaign-finished-now').click()`);
+  assert.ok(Math.abs(Date.now() - Date.parse(await page.eval(`document.getElementById('campaign-finished-at').value`))) < 5000);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
+  await page.eval(`document.getElementById('campaign-finished-pick').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), false);
+  await page.eval(`document.getElementById('campaign-finished-picker').value='2026-10-25T12:30';document.getElementById('campaign-finished-picker').dispatchEvent(new Event('input'));document.getElementById('campaign-finished-picker-done').click();`);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
+  assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-25T12:30:00.000Z");
+  await page.eval(`window.finalizeConfirmations=0;window.confirm=()=>{window.finalizeConfirmations++;return false;}`);
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  await page.waitFor(`!document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(await page.eval(`window.finalizeConfirmations`),0,"finalize must not require another confirmation");
+  await page.waitFor(`document.querySelector('[data-attempt-id]')?.textContent.startsWith('Final: ')`);
+  await page.eval(`document.querySelector('[data-attempt-id]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').disabled`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-save').disabled`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-finalize').disabled`),true);
+  assert.equal(await page.eval(`['campaign-finished-now','campaign-finished-created','campaign-finished-picker'].every(id=>document.getElementById(id).disabled)`),true);
+  assert.equal(await page.eval(`document.getElementById('campaign-final-evidence').hidden`),false);
+  assert.match(await page.eval(`document.getElementById('campaign-final-evidence').href`),/detail=example-evidence/);
+  await page.eval(`document.getElementById('campaign-draft-close').click()`);
   assert.deepEqual(page.problems,[]);
 });
 

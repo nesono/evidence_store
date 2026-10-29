@@ -8,8 +8,9 @@ Implemented: the [procedure validator](campaign-procedure-validation.md) and
 [package builder/validator](campaign-package-format.md), and
 [server import with CAS persistence](campaign-import.md), and the
 [campaign package browser](campaign-browser.md), and
-[online attempt drafts](campaign-attempt-drafts.md). Finalization, sessions and
-offline execution remain planned. The package format document is the implemented
+[online attempt drafts](campaign-attempt-drafts.md), and
+[attempt finalization](campaign-finalization.md). Sessions and offline execution
+remain planned. The package format document is the implemented
 v2 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
 product revision associations live outside the content-addressed archive.
 

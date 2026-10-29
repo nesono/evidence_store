@@ -313,7 +313,7 @@ async function loadIdentity() {
   runSync();
   // The log field is the one place somebody writes prose in this store, and
   // the only one where markdown means anything.
-  document.querySelectorAll("textarea[name=observations]").forEach(mountMarkdownEditor);
+  document.querySelectorAll("#add-form textarea[name=observations]").forEach(mountMarkdownEditor);
 
   mountSearch();
   mountAddForm({ subject: () => currentSubject });

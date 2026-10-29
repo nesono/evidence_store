@@ -32,7 +32,15 @@
 // v22: cell-owned procedure spacing and aligned text baselines.
 // v23: online campaign attempt drafts.
 // v24: floating circular close control on attempt drafts.
-const VERSION = "v24";
+// v25: immutable campaign finalization and evidence summaries.
+// v26: finish-time shortcuts and synchronized UTC picker.
+// v27: full manual-result context for campaign capture.
+// v28: suppress inherited list-item bullets in campaign listings.
+// v29: actionable finalization validation beside the action.
+// v30: required-field guidance and close-on-finalization.
+// v31: distinguish check outcomes from the overall procedure verdict.
+// v32: one finish-time field with Now / Created / Pick date actions.
+const VERSION = "v32";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -43,7 +51,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=24",
+  "/app.css?v=32",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -52,6 +60,10 @@ const SHELL = [
   "/common.js",
   "/campaigns.js",
   "/campaigndrafts.js",
+  "/campaignresult.js",
+  "/finishtime.js",
+  "/finalizationcheck.js",
+  "/draftmanual.js",
   "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",

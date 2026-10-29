@@ -49,3 +49,18 @@ func TestDraftValidation(t *testing.T) {
 		t.Fatal("invalid overall result")
 	}
 }
+
+func TestEmptyMetadataRemainsAnExplicitOverride(t *testing.T) {
+	d := DraftData{Metadata: map[string]json.RawMessage{}}
+	encoded, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored DraftData
+	if err := json.Unmarshal(encoded, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Metadata == nil {
+		t.Fatal("empty metadata must not disappear and restore package defaults")
+	}
+}
