@@ -3924,6 +3924,8 @@ label > .input-with-button {
 #campaign-draft-identity { overflow-wrap: anywhere; }
 .campaign-finish-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-block: 0.5rem 1rem; }
 #campaign-finished-picker { max-width: 100%; }
+#campaign-finalize-blockers { padding-left: 1.25rem; }
+#campaign-finalize-blockers .finalize-blocker-link { display: inline; padding: 0; min-height: 0; border: 0; background: transparent; color: var(--color-accent); text-align: left; text-decoration: underline; box-shadow: none; }
 #campaign-draft-fields { min-width: 0; }
 #campaign-attempt-tools { margin-block: 1rem; }
 #campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }

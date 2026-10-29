@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=29">
+    <link rel="stylesheet" href="app.css?v=30">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -148,25 +148,25 @@
                     <header><h2 id="campaign-draft-title">Attempt draft</h2></header>
                     <p id="campaign-draft-identity"></p>
                     <p>Online draft capture. Save explicitly before closing. A draft is not finalized evidence.</p>
-                    <form id="campaign-draft-form">
+                    <form id="campaign-draft-form" novalidate>
                         <fieldset id="campaign-draft-fields">
                             <details id="draft-software-context">
                                 <summary id="draft-software-summary">Software under test</summary>
                                 <p>Reused from your last saved attempt in this campaign. Confirm the actual deployed build; edit these values to override. Changes apply to this attempt and seed subsequent new attempts, never existing records.</p>
                                 <div class="grid">
-                                    <label>Repository<input name="repo" type="text" placeholder="org/repo" list="repos-list"></label>
-                                    <label>Branch<input name="branch" type="text"></label>
-                                    <label>Deployed revision<input name="rcs_ref" type="text" placeholder="Actual commit or release"></label>
+                                    <label>Repository <small>(required to finalize)</small><input name="repo" type="text" placeholder="org/repo" list="repos-list" aria-required="true"></label>
+                                    <label>Branch <small>(required to finalize)</small><input name="branch" type="text" aria-required="true"></label>
+                                    <label>Deployed revision <small>(required to finalize)</small><input name="rcs_ref" type="text" placeholder="Actual commit or release" aria-required="true"></label>
                                 </div>
                             </details>
                             <div class="grid">
                                 <label>Procedure (fixed)<input name="procedure_ref" type="text" readonly></label>
-                                <label>Evidence type<select name="evidence_type"><option value="ci">CI</option><option value="manual_test">Manual Test</option><option value="demonstration">Demonstration</option></select></label>
-                                <label>Username/Source-URL<input name="source" type="text"></label>
+                                <label>Evidence type <small>(required, prefilled)</small><select name="evidence_type" aria-required="true"><option value="ci">CI</option><option value="manual_test">Manual Test</option><option value="demonstration">Demonstration</option></select></label>
+                                <label>Username/Source-URL <small>(prefilled from your identity)</small><input name="source" type="text"></label>
                             </div>
                             <div id="campaign-draft-controls"></div>
                             <fieldset>
-                                <legend>Result (provisional until finalized)</legend>
+                                <legend>Result <small>(required to finalize)</small></legend>
                                 <label><input type="radio" name="result" value="PASS"> PASS</label>
                                 <label><input type="radio" name="result" value="FAIL"> FAIL</label>
                                 <label><input type="radio" name="result" value="ERROR"> ERROR</label>
@@ -191,7 +191,7 @@
                                 </div>
                                 <button id="draft-weather-apply" type="button" class="secondary outline">Use conditions</button>
                             </div>
-                            <label>Tester notes<textarea name="notes" rows="3"></textarea></label>
+                            <label>Tester notes <small>(required for ERROR/SKIPPED, missing required inputs, or FAIL without a failed check)</small><textarea name="notes" rows="3"></textarea></label>
                             <label>Test log <small>(Markdown, paste/drop images and videos)</small><textarea name="observations" rows="8" placeholder="What you observed during the test"></textarea></label>
                             <div class="test-log-tools">
                                 <input id="draft-photo-input" type="file" accept="image/*,video/mp4,video/webm" multiple hidden>
@@ -210,8 +210,8 @@
                     <section aria-label="Finalize saved attempt">
                         <h3>Finalize saved attempt</h3>
                         <p>Save your edits first. Finalization publishes the saved result as immutable evidence.</p>
-                        <label for="campaign-finished-at">Actual finish time (RFC3339, including timezone)</label>
-                        <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z">
+                        <label for="campaign-finished-at">Actual finish time <small>(required, RFC3339 including timezone)</small></label>
+                        <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                         <div class="campaign-finish-tools">
                             <button id="campaign-finished-now" type="button" class="secondary outline">Now</button>
                             <button id="campaign-finished-created" type="button" class="secondary outline" title="Use the original creation time of this attempt">Draft created</button>
@@ -221,6 +221,7 @@
                         <small>The picker uses UTC. You can also edit or paste a timestamp with a timezone above. Draft created uses the original attempt creation time.</small>
                         <button id="campaign-draft-finalize" type="button">Finalize as evidence</button>
                         <p id="campaign-finalize-status" role="status" aria-live="polite"></p>
+                        <ul id="campaign-finalize-blockers" aria-label="Required before finalization" hidden></ul>
                         <a id="campaign-final-evidence" target="_blank" rel="noopener noreferrer" hidden>Open evidence record</a>
                     </section>
                 </article>

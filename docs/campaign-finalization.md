@@ -9,9 +9,10 @@ procedure reference, type, tags, and result through the existing Search view.
 1. Start or resume an attempt, record answers and actual software context, then
    **Save draft**. Finalization acts on that saved revision, not unsaved form data.
    If edits are unsaved, selecting Finalize explains that Save draft is needed.
-   Missing software context or overall result opens/focuses the relevant field;
-   individual check outcomes do not implicitly select an overall result. Status
-   and server validation errors are also displayed beside the Finalize button.
+   Required fields are labeled, and a live blocker list links to fields needing
+   attention. Individual checks do not implicitly select an overall result.
+   Incomplete drafts remain saveable; blockers prevent sending finalization.
+   Server validation errors are also displayed beside the Finalize button.
 2. Set the **actual finish time** using **Now**, **Draft created** (the attempt's
    original creation time), or the **UTC date/time picker**. The RFC3339 text
    field remains editable, including pasted timezone offsets such as
@@ -20,9 +21,10 @@ procedure reference, type, tags, and result through the existing Search view.
    in the open dialog; it is persisted with the evidence on finalization.
 3. Select **Finalize as evidence** and confirm. Validation errors leave the draft
    editable; save corrections and try again.
-4. On success the attempt becomes read-only. **Open evidence record** opens its
-   record in a separate tab. The attempt list distinguishes drafts, finalized
-   attempts, and attempts whose evidence has expired.
+4. On success the dialog closes and the attempt list refreshes. Entries use
+   **Draft:**, **Final:**, or **Expired:** prefixes. Reopen a final attempt to
+   inspect its read-only data and use **Open evidence record** to open the record
+   in a separate tab. Failures leave the dialog open for correction or retry.
 
 Corrections or reruns require a new attempt. They do not replace the old record,
 and this version does not aggregate multiple attempts into a campaign verdict.

@@ -5,6 +5,7 @@ import { resolveAssetImages } from "./campaignview.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { mountFinishTime } from "./finishtime.js";
 import { mountDraftManual, readManualMetadata } from "./draftmanual.js";
+import { finalizationBlockers } from "./finalizationcheck.js";
 
 export function draftControlsHTML(procedure, data, descriptionPath, assets) {
   return procedure.blocks
@@ -16,9 +17,9 @@ export function draftControlsHTML(procedure, data, descriptionPath, assets) {
       const value = data.answers[f.id];
       const attrs = `id="${id}" data-answer="${esc(f.id)}"`;
       if (b.check)
-        return `<div class="campaign-control"><label for="${id}">${esc(f.label)}</label>
-      <select ${attrs} data-type="check">${optionsHTML(["PASS", "FAIL", "NOT_EXECUTED"], value?.outcome)}</select>
-      <label for="${id}-reason">Reason / observation</label><input id="${id}-reason" data-reason="${esc(f.id)}" value="${esc(value?.reason || "")}"></div>`;
+        return `<div class="campaign-control"><label for="${id}">${esc(f.label)} <small>(required to finalize)</small></label>
+      <select ${attrs} data-type="check" aria-required="true">${optionsHTML(["PASS", "FAIL", "NOT_EXECUTED"], value?.outcome)}</select>
+      <label for="${id}-reason">Reason / observation <small>(required when NOT_EXECUTED)</small></label><input id="${id}-reason" data-reason="${esc(f.id)}" value="${esc(value?.reason || "")}"></div>`;
       if (f.bind)
         return `<p>Overall assessment is recorded in the result field below.</p>`;
       let input;
@@ -30,7 +31,7 @@ export function draftControlsHTML(procedure, data, descriptionPath, assets) {
         input = `<textarea ${attrs} data-type="evidence" rows="2" placeholder="One external HTTPS link per line">${esc((value || []).map((link) => link.uri).join("\n"))}</textarea><small>External links only in this draft version; file uploads follow separately.</small>`;
       else
         input = `<textarea ${attrs} data-type="text" rows="${f.multiline ? 3 : 1}">${esc(value ?? "")}</textarea>`;
-      return `<div class="campaign-control"><label for="${id}">${esc(f.label)}${f.required ? " (required for completion)" : ""}</label>${input}</div>`;
+      return `<div class="campaign-control"><label for="${id}">${esc(f.label)}${f.required ? " (required for PASS; otherwise explain omission in notes)" : ""}</label>${input}</div>`;
     })
     .join("");
 }
@@ -111,7 +112,7 @@ export function mountCampaignDrafts(root, me) {
     pendingFinalize = null,
     listVersion = 0,
     offset = 0;
-  const finishTime = mountFinishTime(root, () => attempt?.created_at);
+  const finishTime = mountFinishTime(root, () => attempt?.created_at, () => refreshBlockers());
   const allowed = mayDo(me, "evidence:write");
   el("campaign-attempt-tools").hidden = !allowed;
   const status = (text) => {
@@ -123,6 +124,7 @@ export function mountCampaignDrafts(root, me) {
       if (!attempt?.finalized_at) {
         dirty = true;
         status("Unsaved changes — Save draft to store them.");
+        refreshBlockers();
       }
     },
     status,
@@ -206,6 +208,7 @@ export function mountCampaignDrafts(root, me) {
     if (row.finalized_at && !row.evidence_id)
       el("campaign-draft-controls").replaceChildren();
     setBusy(busy);
+    refreshBlockers();
     if (!dialog.open) dialog.showModal();
     if (mayDo(me, "blob:read")) hydrateImages(el("campaign-draft-controls"));
     else
@@ -233,7 +236,7 @@ export function mountCampaignDrafts(root, me) {
       el("campaign-attempt-list").innerHTML = page.attempts
         .map(
           (a) =>
-            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.finalized_at ? (a.evidence_id ? "View finalized attempt" : "View expired attempt") : "Resume draft"} · ${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
+            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.finalized_at ? (a.evidence_id ? "Final: " : "Expired: ") : "Draft: "}${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
         )
         .join("");
       el("campaign-attempt-list-status").textContent = page.attempts.length
@@ -332,44 +335,64 @@ export function mountCampaignDrafts(root, me) {
         ))
     )
       return;
+    dismissAttempt();
+  }
+
+  function dismissAttempt() {
     dialog.close();
     dirty = false;
     attempt = null;
+    pendingSave = null;
+    pendingFinalize = null;
     el("campaign-draft-controls").replaceChildren();
     releaseImages();
+    el("campaign-attempt-start").focus();
+  }
+
+  function blockerTarget(target) {
+    if (target === "save") return el("campaign-draft-save");
+    if (target === "finished") return el("campaign-finished-at");
+    if (target === "result") return form.querySelector('[name="result"]');
+    if (target.startsWith("answer:")) return [...form.querySelectorAll("[data-answer]")].find(input => input.dataset.answer === target.slice(7));
+    if (target.startsWith("reason:")) return [...form.querySelectorAll("[data-reason]")].find(input => input.dataset.reason === target.slice(7));
+    return form.elements.namedItem(target);
+  }
+
+  function refreshBlockers() {
+    const list = el("campaign-finalize-blockers");
+    list.replaceChildren();
+    for (const input of root.querySelectorAll('[aria-invalid="true"]')) input.removeAttribute("aria-invalid");
+    if (!attempt || attempt.finalized_at) { list.hidden = true; return []; }
+    let data, issues;
+    try {
+      data = readDraftForm(form, attempt.data.answers);
+      issues = finalizationBlockers(context.scenario.procedure, data, el("campaign-finished-at").value, dirty);
+    } catch (error) { issues = [{target:"save", message:error.message}]; }
+    list.hidden = !issues.length;
+    for (const issue of issues) {
+      const input = blockerTarget(issue.target);
+      if (input && issue.target !== "save") input.setAttribute("aria-invalid", "true");
+      const item = document.createElement("li"), button = document.createElement("button");
+      button.type = "button"; button.className = "finalize-blocker-link"; button.textContent = issue.message;
+      button.addEventListener("click", () => {
+        if (input?.closest("details")) input.closest("details").open = true;
+        input?.focus();
+      });
+      item.append(button); list.append(item);
+    }
+    return issues;
   }
 
   async function finalize() {
     if (!attempt || busy || attempt.finalized_at) return;
-    if (dirty) {
-      status("Save draft first: your latest changes have not reached the server. Then select Finalize as evidence again.");
-      el("campaign-draft-save").focus();
-      return;
-    }
-    const missingContext = ["repo", "branch", "rcs_ref"].filter(name => !String(attempt.data[name] || "").trim());
-    if (missingContext.length) {
-      status("Cannot finalize: enter the actual repository, branch and deployed revision under Software under test, then Save draft.");
-      el("draft-software-context").open = true;
-      form.elements.namedItem(missingContext[0]).focus();
-      return;
-    }
-    if (!attempt.data.result) {
-      status("Cannot finalize: choose an overall Result (PASS, FAIL, ERROR or SKIPPED), then Save draft. Individual check outcomes do not set the overall result.");
-      form.querySelector('[name="result"]').focus();
+    if (manual.pending()) { status("Wait for pending lookups or attachments before finalizing."); return; }
+    const issues = refreshBlockers();
+    if (issues.length) {
+      status("Cannot finalize: complete the required fields listed below and save changes.");
+      el("campaign-finalize-blockers").querySelector("button")?.focus();
       return;
     }
     const raw = el("campaign-finished-at").value.trim();
-    if (
-      !raw ||
-      !/(Z|[+-]\d{2}:\d{2})$/.test(raw) ||
-      !Number.isFinite(Date.parse(raw))
-    ) {
-      status(
-        "Enter the actual finish time as RFC3339 with a timezone, e.g. 2026-10-25T14:30:00Z.",
-      );
-      el("campaign-finished-at").focus();
-      return;
-    }
     const finished_at = new Date(raw).toISOString();
     if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
       pendingFinalize = { revision: attempt.revision, finished_at };
@@ -382,13 +405,14 @@ export function mountCampaignDrafts(root, me) {
     setBusy(true);
     status("Finalizing saved attempt…");
     try {
-      showAttempt(
-        await send(
+      await send(
           `/campaign-attempts/${attempt.id}/finalize`,
           "POST",
           pendingFinalize,
-        ),
       );
+      dismissAttempt();
+      setBusy(false);
+      el("campaign-attempt-start").focus();
       listDrafts();
     } catch (error) {
       status(
@@ -415,6 +439,7 @@ export function mountCampaignDrafts(root, me) {
     if (attempt?.finalized_at) return;
     dirty = true;
     status("Unsaved changes — select Save draft to store them on the server.");
+    refreshBlockers();
   });
   form.addEventListener("submit", save);
   el("campaign-draft-close").addEventListener("click", close);

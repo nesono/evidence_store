@@ -12,7 +12,7 @@ export function finishTimeFromPicker(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
-export function mountFinishTime(root, createdAt) {
+export function mountFinishTime(root, createdAt, changed = () => {}) {
   const field = root.querySelector("#campaign-finished-at");
   const picker = root.querySelector("#campaign-finished-picker");
   const now = root.querySelector("#campaign-finished-now");
@@ -20,9 +20,10 @@ export function mountFinishTime(root, createdAt) {
   function set(value) {
     field.value = value || "";
     picker.value = finishPickerValue(field.value);
+    changed();
   }
-  field.addEventListener("input", () => { picker.value = finishPickerValue(field.value); });
-  picker.addEventListener("input", () => { field.value = finishTimeFromPicker(picker.value); });
+  field.addEventListener("input", () => { picker.value = finishPickerValue(field.value); changed(); });
+  picker.addEventListener("input", () => { field.value = finishTimeFromPicker(picker.value); changed(); });
   now.addEventListener("click", () => set(new Date().toISOString()));
   created.addEventListener("click", () => set(createdAt()));
   return {
