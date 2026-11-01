@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=32">
+    <link rel="stylesheet" href="app.css?v=33">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -147,7 +147,7 @@
                 <article>
                     <header><h2 id="campaign-draft-title">Attempt draft</h2></header>
                     <p id="campaign-draft-identity"></p>
-                    <p>Online draft capture. Save explicitly before closing. A draft is not finalized evidence.</p>
+                    <p>Save draft to continue later, or Save and finalize to publish the current entries as evidence. <span class="draft-required-key">*</span> Required to finalize; red borders indicate unmet requirements. Incomplete drafts can still be saved.</p>
                     <form id="campaign-draft-form" novalidate>
                         <fieldset id="campaign-draft-fields">
                             <details id="draft-software-context">
@@ -170,7 +170,7 @@
                                 <div id="campaign-draft-controls"></div>
                             </section>
                             <fieldset id="campaign-overall-result" aria-describedby="campaign-overall-result-help">
-                                <legend>Overall procedure result <small>(required to finalize)</small></legend>
+                                <legend class="draft-required-label">Overall procedure result <small>(required to finalize)</small></legend>
                                 <p id="campaign-overall-result-help">Your verdict for this entire attempt, not one step and not the whole campaign. Select it explicitly after assessing the checks; their outcomes do not select it automatically.</p>
                                 <label><input type="radio" name="result" value="PASS"> <span><strong>PASS — procedure passed</strong><small>All checks passed and required inputs are recorded.</small></span></label>
                                 <label><input type="radio" name="result" value="FAIL"> <span><strong>FAIL — procedure failed</strong><small>The test established a failure of the behavior being tested.</small></span></label>
@@ -212,10 +212,10 @@
                         <button id="campaign-draft-save" type="submit">Save draft</button>
                         <button id="campaign-draft-reload" type="button" class="secondary outline">Reload saved draft</button>
                     </form>
-                    <section aria-label="Finalize saved attempt">
-                        <h3>Finalize saved attempt</h3>
-                        <p>Save your edits first. Finalization publishes the saved result as immutable evidence.</p>
-                        <label for="campaign-finished-at">Actual finish time <small>(required, RFC3339 including timezone)</small></label>
+                    <section aria-label="Save and finalize attempt">
+                        <h3>Save and finalize attempt</h3>
+                        <p>Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.</p>
+                        <label for="campaign-finished-at" class="draft-required-label">Actual finish time <small>(required, RFC3339 including timezone)</small></label>
                         <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                         <div class="campaign-finish-tools">
                             <button id="campaign-finished-now" type="button" class="secondary outline">Now</button>
@@ -228,9 +228,8 @@
                             </div>
                         </div>
                         <small>Pick date uses UTC. Created uses the original attempt creation time. You can also edit or paste a timestamp above.</small>
-                        <button id="campaign-draft-finalize" type="button">Finalize as evidence</button>
+                        <button id="campaign-draft-finalize" type="button">Save and finalize</button>
                         <p id="campaign-finalize-status" role="status" aria-live="polite"></p>
-                        <ul id="campaign-finalize-blockers" aria-label="Required before finalization" hidden></ul>
                         <a id="campaign-final-evidence" target="_blank" rel="noopener noreferrer" hidden>Open evidence record</a>
                     </section>
                 </article>

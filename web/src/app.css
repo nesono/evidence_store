@@ -3925,8 +3925,11 @@ label > .input-with-button {
 .campaign-finish-tools { position: relative; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-block: 0.5rem 1rem; }
 #campaign-finished-picker-panel { position: absolute; top: calc(100% + 0.25rem); left: 0; z-index: 2; width: min(24rem, 100%); padding: 1rem; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-ground-raised); box-shadow: 0 4px 12px #0003; }
 #campaign-finished-picker { max-width: 100%; }
-#campaign-finalize-blockers { padding-left: 1.25rem; }
-#campaign-finalize-blockers .finalize-blocker-link { display: inline; padding: 0; min-height: 0; border: 0; background: transparent; color: var(--color-accent); text-align: left; text-decoration: underline; box-shadow: none; }
+#campaign-draft-dialog .draft-required-label::after { content: " *"; color: var(--color-fail); font-weight: 700; }
+#campaign-draft-dialog .draft-required-key,
+#campaign-draft-dialog .draft-required-marker { color: var(--color-fail); font-weight: 700; }
+#campaign-draft-dialog :is(input, select, textarea)[aria-invalid="true"],
+#campaign-draft-dialog #campaign-overall-result[aria-invalid="true"] { border: 2px solid var(--color-fail); }
 #campaign-draft-fields { min-width: 0; }
 #campaign-attempt-tools { margin-block: 1rem; }
 #campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }

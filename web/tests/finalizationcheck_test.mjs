@@ -9,9 +9,10 @@ const procedure = {blocks:[
 const finish = "2026-10-29T10:00:00Z";
 const complete = {repo:"repo",branch:"main",rcs_ref:"build",result:"PASS",answers:{check:{outcome:"PASS"},distance:0}};
 
-test("finalization lists all missing fields and unsaved work", () => {
-  const targets = finalizationBlockers(procedure,{answers:{}},"",true).map(i=>i.target);
-  for(const target of ["save","repo","branch","rcs_ref","result","finished","answer:check","notes"]) assert.ok(targets.includes(target),target);
+test("finalization identifies missing fields without requiring a separate save", () => {
+  const targets = finalizationBlockers(procedure,{answers:{}},"").map(i=>i.target);
+  for(const target of ["repo","branch","rcs_ref","result","finished","answer:check","notes"]) assert.ok(targets.includes(target),target);
+  assert.ok(!targets.includes("save"));
 });
 
 test("complete PASS accepts a zero measurement, but missing inputs or failed checks block",()=>{

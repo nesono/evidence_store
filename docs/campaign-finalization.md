@@ -6,13 +6,12 @@ procedure reference, type, tags, and result through the existing Search view.
 
 ## Web workflow
 
-1. Start or resume an attempt, record answers and actual software context, then
-   **Save draft**. Finalization acts on that saved revision, not unsaved form data.
-   If edits are unsaved, selecting Finalize explains that Save draft is needed.
-   Required fields are labeled, and a live blocker list links to fields needing
-   attention. Individual checks do not implicitly select an overall result.
-   Incomplete drafts remain saveable; blockers prevent sending finalization.
-   Server validation errors are also displayed beside the Finalize button.
+1. Start or resume an attempt and record answers and actual software context.
+   Required fields have a red asterisk; invalid or missing required values have
+   a red border. Requirements update with the chosen result (for example, notes
+   are required for SKIPPED and a check reason for NOT_EXECUTED). Individual
+   checks do not implicitly select an overall result. Incomplete work can still
+   be saved with **Save draft**; there is no separate required-field list.
 2. Set the **actual finish time** using **Now**, **Created** (the attempt's
    original creation time), or **Pick date**, which opens a compact UTC date/time
    picker beneath the buttons. **Done** closes the picker. All three actions
@@ -21,9 +20,12 @@ procedure reference, type, tags, and result through the existing Search view.
    `2026-10-25T14:30:00+02:00`; the picker displays that instant in UTC. Nothing
    is selected automatically. Your selection survives saving the same draft
    in the open dialog; it is persisted with the evidence on finalization.
-3. Select **Finalize as evidence**. It submits directly without a second confirmation.
-   Validation errors leave the draft
-   editable; save corrections and try again.
+3. Select **Save and finalize**. It validates the current form, saves any changes,
+   and finalizes that saved revision without an extra confirmation or separate
+   Save draft click. Validation errors focus the first invalid field and leave
+   the dialog open. Network/save/finalization errors preserve your entries for
+   retry. If saving succeeds but finalization fails, the saved draft remains;
+   retrying an unchanged request reuses its revision and finish time.
 4. On success the dialog closes and the attempt list refreshes. Entries use
    **Draft:**, **Final:**, or **Expired:** prefixes. Reopen a final attempt to
    inspect its read-only data and use **Open evidence record** to open the record

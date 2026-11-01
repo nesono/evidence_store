@@ -1,9 +1,8 @@
 // Mirrors the server's completion rules for actionable feedback. Drafts may be
 // incomplete; finalization still validates the saved revision on the server.
-export function finalizationBlockers(procedure, data, finished, dirty = false) {
+export function finalizationBlockers(procedure, data, finished) {
   const issues = [];
   const add = (target, message) => issues.push({ target, message });
-  if (dirty) add("save", "Save draft first to include your latest changes.");
   for (const [key, label] of [["repo", "Repository"], ["branch", "Branch"], ["rcs_ref", "Deployed revision"]]) {
     if (!String(data[key] || "").trim()) add(key, `${label} is required.`);
   }

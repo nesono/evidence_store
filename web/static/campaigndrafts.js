@@ -15,7 +15,7 @@ export function draftControlsHTML(procedure, data, descriptionPath, assets) {
       const f = b.field || b.check,
         id = `draft-input-${i}`;
       const value = data.answers[f.id];
-      const attrs = `id="${id}" data-answer="${esc(f.id)}"`;
+      const attrs = `id="${id}" data-answer="${esc(f.id)}"${f.required && !b.check ? ' data-completion-required="true"' : ""}`;
       if (b.check)
         return `<div class="campaign-control campaign-check"><p class="campaign-check-scope">Individual check</p>
       <label for="${id}">${esc(f.label)} <small>(required to finalize)</small></label>
@@ -299,24 +299,10 @@ export function mountCampaignDrafts(root, me) {
       status(error.message);
       return;
     }
-    if (
-      !pendingSave ||
-      JSON.stringify(pendingSave.data) !== JSON.stringify(data)
-    )
-      pendingSave = {
-        revision: attempt.revision,
-        operation_id: crypto.randomUUID(),
-        data,
-      };
     setBusy(true);
     status("Saving draft…");
     try {
-      await manual.prepare(data);
-      const row = await send(
-        `/campaign-attempts/${attempt.id}`,
-        "PUT",
-        pendingSave,
-      );
+      const row = await persistDraft(data);
       showAttempt(row);
       listDrafts();
     } catch (error) {
@@ -325,6 +311,14 @@ export function mountCampaignDrafts(root, me) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function persistDraft(data) {
+    if (!pendingSave || JSON.stringify(pendingSave.data) !== JSON.stringify(data)) {
+      pendingSave = {revision: attempt.revision, operation_id: crypto.randomUUID(), data};
+    }
+    await manual.prepare(data);
+    return send(`/campaign-attempts/${attempt.id}`, "PUT", pendingSave);
   }
   function close() {
     if (manual.pending()) {
@@ -363,26 +357,44 @@ export function mountCampaignDrafts(root, me) {
   }
 
   function refreshBlockers() {
-    const list = el("campaign-finalize-blockers");
-    list.replaceChildren();
     for (const input of root.querySelectorAll('[aria-invalid="true"]')) input.removeAttribute("aria-invalid");
-    if (!attempt || attempt.finalized_at) { list.hidden = true; return []; }
+    if (!attempt || attempt.finalized_at) return [];
+    const result = form.elements.namedItem("result").value;
+    for (const input of form.querySelectorAll('[data-completion-required]')) {
+      input.setAttribute("aria-required", String(result === "PASS"));
+    }
+    for (const reason of form.querySelectorAll('[data-reason]')) {
+      const check = blockerTarget(`answer:${reason.dataset.reason}`);
+      reason.setAttribute("aria-required", String(check?.value === "NOT_EXECUTED"));
+    }
+    for (const label of form.querySelectorAll('#campaign-draft-controls label[for]')) {
+      label.classList.toggle("draft-required-label", el(label.htmlFor)?.getAttribute("aria-required") === "true");
+    }
     let data, issues;
     try {
       data = readDraftForm(form, attempt.data.answers);
-      issues = finalizationBlockers(context.scenario.procedure, data, el("campaign-finished-at").value, dirty);
+      issues = finalizationBlockers(context.scenario.procedure, data, el("campaign-finished-at").value);
+      const notesRequired = finalizationBlockers(context.scenario.procedure, {...data, notes:""}, el("campaign-finished-at").value).some(issue => issue.target === "notes");
+      form.elements.namedItem("notes").setAttribute("aria-required", String(notesRequired));
     } catch (error) { issues = [{target:"save", message:error.message}]; }
-    list.hidden = !issues.length;
+    for (const label of form.querySelectorAll("label:not([for])")) {
+      const input = label.querySelector('input,select,textarea');
+      if (!input) continue;
+      let marker = label.querySelector(".draft-required-marker");
+      const required = input.getAttribute("aria-required") === "true";
+      if (!marker && required) {
+        marker = document.createElement("span");
+        marker.className = "draft-required-marker";
+        marker.textContent = " * ";
+        marker.setAttribute("aria-hidden", "true");
+        label.insertBefore(marker, label.firstElementChild);
+      }
+      if (marker) marker.hidden = !required;
+    }
     for (const issue of issues) {
       const input = blockerTarget(issue.target);
       if (input && issue.target !== "save") input.setAttribute("aria-invalid", "true");
-      const item = document.createElement("li"), button = document.createElement("button");
-      button.type = "button"; button.className = "finalize-blocker-link"; button.textContent = issue.message;
-      button.addEventListener("click", () => {
-        if (input?.closest("details")) input.closest("details").open = true;
-        input?.focus();
-      });
-      item.append(button); list.append(item);
+      if (issue.target === "result") el("campaign-overall-result").setAttribute("aria-invalid", "true");
     }
     return issues;
   }
@@ -392,17 +404,30 @@ export function mountCampaignDrafts(root, me) {
     if (manual.pending()) { status("Wait for pending lookups or attachments before finalizing."); return; }
     const issues = refreshBlockers();
     if (issues.length) {
-      status("Cannot finalize: complete the required fields listed below and save changes.");
-      el("campaign-finalize-blockers").querySelector("button")?.focus();
+      const issue = issues.find(item => item.target !== "save") || issues[0];
+      status(`Cannot finalize: ${issue.message}`);
+      const input = blockerTarget(issue.target);
+      if (input?.closest("details")) input.closest("details").open = true;
+      input?.focus();
       return;
     }
     const raw = el("campaign-finished-at").value.trim();
     const finished_at = new Date(raw).toISOString();
-    if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
-      pendingFinalize = { revision: attempt.revision, finished_at };
+    const data = readDraftForm(form, attempt.data.answers);
     setBusy(true);
-    status("Finalizing saved attempt…");
+    status("Saving and finalizing attempt…");
     try {
+      // Once saving succeeds, keep that revision even if finalization loses its
+      // response. An unchanged retry must not attempt another save on an already
+      // finalized row. Failed saves retain their operation ID for safe replay.
+      if (dirty || (!pendingFinalize && JSON.stringify(data) !== JSON.stringify(attempt.data))) {
+        attempt = await persistDraft(data);
+        dirty = false;
+        pendingSave = null;
+        pendingFinalize = null;
+      }
+      if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
+        pendingFinalize = { revision: attempt.revision, finished_at };
       await send(
           `/campaign-attempts/${attempt.id}/finalize`,
           "POST",

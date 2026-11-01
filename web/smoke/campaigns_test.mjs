@@ -21,6 +21,7 @@ function packageRow(id) {
 let httpServer, chrome, page, base;
 let role = "writer", listFails = false, uploads = 0, imageRequests = 0, downloads = 0, delayA = false;
 const attempts=new Map();
+let draftWrites = 0, failFinalResponse = false;
 const rows = Array.from({ length: 26 }, (_, i) => packageRow(`package-${i}`));
 // A campaign larger than one procedure page exercises incremental filtering
 // over the whole package, rather than only the visible list.
@@ -47,8 +48,11 @@ async function handle(req, res) {
       const body=JSON.parse(Buffer.concat(chunks));
       if(url.pathname.endsWith('/finalize')) {
         const a=attempts.get(url.pathname.split('/').at(-2));
+        if(a.finalized_at && a.finalized_revision===body.revision && a.finished_at===body.finished_at) return json(res,a);
         if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
+        a.finalized_revision=a.revision;
         a.finalized_at=new Date().toISOString();a.finished_at=body.finished_at;a.evidence_id="example-evidence";a.revision++;
+        if(failFinalResponse) {failFinalResponse=false;return json(res,{error:"response interrupted"},503);}
         return json(res,a,201);
       }
       if(req.method==="POST") {
@@ -56,6 +60,8 @@ async function handle(req, res) {
         attempts.set(a.id,a);return json(res,a,201);
       }
       const a=attempts.get(url.pathname.split("/").pop());
+      draftWrites++;
+      if(a.finalized_at) return json(res,{error:"already finalized"},409);
       if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
       a.data=body.data;a.revision++;return json(res,a);
     }
@@ -249,16 +255,15 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   await page.eval(`window.confirm=()=>true;document.getElementById('campaign-draft-reload').click()`);
   await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 3')`);
   await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
-  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /Deployed revision is required/);
+  assert.equal(await page.eval(`document.getElementById('campaign-finalize-blockers')`),null);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.rcs_ref.getAttribute('aria-invalid')`),"true");
+  assert.equal(await page.eval(`getComputedStyle(document.getElementById('campaign-draft-form').elements.rcs_ref).borderTopWidth`),"2px");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').open`),true);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.branch.value='main';f.elements.rcs_ref.value='deployed-build';f.dispatchEvent(new Event('input'));document.getElementById('campaign-draft-finalize').click();})()`);
-  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /Save draft first/);
-  await page.eval(`document.getElementById('campaign-draft-form').requestSubmit()`);
-  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 4')`);
-  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
-  assert.match(await page.eval(`document.getElementById('campaign-finalize-blockers').textContent`), /overall Result/);
-  await page.eval(`document.querySelector('#campaign-draft-form [name=result][value=FAIL]').click();document.getElementById('campaign-draft-form').requestSubmit()`);
-  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('revision 5')`);
+  assert.match(await page.eval(`document.getElementById('campaign-finalize-status').textContent`), /overall Result/);
+  assert.equal(await page.eval(`document.getElementById('campaign-overall-result').getAttribute('aria-invalid')`),"true");
+  await page.eval(`document.querySelector('#campaign-draft-form [name=result][value=FAIL]').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-overall-result').hasAttribute('aria-invalid')`),false);
   await page.eval(`document.getElementById('campaign-finished-now').click()`);
   assert.ok(Math.abs(Date.now() - Date.parse(await page.eval(`document.getElementById('campaign-finished-at').value`))) < 5000);
   assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
@@ -268,8 +273,17 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-finished-picker-panel').hidden`), true);
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-25T12:30:00.000Z");
   await page.eval(`window.finalizeConfirmations=0;window.confirm=()=>{window.finalizeConfirmations++;return false;}`);
+  const writesBefore = draftWrites;
+  failFinalResponse = true;
+  await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
+  await page.waitFor(`document.getElementById('campaign-finalize-status').textContent.includes('response interrupted')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').open`),true);
+  assert.equal(draftWrites,writesBefore+1,"current edits must be saved automatically");
+  assert.equal([...attempts.values()][0].data.rcs_ref,"deployed-build");
+  assert.equal([...attempts.values()][0].data.result,"FAIL");
   await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
   await page.waitFor(`!document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(draftWrites,writesBefore+1,"retry after lost finalization response must not save again");
   assert.equal(await page.eval(`window.finalizeConfirmations`),0,"finalize must not require another confirmation");
   await page.waitFor(`document.querySelector('[data-attempt-id]')?.textContent.startsWith('Final: ')`);
   await page.eval(`document.querySelector('[data-attempt-id]').click()`);
