@@ -188,6 +188,20 @@ test("uploads report validation failures and duplicates, and list errors allow r
 });
 
 test("attempts save typed answers, survive reload, and keep unsaved edits on conflict", async () => {
+  // Reproduce the upgrade failure: old draft JS cached against current HTML.
+  // The old renderer addressed the now-removed required-fields list.
+  await page.waitFor(`!!navigator.serviceWorker.controller`);
+  await page.eval(`(async () => {
+    const names = await caches.keys();
+    const cache = await caches.open(names.find(name => name.startsWith('evidence-shell-')));
+    await cache.put('/campaigndrafts.js', new Response(
+      'export function mountCampaignDrafts() { document.getElementById("campaign-finalize-blockers").replaceChildren(); }',
+      {headers:{'Content-Type':'text/javascript'}}));
+  })()`);
+  await page.goto(`${base}/?upgrade=1#campaigns`);
+  await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
+  await page.eval(`document.querySelector('.campaign-package').click()`);
+  await page.waitFor(`document.querySelector('.campaign-procedure-item')`);
   await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
   await page.waitFor(`document.getElementById('campaign-attempt-list-status').textContent.includes('No saved drafts')`);
   await page.eval(`document.getElementById('campaign-attempt-start').click()`);
