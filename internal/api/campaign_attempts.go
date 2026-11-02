@@ -1,9 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -53,11 +55,12 @@ func (h *CampaignHandler) CreateAttempt(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 422, "id and campaign_id must be nonzero UUIDs")
 		return
 	}
-	procedure := h.attemptProcedure(w, r, req.CampaignID, req.ProcedureRef)
-	if procedure == nil {
+	initial, err := h.initialAttemptData(r, req.CampaignID, req.ProcedureRef)
+	if err != nil {
+		attemptError(w, err)
 		return
 	}
-	a, created, err := h.store.CreateAttempt(r.Context(), req.ID, req.CampaignID, req.ProcedureRef, attemptOwner(r), campaign.InitialDraft(procedure))
+	a, created, err := h.store.CreateAttempt(r.Context(), req.ID, req.CampaignID, req.ProcedureRef, attemptOwner(r), initial)
 	if err != nil {
 		attemptError(w, err)
 		return
@@ -67,6 +70,42 @@ func (h *CampaignHandler) CreateAttempt(w http.ResponseWriter, r *http.Request) 
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, a)
+}
+
+func (h *CampaignHandler) initialAttemptData(r *http.Request, id uuid.UUID, ref string) (campaign.DraftData, error) {
+	row, err := h.store.Get(r.Context(), id)
+	if err != nil {
+		return campaign.DraftData{}, err
+	}
+	for _, s := range row.Definition.Scenarios {
+		if s.Definition.ProcedureRef != ref {
+			continue
+		}
+		d := campaign.InitialDraft(s.Procedure)
+		d.EvidenceType = s.Definition.Defaults.EvidenceType
+		d.Source = attemptOwner(r)
+		d.Metadata = map[string]json.RawMessage{}
+		for key, value := range s.Definition.Defaults.Metadata {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return d, err
+			}
+			d.Metadata[key] = encoded
+		}
+		if len(s.Definition.Defaults.Tags) > 0 {
+			d.Metadata["tags"], err = json.Marshal(s.Definition.Defaults.Tags)
+			if err != nil {
+				return d, err
+			}
+		}
+		prior, err := h.store.LatestSoftwareContext(r.Context(), id, attemptOwner(r))
+		if err != nil {
+			return d, err
+		}
+		d.Repo, d.Branch, d.RCSRef = prior.Repo, prior.Branch, prior.RCSRef
+		return d, nil
+	}
+	return campaign.DraftData{}, &store.FinalizationError{Message: "procedure_ref is not in this campaign package"}
 }
 
 func (h *CampaignHandler) attemptProcedure(w http.ResponseWriter, r *http.Request, id uuid.UUID, ref string) *campaign.Procedure {
@@ -129,7 +168,13 @@ func (h *CampaignHandler) SaveAttempt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 422, err.Error())
 		return
 	}
-	saved, err := h.store.SaveAttempt(r.Context(), a.ID, attemptOwner(r), req.Revision, req.OperationID, req.Data)
+	// Keep the same source-override permission as Add Result. Recheck again at
+	// finalization in case privileges changed after this draft was saved.
+	if _, err := auth.BindSource(r.Context(), req.Data.Source); err != nil {
+		writeError(w, 403, err.Error())
+		return
+	}
+	saved, err := h.store.SaveAttempt(r.Context(), a.ID, attemptOwner(r), req.Revision, req.OperationID, req.Data, h.blobs)
 	if err != nil {
 		attemptError(w, err)
 		return
@@ -166,13 +211,61 @@ func (h *CampaignHandler) ListAttempts(w http.ResponseWriter, r *http.Request) {
 }
 
 func attemptError(w http.ResponseWriter, err error) {
+	var invalid *store.FinalizationError
+	if errors.As(err, &invalid) {
+		writeError(w, 422, invalid.Error())
+		return
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, 404, "attempt or campaign not found")
 		return
 	}
 	if errors.Is(err, store.ErrAttemptConflict) {
-		writeError(w, 409, "draft changed; reload the saved draft before applying your changes")
+		writeError(w, 409, "attempt changed or is finalized; reload the saved attempt")
 		return
 	}
 	campaignError(w, err)
+}
+
+func (h *CampaignHandler) FinalizeAttempt(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, 400, "invalid attempt id")
+		return
+	}
+	var req struct {
+		Revision   int64     `json:"revision"`
+		FinishedAt time.Time `json:"finished_at"`
+	}
+	if !readAttemptJSON(w, r, &req) {
+		return
+	}
+	if req.Revision < 1 || req.FinishedAt.IsZero() {
+		writeError(w, 422, "revision and finished_at (RFC3339) are required")
+		return
+	}
+	owned, err := h.store.GetAttempt(r.Context(), id, attemptOwner(r))
+	if err != nil {
+		attemptError(w, err)
+		return
+	}
+	if _, err := auth.BindSource(r.Context(), owned.Data.Source); err != nil {
+		writeError(w, 403, err.Error())
+		return
+	}
+	// PostgreSQL timestamps are microsecond-precision; normalize before both
+	// comparison and insertion so nanosecond RFC3339 requests remain retryable.
+	a, created, err := h.store.FinalizeAttempt(r.Context(), id, attemptOwner(r), req.Revision, req.FinishedAt.UTC().Truncate(time.Microsecond))
+	if err != nil {
+		attemptError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	if a.EvidenceID != nil {
+		w.Header().Set("Location", "/api/v1/evidence/"+a.EvidenceID.String())
+	}
+	writeJSON(w, status, a)
 }

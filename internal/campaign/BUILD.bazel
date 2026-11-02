@@ -7,6 +7,7 @@ go_library(
         "declaration.go",
         "directory.go",
         "draft.go",
+        "finalize.go",
         "package.go",
         "package_files.go",
         "procedure.go",
@@ -21,7 +22,7 @@ go_library(
 
 go_test(
     name = "campaign_test",
-    srcs = ["draft_test.go", "package_test.go", "procedure_test.go"],
+    srcs = ["draft_test.go", "finalize_test.go", "package_test.go", "procedure_test.go"],
     embedsrcs = glob(["testdata/*.md", "testdata/package/**"]),
     embed = [":campaign"],
 )

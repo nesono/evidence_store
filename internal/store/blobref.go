@@ -47,7 +47,8 @@ func referencedBlobs(ctx context.Context, q blobRefQuerier, digests []blob.Diges
 	}
 
 	rows, err := q.Query(ctx, `SELECT digest FROM blob_ref WHERE digest = ANY($1)
-		UNION SELECT digest FROM campaign_blob_ref WHERE digest = ANY($1)`, values)
+		UNION SELECT digest FROM campaign_blob_ref WHERE digest = ANY($1)
+		UNION SELECT digest FROM campaign_draft_blob_ref WHERE digest = ANY($1)`, values)
 	if err != nil {
 		return nil, fmt.Errorf("query blob refs: %w", err)
 	}

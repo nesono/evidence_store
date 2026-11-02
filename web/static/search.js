@@ -14,6 +14,7 @@ import { attachRangePicker } from "./datepicker.js";
 import { parseUserDateTime } from "./datetime.js";
 import { updateUtcPreview } from "./utcpreview.js";
 import { renderMarkdown } from "./markdown.js";
+import { campaignResultHTML } from "./campaignresult.js";
 import { fitTagCells } from "./tagfit.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { EVIDENCE_TYPES, evidenceTypeLabel } from "./evidencetype.js";
@@ -663,6 +664,7 @@ export function renderDetail(record) {
     </dl>`;
   }
   let body = "";
+  body += campaignResultHTML(metadata.campaign);
 
   const notes = readerText(metadata.notes);
   if (notes) {

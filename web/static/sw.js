@@ -32,7 +32,17 @@
 // v22: cell-owned procedure spacing and aligned text baselines.
 // v23: online campaign attempt drafts.
 // v24: floating circular close control on attempt drafts.
-const VERSION = "v24";
+// v25: immutable campaign finalization and evidence summaries.
+// v26: finish-time shortcuts and synchronized UTC picker.
+// v27: full manual-result context for campaign capture.
+// v28: suppress inherited list-item bullets in campaign listings.
+// v29: actionable finalization validation beside the action.
+// v30: required-field guidance and close-on-finalization.
+// v31: distinguish check outcomes from the overall procedure verdict.
+// v32: one finish-time field with Now / Created / Pick date actions.
+// v33: field-level required markers and invalid borders.
+// v34: fetch scripts network-first so updated HTML never uses stale cached DOM code.
+const VERSION = "v34";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -43,7 +53,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=24",
+  "/app.css?v=34",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -52,6 +62,10 @@ const SHELL = [
   "/common.js",
   "/campaigns.js",
   "/campaigndrafts.js",
+  "/campaignresult.js",
+  "/finishtime.js",
+  "/finalizationcheck.js",
+  "/draftmanual.js",
   "/campaignview.js",
   "/datalists.js",
   "/datepicker.js",
@@ -133,8 +147,32 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  // HTML is network-first. Its DOM and the scripts that operate on it must
+  // update together: stale-while-revalidate could serve an old script that
+  // addresses elements removed by the new page. Bypass the HTTP cache as well;
+  // use the shell copy only when the network is actually unavailable.
+  if (url.pathname.endsWith(".js")) {
+    event.respondWith(networkFirstScript(request));
+    return;
+  }
+
   event.respondWith(staleWhileRevalidate(request));
 });
+
+async function networkFirstScript(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok && response.type === "basic") {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return await cache.match(request) || new Response("offline and not in the cache", {
+      status: 503, headers: { "Content-Type": "text/plain" },
+    });
+  }
+}
 
 // Answer from the cache at once, and replace it with whatever the network says
 // for next time.
