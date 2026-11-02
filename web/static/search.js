@@ -646,7 +646,7 @@ export function renderDetail(record) {
   // that from here without reading a list.
   let reader = `<div class="record-head">
     ${resultBadge(record.result)}
-    <h4 class="record-title">${esc(record.procedure_ref)}</h4>
+    <h3 class="record-title">${esc(record.procedure_ref)}</h3>
     <p class="record-sub">${esc(record.repo)}${record.branch ? ` \u00b7 <span class="commit-ref">${esc(record.branch)}</span>` : ""}${commit ? ` · <button type="button" class="record-copy commit-ref" title="${esc(commit)}" aria-label="Copy full commit hash">${esc(commit.slice(0, 12))}</button><span class="record-copy-status" role="status"></span>` : ""}</p>
   </div>`;
   if (record.inherited) reader += '<p class="record-empty">Inherited result</p>';
@@ -734,6 +734,7 @@ export function renderDetail(record) {
   // renderer leaves them without a src because reading a blob needs the API key.
   releaseImages();
   hydrateImages(el);
+  document.getElementById("detail-dialog").setAttribute("aria-label", `${record.result}: ${record.procedure_ref}`);
   showDetailPanel(record.id);
   if (new URLSearchParams(window.location.search).get("view") === "record") {
     document.title = `${record.procedure_ref} — Evidence Record`;
@@ -857,6 +858,7 @@ export async function openDetail(id, { updateURL = true } = {}) {
   if (updateURL) writeStateToURL(parseSearchState(window.location.search).filters, id);
   const content = document.getElementById("detail-content");
   content.innerHTML = '<p class="empty-state" role="status">Loading record...</p>';
+  document.getElementById("detail-dialog").setAttribute("aria-label", "Record details");
   releaseImages();
   showDetailPanel(id);
   document.getElementById("detail-dialog").scrollTop = 0;
