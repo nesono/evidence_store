@@ -10,7 +10,7 @@ import {
   registerServiceWorker, startConnectionIndicator, tabFromHash,
 } from "./offline.js";
 import {
-  applyURLState, doSearch, fetchEvidenceById, mountSearch, readStateFromURL, renderDetail,
+  applyURLState, doSearch, mountSearch, openDetail, readStateFromURL,
 } from "./search.js";
 import { beginCorrection, mountAddForm, pinSourceToCaller } from "./addform.js";
 import { mountMarkdownEditor } from "./markdownedit.js";
@@ -354,10 +354,6 @@ async function loadIdentity() {
   }
 
   if (detail) {
-    try {
-      renderDetail(await fetchEvidenceById(detail));
-    } catch (err) {
-      document.getElementById("results-body").textContent = `Could not load record: ${err.message}`;
-    }
+    await openDetail(detail, { updateURL: false });
   }
 })();

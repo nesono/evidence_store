@@ -111,16 +111,63 @@ test("paging moves the window and says so in the URL", async t => {
   noProblems(t);
 });
 
-test("a row opens the record, and the back button returns to the list", async t => {
+test("results open beside the list and browser history restores the selection", async t => {
+  await page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  const ids = await page.eval(`[...document.querySelectorAll('#results-body tr[data-id]')].map(row => row.dataset.id)`);
   await page.eval(`document.querySelector('#results-body tr[data-id]').click()`);
-  await page.waitFor(`document.getElementById('detail-dialog').open`, { what: "the record dialog" });
+  await page.waitFor(`document.querySelector('#detail-content .record-title')`, { what: "the record detail" });
   assert.ok(await page.eval(`/detail=/.test(location.search)`),
     "an open record should be linkable");
+  const layout = await page.eval(`(() => {
+    const list = document.getElementById('results-window').getBoundingClientRect();
+    const pane = document.getElementById('detail-dialog');
+    return { beside: list.right <= pane.getBoundingClientRect().left,
+      modal: pane.matches(':modal'), selected: document.querySelector('#results-body tr.selected')?.dataset.id,
+      ids: [...document.querySelectorAll('#results-body tr[data-id]')].map(row => row.dataset.id),
+      overflow: document.documentElement.scrollWidth > innerWidth };
+  })()`);
+  assert.equal(layout.beside, true, "the record is to the right of the listing");
+  assert.equal(layout.modal, false, "the listing stays interactive");
+  assert.equal(layout.overflow, false, "both panes fit the viewport");
+  assert.equal(layout.selected, ids[0]);
+  assert.deepEqual(layout.ids, ids, "opening details retains the result listing");
+
+  assert.ok(ids.length > 1);
+  await page.eval(`document.querySelectorAll('#results-body .col-procedure a')[1].click()`);
+  await page.waitFor(`document.querySelector('#detail-content .record-title') && new URLSearchParams(location.search).get('detail') === ${JSON.stringify(ids[1])}`);
+  assert.equal(await page.eval(`document.querySelector('#results-body tr.selected')?.dataset.id`), ids[1]);
+
+  await page.eval(`history.back()`);
+  await page.waitFor(`document.querySelector('#detail-content .record-title') && document.querySelector('#results-body tr.selected')?.dataset.id === ${JSON.stringify(ids[0])}`);
+  await page.eval(`history.back()`);
+  await page.waitFor(`!document.getElementById('detail-dialog').open && !new URLSearchParams(location.search).has('detail')`);
+  await page.eval(`history.forward()`);
+  await page.waitFor(`document.querySelector('#detail-content .record-title') && document.querySelector('#results-body tr.selected')?.dataset.id === ${JSON.stringify(ids[0])}`);
+
+  await page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1024, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  assert.equal(await page.eval(`document.documentElement.scrollWidth > innerWidth`), false,
+    "the narrowest split view fits both panes");
+  assert.ok(await page.eval(`document.querySelector('#results-table .col-procedure').getBoundingClientRect().width > 80`),
+    "the procedure column remains readable");
+  await page.send("Emulation.setDeviceMetricsOverride", {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: false,
+  });
+  await page.waitFor(`document.getElementById('detail-dialog').matches(':modal')`,
+    { what: "the small-screen dialog" });
+  await page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  await page.waitFor(`document.getElementById('detail-dialog').open && !document.getElementById('detail-dialog').matches(':modal')`,
+    { what: "the restored side pane" });
 
   await page.eval(`document.getElementById('close-detail').click()`);
-  await page.eval(`history.back()`);
-  await page.waitFor(`document.querySelectorAll('#results-body tr[data-id]').length > 0`,
-    { what: "the list to come back" });
+  assert.equal(await page.eval(`document.getElementById('detail-dialog').open`), false);
+  assert.equal(await page.eval(`document.querySelector('#results-body tr.selected')`), null);
+  await page.send("Emulation.clearDeviceMetricsOverride");
   noProblems(t);
 });
 
