@@ -164,12 +164,7 @@ test("the Filters button counts every filter that narrows the search", () => {
   assert.equal(activeFilterCount({ repo: "" }), 0, "an empty box is not a filter");
 });
 
-// --- A tablet in landscape shows the record beside the list (#163) ---
-//
-// The store already has the shape a tablet wants: a list and a record. On a
-// screen with the width for both, the record is a panel rather than a dialog
-// over the list. Decided by input as well as width: a wide screen with a mouse
-// is a desktop, where the dialog is right.
+// --- Wide screens show the record beside the list ---
 
 test("a tablet in landscape puts the record beside the list", () => {
   assert.equal(prefersSplitView({ width: 1180, coarse: true }), true);
@@ -181,10 +176,10 @@ test("a tablet in portrait has no room for both", () => {
   assert.equal(prefersSplitView({ width: 1023, coarse: true }), false);
 });
 
-test("a phone and a desktop keep the dialog", () => {
+test("a phone keeps the dialog while a desktop shows the detail pane", () => {
   assert.equal(prefersSplitView({ width: 390, coarse: true }), false);
-  assert.equal(prefersSplitView({ width: 1440, coarse: false }), false,
-    "a wide screen with a mouse is a desktop, and a dialog is what it has always had");
+  assert.equal(prefersSplitView({ width: 1440, coarse: false }), true);
+  assert.equal(prefersSplitView({ width: 1024 }), true);
   assert.equal(prefersSplitView(), false);
 });
 

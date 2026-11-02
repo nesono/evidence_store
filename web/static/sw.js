@@ -42,7 +42,8 @@
 // v32: one finish-time field with Now / Created / Pick date actions.
 // v33: field-level required markers and invalid borders.
 // v34: fetch scripts network-first so updated HTML never uses stale cached DOM code.
-const VERSION = "v34";
+// v36: Search detail pane and understated Raw display disclosure.
+const VERSION = "v36";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -53,7 +54,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=34",
+  "/app.css?v=36",
   "/app.js",
   "/blobref.js",
   "/access.js",

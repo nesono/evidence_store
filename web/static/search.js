@@ -287,14 +287,11 @@ export function activeAdvancedCount(filters) {
   return n;
 }
 
-// A tablet in landscape has room for the list and the record at once, which
-// is the shape the store already has. Decided by input as well as width: a
-// wide screen with a mouse is a desktop, where the record is a dialog over the
-// list, as it has always been.
-export const SPLIT_VIEW_QUERY = "(min-width: 1024px) and (pointer: coarse)";
+// Show the list and record together whenever the viewport has room for both.
+export const SPLIT_VIEW_QUERY = "(min-width: 1024px)";
 
-export function prefersSplitView({ width = 0, coarse = false } = {}) {
-  return coarse && width >= 1024;
+export function prefersSplitView({ width = 0 } = {}) {
+  return width >= 1024;
 }
 
 function splitView() {
@@ -698,7 +695,7 @@ export function renderDetail(record) {
   el.innerHTML = `<div class="record-pane">
     <div class="record-layout${context ? " has-context" : ""}"><div class="record-text">${reader}</div>${context}</div>
     ${body}
-    <details class="record-details"><summary>Technical details</summary>${details}</details>
+    <details class="record-details"><summary>Raw display</summary>${details}</details>
   </div>`;
   el.querySelector(".record-copy")?.addEventListener("click", async () => {
     const status = el.querySelector(".record-copy-status");
@@ -735,18 +732,26 @@ export function renderDetail(record) {
 
   // The log's images are fetched once the markup is in the document: the
   // renderer leaves them without a src because reading a blob needs the API key.
+  releaseImages();
   hydrateImages(el);
+  showDetailPanel(record.id);
+  if (new URLSearchParams(window.location.search).get("view") === "record") {
+    document.title = `${record.procedure_ref} — Evidence Record`;
+  }
+}
+
+function showDetailPanel(id) {
   const dialog = document.getElementById("detail-dialog");
   // Beside the list, a record is part of the page: show() rather than
   // showModal(), which would put it in the top layer over everything.
-  if (dialog.open) dialog.close();
   if (new URLSearchParams(window.location.search).get("view") === "record") {
     document.getElementById("tab-search").classList.add("record-page");
-    document.title = `${record.procedure_ref} — Evidence Record`;
-    dialog.show();
-  } else if (splitView()) dialog.show(); else dialog.showModal();
+    if (!dialog.open) dialog.show();
+  } else if (!dialog.open) {
+    if (splitView()) dialog.show(); else dialog.showModal();
+  }
   document.getElementById("tab-search").classList.add("detail-open");
-  markSelectedRow(record.id);
+  markSelectedRow(id);
 }
 
 // The embed uses only validated coordinates; descriptive locations remain links.
@@ -764,6 +769,7 @@ export function recordMapURL(location) {
 let searchRequest = 0;
 
 export async function doSearch(filters, { clamped = false } = {}) {
+  if (!parseSearchState(window.location.search).detail) closeDetail();
   const request = ++searchRequest;
   const tbody = document.getElementById("results-body");
   tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading...</td></tr>`;
@@ -785,6 +791,7 @@ export async function doSearch(filters, { clamped = false } = {}) {
 
     renderTable(data.records);
     renderInherited(data.inherited_records);
+    markSelectedRow(selectedRecord);
     renderRange((data.records || []).length);
     renderWindowNav();
   } catch (err) {
@@ -825,21 +832,53 @@ function moveWindow(offset) {
   doSearch(filters);
 }
 
-// Which record the panel is showing. Beside the list, the list has to say so;
-// over it, the dialog is the answer.
+let selectedRecord = null;
+let detailRequest = 0;
+
+// Keep the selection visible, including after a search finishes loading.
 function markSelectedRow(id) {
   for (const row of document.querySelectorAll("#results-table tr.selected, #inherited-table tr.selected")) {
     row.classList.remove("selected");
   }
-  if (id) document.querySelector(`tr[data-id="${id}"]`)?.classList.add("selected");
+  if (id) {
+    for (const row of document.querySelectorAll("#results-body tr[data-id], #inherited-body tr[data-id]")) {
+      if (row.dataset.id === id) row.classList.add("selected");
+    }
+  }
 }
 
 export function recordURL(id) {
   return `?${new URLSearchParams({ detail: id, view: "record" })}#search`;
 }
 
-function openDetail(id) {
-  window.open(recordURL(id), "_blank", "noopener");
+export async function openDetail(id, { updateURL = true } = {}) {
+  const request = ++detailRequest;
+  selectedRecord = id;
+  if (updateURL) writeStateToURL(parseSearchState(window.location.search).filters, id);
+  const content = document.getElementById("detail-content");
+  content.innerHTML = '<p class="empty-state" role="status">Loading record...</p>';
+  releaseImages();
+  showDetailPanel(id);
+  document.getElementById("detail-dialog").scrollTop = 0;
+  try {
+    const record = await fetchEvidenceById(id);
+    if (request !== detailRequest) return;
+    renderDetail(record);
+  } catch (err) {
+    if (request !== detailRequest) return;
+    content.innerHTML = `<p class="empty-state" role="alert">Could not load record: ${esc(err.message)}</p>`;
+  }
+}
+
+function closeDetail({ updateURL = false } = {}) {
+  ++detailRequest;
+  selectedRecord = null;
+  document.getElementById("detail-dialog").close();
+  document.getElementById("detail-content").replaceChildren();
+  document.getElementById("tab-search").classList.remove("detail-open");
+  markSelectedRow(null);
+  releaseImages();
+  if (updateURL) writeStateToURL(parseSearchState(window.location.search).filters);
 }
 
 // Reflects URL-derived state into the form and the window controls.
@@ -999,23 +1038,34 @@ export function mountSearch() {
   }).observe(document.getElementById("results-window"));
   document.getElementById("inherited-panel").addEventListener("toggle", refitTags);
 
-  document.getElementById("results-body").addEventListener("click", (e) => {
-    const row = e.target.closest("tr[data-id]");
-    if (row && !e.target.closest("a, button")) openDetail(row.dataset.id);
-  });
-
-  document.getElementById("inherited-body").addEventListener("click", (e) => {
-    const row = e.target.closest("tr[data-id]");
-    if (row && !e.target.closest("a, button")) openDetail(row.dataset.id);
-  });
+  for (const id of ["results-body", "inherited-body"]) {
+    document.getElementById(id).addEventListener("click", (e) => {
+      const row = e.target.closest("tr[data-id]");
+      if (!row || e.target.closest("button") || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      // Ordinary link activation (including Enter) opens the panel; modified
+      // clicks retain the link's standalone-record destination.
+      e.preventDefault();
+      openDetail(row.dataset.id);
+    });
+  }
 
   document.getElementById("close-detail").addEventListener("click", () => {
     if (new URLSearchParams(window.location.search).get("view") === "record") {
       window.location.assign(`${window.location.pathname}#search`);
       return;
     }
-    document.getElementById("detail-dialog").close();
-    writeStateToURL(readFormFilters());
+    closeDetail({ updateURL: true });
+  });
+
+  document.getElementById("detail-dialog").addEventListener("cancel", (e) => {
+    e.preventDefault();
+    closeDetail({ updateURL: true });
+  });
+
+  document.getElementById("detail-dialog").addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !splitView() || new URLSearchParams(window.location.search).get("view") === "record") return;
+    e.preventDefault();
+    closeDetail({ updateURL: true });
   });
 
   // On the dialog itself rather than the close button: Escape closes it too, and
@@ -1025,12 +1075,10 @@ export function mountSearch() {
     // tablet is rotated, and that close arrives after it has been reopened.
     // An open record is not one being put away.
     if (event.target.open) return;
-    releaseImages();
-    document.getElementById("tab-search").classList.remove("detail-open");
-    markSelectedRow(null);
+    closeDetail();
   });
 
-  // Rotating a tablet, or plugging in a mouse, changes which of the two a
+  // Resizing the viewport changes which of the two a
   // record should be. An open one is reopened the other way rather than left
   // as a panel in a layout that no longer has a column for it.
   window.matchMedia(SPLIT_VIEW_QUERY).addEventListener("change", () => {
@@ -1044,11 +1092,12 @@ export function mountSearch() {
   });
 
   window.addEventListener("popstate", () => {
-    const { filters } = readStateFromURL();
+    const { filters, detail } = readStateFromURL();
     applyURLState(filters);
     // Going back may land on a different filter set, so the cached count no longer
     // applies.
     totalRecords = null;
     doSearch(filters);
+    if (detail) openDetail(detail, { updateURL: false });
   });
 }
