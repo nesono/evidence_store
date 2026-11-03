@@ -44,7 +44,9 @@
 // v34: fetch scripts network-first so updated HTML never uses stale cached DOM code.
 // v36: Search detail pane and understated Raw display disclosure.
 // v37: use the verdict and procedure as the record detail heading.
-const VERSION = "v37";
+// v38: shared campaign execution workspace.
+// v39: spaced, link-style campaign package back navigation.
+const VERSION = "v39";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -55,7 +57,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=37",
+  "/app.css?v=39",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -63,6 +65,7 @@ const SHELL = [
   "/analytics.js",
   "/common.js",
   "/campaigns.js",
+  "/campaignworkspace.js",
   "/campaigndrafts.js",
   "/campaignresult.js",
   "/finishtime.js",

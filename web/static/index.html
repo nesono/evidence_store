@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=37">
+    <link rel="stylesheet" href="app.css?v=39">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -75,6 +75,47 @@
 
     <main class="container">
         <section id="tab-campaigns" class="tab-content" hidden>
+            <section id="campaign-home">
+                <div class="campaign-toolbar"><h2>Campaigns</h2><button id="campaign-new" type="button">New campaign</button><button id="campaign-packages" type="button" class="secondary outline">Campaign packages</button></div>
+                <div class="campaign-toolbar">
+                    <label class="campaign-search-label">Find a campaign<input id="campaign-search" type="search" maxlength="200" placeholder="Name, repository, branch or revision"></label>
+                    <label>Show<select id="campaign-state"><option value="open">Open</option><option value="completed">Completed</option><option value="all">All</option></select></label>
+                    <button id="campaign-runs-refresh" type="button" class="secondary outline">Refresh</button>
+                </div>
+                <p id="campaign-runs-status" role="status"></p>
+                <ul id="campaign-runs" class="campaign-run-list"></ul>
+                <div class="campaign-toolbar"><button id="campaign-runs-prev" type="button" class="secondary outline">Previous</button><button id="campaign-runs-next" type="button" class="secondary outline">Next</button></div>
+            </section>
+            <section id="campaign-new-view" hidden>
+                <div class="campaign-toolbar"><button id="campaign-new-back" type="button" class="secondary outline">Back to campaigns</button><h2>Start a campaign</h2></div>
+                <label>Find a campaign package<input id="campaign-package-search" type="search" maxlength="200" placeholder="Package name, key or source repository"></label>
+                <p id="campaign-package-picker-status" role="status"></p>
+                <ul id="campaign-package-picker" class="campaign-run-list"></ul>
+                <div class="campaign-toolbar"><button id="campaign-picker-prev" type="button" class="secondary outline">Previous packages</button><button id="campaign-picker-next" type="button" class="secondary outline">Next packages</button></div>
+                <form id="campaign-start-form" hidden>
+                    <h3 id="campaign-start-package"></h3>
+                    <label>Campaign name<input name="name" required maxlength="200"></label>
+                    <div class="grid"><label>Product repository<input name="repo" required maxlength="1000" list="repos-list" placeholder="org/repo"></label><label>Branch<input name="branch" required maxlength="1000"></label><label>Deployed revision<input name="rcs_ref" required maxlength="1000" placeholder="Actual commit or release"></label></div>
+                    <p>This product revision applies to every attempt in the campaign. Confirm it matches the deployed software.</p>
+                    <button id="campaign-start" type="submit">Start campaign</button>
+                    <p id="campaign-start-status" role="status"></p>
+                </form>
+            </section>
+            <section id="campaign-workspace" hidden>
+                <div class="campaign-toolbar"><button id="campaign-work-back" type="button" class="secondary outline">All campaigns</button><button id="campaign-work-refresh" type="button" class="secondary outline">Refresh campaign</button><button id="campaign-work-close" type="button" class="secondary outline">Finish campaign</button></div>
+                <h2 id="campaign-work-title"></h2><p id="campaign-work-context" class="commit-ref"></p><p id="campaign-work-progress"></p><p id="campaign-work-status" role="status"></p>
+                <div class="campaign-work-layout">
+                    <aside aria-label="Campaign procedures"><label>Find a procedure<input id="campaign-work-search" type="search" placeholder="Procedure title or reference"></label><ul id="campaign-work-procedures" class="campaign-run-list"></ul></aside>
+                    <section>
+                        <div class="campaign-toolbar campaign-work-nav"><button id="campaign-work-prev" type="button" class="secondary outline">← Previous procedure</button><span id="campaign-work-position"></span><button id="campaign-work-next" type="button" class="secondary outline">Next procedure →</button></div>
+                        <p id="campaign-work-empty">Choose any procedure to begin or continue.</p>
+                        <details id="campaign-work-history"><summary>Attempts and retry</summary><div id="campaign-work-attempts"></div></details>
+                        <div id="campaign-work-editor"></div>
+                    </section>
+                </div>
+            </section>
+            <section id="campaign-package-management" hidden>
+            <nav class="campaign-back-nav" aria-label="Campaign navigation"><a id="campaign-packages-back" href="#campaigns">← Back to campaigns</a></nav>
             <h2>Campaign packages</h2>
             <p>Import a package, review its procedures, and record observations in a draft. Save and resume drafts online, then finalize completed attempts as evidence.</p>
             <form id="campaign-import-form">
@@ -214,7 +255,7 @@
                     </form>
                     <section aria-label="Save and finalize attempt">
                         <h3>Save and finalize attempt</h3>
-                        <p>Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.</p>
+                        <p id="campaign-finalize-help">Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.</p>
                         <label for="campaign-finished-at" class="draft-required-label">Actual finish time <small>(required, RFC3339 including timezone)</small></label>
                         <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                         <div class="campaign-finish-tools">
@@ -235,6 +276,7 @@
                 </article>
                 </div>
             </dialog>
+            </section>
         </section>
         <section id="tab-add" class="tab-content" hidden>
             <h4>Add Manual Test Result</h4>

@@ -8,6 +8,7 @@ go_library(
         "budget.go",
         "campaigns.go",
         "campaign_attempts.go",
+        "campaign_executions.go",
         "evidence.go",
         "filter.go",
         "inheritance.go",

@@ -180,10 +180,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 		r.With(auth.Require(auth.PermEvidenceRead), auth.Require(auth.PermBlobRead)).Get("/campaigns/{id}/package", campaignAPI.Download)
 		r.With(auth.Require(auth.PermEvidenceRead), auth.Require(auth.PermBlobRead)).Head("/campaigns/{id}/package", campaignAPI.Download)
 		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/campaign-attempts", campaignAPI.CreateAttempt)
-		r.With(auth.Require(auth.PermEvidenceWrite)).Get("/campaign-attempts", campaignAPI.ListAttempts)
-		r.With(auth.Require(auth.PermEvidenceWrite)).Get("/campaign-attempts/{id}", campaignAPI.GetAttempt)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaign-attempts", campaignAPI.ListAttempts)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaign-attempts/{id}", campaignAPI.GetAttempt)
 		r.With(auth.Require(auth.PermEvidenceWrite)).Put("/campaign-attempts/{id}", campaignAPI.SaveAttempt)
 		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/campaign-attempts/{id}/finalize", campaignAPI.FinalizeAttempt)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaign-executions", campaignAPI.ListExecutions)
+		r.With(auth.Require(auth.PermEvidenceRead)).Get("/campaign-executions/{id}", campaignAPI.GetExecution)
+		r.With(auth.Require(auth.PermEvidenceWrite)).Post("/campaign-executions", campaignAPI.CreateExecution)
+		r.With(auth.Require(auth.PermEvidenceWrite)).Put("/campaign-executions/{id}/state", campaignAPI.SetExecutionClosed)
 
 		// Declaring that one branch inherits another's evidence rewrites what
 		// the store answers about code nobody tested. DESIGN.md section 8 has

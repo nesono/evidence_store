@@ -1,5 +1,8 @@
 # Campaign package browser
 
+The Campaigns tab now opens on [shared campaign executions](campaign-workspace.md).
+Select **Campaign packages** for the import/browse/download workflow described here.
+
 The **Campaigns** tab exposes [campaign import](campaign-import.md) in the web UI.
 On a phone it lives under **More → Campaigns**. Opening `/#campaigns` selects it
 directly. The tab requires `evidence:read`, matching the backend read endpoints.

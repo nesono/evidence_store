@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/nesono/evidence-store/internal/model"
 )
@@ -25,6 +26,7 @@ type DraftData struct {
 	EvidenceType string                     `json:"evidence_type,omitempty"`
 	Source       string                     `json:"source,omitempty"`
 	Metadata     map[string]json.RawMessage `json:"metadata"`
+	FinishedAt   string                     `json:"finished_at,omitempty"`
 }
 
 // InitialDraft copies input defaults, never check outcomes or an overall result.
@@ -39,6 +41,11 @@ func InitialDraft(p *Procedure) DraftData {
 }
 
 func ValidateDraft(p *Procedure, d DraftData) error {
+	if d.FinishedAt != "" {
+		if _, err := time.Parse(time.RFC3339Nano, d.FinishedAt); err != nil {
+			return fmt.Errorf("finished_at must include a valid timezone")
+		}
+	}
 	if d.EvidenceType != "" && !model.ValidEvidenceType(d.EvidenceType) {
 		return fmt.Errorf("invalid evidence_type")
 	}

@@ -28,14 +28,17 @@ type CampaignAttempt struct {
 	FinishedAt        *time.Time         `json:"finished_at,omitempty"`
 	FinalizedRevision *int64             `json:"finalized_revision,omitempty"`
 	EvidenceID        *uuid.UUID         `json:"evidence_id,omitempty"`
+	ExecutionID       *uuid.UUID         `json:"execution_id,omitempty"`
+	UpdatedBy         *string            `json:"updated_by,omitempty"`
+	FinalizedBy       *string            `json:"finalized_by,omitempty"`
 }
 
-const attemptColumns = `id, campaign_id, procedure_ref, owner, revision, created_at, updated_at, data, finalized_at, finished_at, finalized_revision, evidence_id`
+const attemptColumns = `id, campaign_id, procedure_ref, owner, revision, created_at, updated_at, data, finalized_at, finished_at, finalized_revision, evidence_id, execution_id, updated_by, finalized_by`
 
 func scanAttempt(row pgx.Row) (*CampaignAttempt, error) {
 	var a CampaignAttempt
 	var data []byte
-	if err := row.Scan(&a.ID, &a.CampaignID, &a.ProcedureRef, &a.Owner, &a.Revision, &a.CreatedAt, &a.UpdatedAt, &data, &a.FinalizedAt, &a.FinishedAt, &a.FinalizedRevision, &a.EvidenceID); err != nil {
+	if err := row.Scan(&a.ID, &a.CampaignID, &a.ProcedureRef, &a.Owner, &a.Revision, &a.CreatedAt, &a.UpdatedAt, &data, &a.FinalizedAt, &a.FinishedAt, &a.FinalizedRevision, &a.EvidenceID, &a.ExecutionID, &a.UpdatedBy, &a.FinalizedBy); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &a.Data); err != nil {
@@ -61,14 +64,14 @@ func (s *CampaignStore) CreateAttempt(ctx context.Context, id, packageID uuid.UU
 	if err != nil {
 		return nil, false, err
 	}
-	if a.CampaignID != packageID || a.ProcedureRef != ref {
+	if a.CampaignID != packageID || a.ProcedureRef != ref || a.ExecutionID != nil || a.Owner != owner {
 		return nil, false, ErrAttemptConflict
 	}
 	return a, false, nil
 }
 
 func (s *CampaignStore) GetAttempt(ctx context.Context, id uuid.UUID, owner string) (*CampaignAttempt, error) {
-	return scanAttempt(s.pool.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND owner=$2`, id, owner))
+	return scanAttempt(s.pool.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND (owner=$2 OR execution_id IS NOT NULL)`, id, owner))
 }
 
 // SaveAttempt serializes edits on one row. Retry of the last accepted operation
@@ -84,10 +87,22 @@ func (s *CampaignStore) SaveAttempt(ctx context.Context, id uuid.UUID, owner str
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	execution, err := lockAttemptExecution(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if execution != nil {
+		if execution.ClosedAt != nil {
+			return nil, ErrCampaignConflict
+		}
+		if data.Repo != execution.Repo || data.Branch != execution.Branch || data.RCSRef != execution.RCSRef {
+			return nil, &FinalizationError{"product revision is fixed for this campaign; start another campaign to test another revision"}
+		}
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared($1)`, campaignSweepLock); err != nil {
 		return nil, err
 	}
-	a, err := scanAttempt(tx.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND owner=$2 FOR UPDATE`, id, owner))
+	a, err := scanAttempt(tx.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND (owner=$2 OR execution_id IS NOT NULL) FOR UPDATE`, id, owner))
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +128,11 @@ func (s *CampaignStore) SaveAttempt(ctx context.Context, id uuid.UUID, owner str
 		return nil, err
 	}
 	a, err = scanAttempt(tx.QueryRow(ctx, `UPDATE campaign_attempt SET data=$2, revision=revision+1, updated_at=now(),
-		last_operation_id=$3, last_base_revision=$4 WHERE id=$1 RETURNING `+attemptColumns, id, encoded, operation, revision))
+		last_operation_id=$3, last_base_revision=$4, updated_by=$5 WHERE id=$1 RETURNING `+attemptColumns, id, encoded, operation, revision, owner))
 	if err != nil {
+		return nil, err
+	}
+	if err := touchExecution(ctx, tx, a.ExecutionID); err != nil {
 		return nil, err
 	}
 	return a, tx.Commit(ctx)

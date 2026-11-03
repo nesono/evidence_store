@@ -52,36 +52,8 @@ var testBlobConfig = config.Blob{MaxBytes: 1 << 20}
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	// Start a Postgres container.
-	pgContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "postgres:16-alpine",
-			ExposedPorts: []string{"5432/tcp"},
-			Env: map[string]string{
-				"POSTGRES_DB":       "evidence_test",
-				"POSTGRES_USER":     "evidence",
-				"POSTGRES_PASSWORD": "evidence",
-			},
-			// The postgres image binds 5432 twice — once for the temporary initdb
-			// server, then again for the real one — so waiting on the port can
-			// return while the database is still starting up. The readiness log's
-			// second occurrence is the real server.
-			WaitingFor: wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60 * time.Second),
-		},
-		Started: true,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start postgres container: %v\n", err)
-		os.Exit(1)
-	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
-
-	host, _ := pgContainer.Host(ctx)
-	port, _ := pgContainer.MappedPort(ctx, "5432")
-
-	dbURL := fmt.Sprintf("postgres://evidence:evidence@%s:%s/evidence_test?sslmode=disable", host, port.Port())
+	dbURL, stop := integrationDatabase(ctx)
+	defer stop()
 
 	// Find migrations directory (relative to this test file).
 	migrationsPath, _ := filepath.Abs(filepath.Join("..", "migrations"))
@@ -120,24 +92,54 @@ func TestMain(m *testing.M) {
 	}
 
 	cfg := &config.Config{
-		DatabaseURL:     dbURL,
-		ListenAddr:      ":0",
-		DefaultPageSize: 100,
-		MaxPageSize:     1000,
-		MaxBatchSize:    1000,
-		LogLevel:        "ERROR",
-		// Matches the production default so the caching path is exercised by
-		// the suite rather than only in unit tests. Every fixture seeds its own
-		// repo, so no test reads another's cached window.
-		AnalyticsCacheTTL: 30 * time.Second,
-		Blob:              testBlobConfig,
+		DatabaseURL: dbURL, ListenAddr: ":0", DefaultPageSize: 100,
+		MaxPageSize: 1000, MaxBatchSize: 1000, LogLevel: "ERROR",
+		AnalyticsCacheTTL: 30 * time.Second, Blob: testBlobConfig,
 	}
-
 	srv := server.New(cfg, pool, testBlobStore, server.SSO{})
 	testServer = httptest.NewServer(srv.Handler())
-	defer testServer.Close()
+	code := m.Run()
+	testServer.Close()
+	pool.Close()
+	_ = os.RemoveAll(blobDir)
+	stop()
+	os.Exit(code)
+}
 
-	os.Exit(m.Run())
+// A dedicated externally provisioned test database also supports environments
+// without Docker access. Never point this at a database containing real records.
+func integrationDatabase(ctx context.Context) (string, func()) {
+	if url := os.Getenv("EVIDENCE_TEST_DATABASE_URL"); url != "" {
+		return url, func() {}
+	}
+	pgContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "postgres:16-alpine",
+			ExposedPorts: []string{"5432/tcp"},
+			Env: map[string]string{
+				"POSTGRES_DB":       "evidence_test",
+				"POSTGRES_USER":     "evidence",
+				"POSTGRES_PASSWORD": "evidence",
+			},
+			// The postgres image binds 5432 twice — once for the temporary initdb
+			// server, then again for the real one — so waiting on the port can
+			// return while the database is still starting up. The readiness log's
+			// second occurrence is the real server.
+			WaitingFor: wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60 * time.Second),
+		},
+		Started: true,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to start postgres container: %v\n", err)
+		os.Exit(1)
+	}
+
+	host, _ := pgContainer.Host(ctx)
+	port, _ := pgContainer.MappedPort(ctx, "5432")
+
+	return fmt.Sprintf("postgres://evidence:evidence@%s:%s/evidence_test?sslmode=disable", host, port.Port()), func() { _ = pgContainer.Terminate(ctx) }
 }
 
 // ---------------------------------------------------------------------------

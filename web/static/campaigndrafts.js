@@ -116,8 +116,11 @@ export function mountCampaignDrafts(root, me) {
     pendingFinalize = null,
     listVersion = 0,
     offset = 0;
-  const finishTime = mountFinishTime(root, () => attempt?.created_at, () => refreshBlockers());
+  const finishTime = mountFinishTime(root, () => attempt?.created_at, () => { if (attempt && !attempt.finalized_at) dirty = true; refreshBlockers(); });
   const allowed = mayDo(me, "evidence:write");
+  let onChanged = () => {};
+  const toolsHome = el("campaign-attempt-tools").parentElement;
+  const dialogHome = dialog.parentElement;
   el("campaign-attempt-tools").hidden = !allowed;
   const status = (text) => {
     el("campaign-draft-status").textContent = text;
@@ -133,7 +136,7 @@ export function mountCampaignDrafts(root, me) {
     },
     status,
     contextID: () => attempt?.id,
-    editable: () => !!attempt && !busy && !attempt.finalized_at,
+    editable: () => allowed && !!attempt && !busy && !attempt.finalized_at && !context?.execution?.closed_at,
   });
   async function request(path, options = {}) {
     const response = await apiFetchNoRedirect(API_BASE + path, options);
@@ -160,21 +163,22 @@ export function mountCampaignDrafts(root, me) {
   function setBusy(value) {
     busy = value;
     const finalized = !!attempt?.finalized_at;
-    el("campaign-draft-fields").disabled = value || finalized;
+    const readOnly = finalized || !allowed || !!context?.execution?.closed_at;
+    el("campaign-draft-fields").disabled = value || readOnly;
     for (const id of [
       "campaign-draft-save",
       "campaign-draft-close",
       "campaign-draft-reload",
     ])
       el(id).disabled = value;
-    el("campaign-attempt-start").disabled = value;
-    el("campaign-draft-save").disabled = value || finalized;
-    el("campaign-draft-finalize").disabled = value || finalized;
-    finishTime.lock(value || finalized);
+    el("campaign-attempt-start").disabled = value || !allowed || !!context?.execution?.closed_at;
+    el("campaign-draft-save").disabled = value || readOnly;
+    el("campaign-draft-finalize").disabled = value || readOnly;
+    finishTime.lock(value || readOnly);
+    el("campaign-attempt-start").textContent = context?.execution
+      ? (attempt?.finalized_at ? "Retry procedure" : "Continue / start attempt") : "Start new attempt";
   }
   function showAttempt(row) {
-    const previousFinish =
-      attempt?.id === row.id ? el("campaign-finished-at").value : "";
     attempt = row;
     pendingSave = null;
     pendingFinalize = null;
@@ -183,12 +187,23 @@ export function mountCampaignDrafts(root, me) {
     el("campaign-draft-title").textContent =
       `${row.finalized_at ? "Finalized" : "Draft"}: ${scenario.definition.title}`;
     el("campaign-draft-identity").textContent =
-      `${row.procedure_ref} · Attempt ${row.id} · Owner ${row.owner}`;
+      `${row.procedure_ref} · Started by ${row.owner}${row.updated_by ? ` · Last saved by ${row.updated_by}` : ""}${row.finalized_by ? ` · Finalized by ${row.finalized_by}` : ""}`;
     for (const name of ["repo", "branch", "rcs_ref", "notes", "result"])
       form.elements.namedItem(name).value = row.data[name] || "";
     for (const radio of form.querySelectorAll('[name="result"]'))
       radio.checked = radio.value === row.data.result;
     manual.restore(row, scenario.definition);
+    for (const name of ["repo", "branch", "rcs_ref"]) form.elements.namedItem(name).readOnly = !!context.execution;
+    el("draft-software-context").querySelector("p").textContent = context.execution
+      ? "Fixed for this campaign. Start a new campaign to test another product revision."
+      : "Reused from your last saved attempt. Confirm the actual deployed build.";
+    if (context.execution && !row.finalized_at) {
+      form.elements.namedItem("source").value = me.subject || "anonymous";
+      form.elements.namedItem("source").readOnly = true;
+    }
+    el("campaign-finalize-help").textContent = context.execution
+      ? "Save and finalize publishes this attempt as immutable evidence. Use Next procedure to continue, or Retry to run this procedure again."
+      : "Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.";
     const base = entry.path.slice(0, entry.path.lastIndexOf("/") + 1);
     el("campaign-draft-controls").innerHTML = draftControlsHTML(
       scenario.procedure,
@@ -203,7 +218,8 @@ export function mountCampaignDrafts(root, me) {
           : "Finalized evidence has expired; its answers are no longer retained."
         : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
     );
-    finishTime.set(row.finished_at || previousFinish);
+    finishTime.set(row.finished_at || row.data.finished_at || "");
+    dirty = false;
     const link = el("campaign-final-evidence");
     link.hidden = !row.evidence_id;
     link.href = row.evidence_id
@@ -213,7 +229,7 @@ export function mountCampaignDrafts(root, me) {
       el("campaign-draft-controls").replaceChildren();
     setBusy(busy);
     refreshBlockers();
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) { if (context.execution) dialog.show(); else dialog.showModal(); }
     if (mayDo(me, "blob:read")) hydrateImages(el("campaign-draft-controls"));
     else
       for (const img of el("campaign-draft-controls").querySelectorAll(
@@ -224,13 +240,13 @@ export function mountCampaignDrafts(root, me) {
         );
   }
   async function listDrafts(nextOffset = 0) {
-    if (!context || !allowed) return;
+    if (!context || (!allowed && !context.execution)) return;
     const version = ++listVersion,
       ctx = context;
-    el("campaign-attempt-list-status").textContent = "Loading your drafts…";
+    el("campaign-attempt-list-status").textContent = "Loading attempts…";
     try {
       const query = new URLSearchParams({
-        campaign_id: ctx.packageID,
+        [ctx.execution ? "execution_id" : "campaign_id"]: ctx.execution?.id || ctx.packageID,
         procedure_ref: ctx.scenario.definition.procedure_ref,
         offset: String(nextOffset),
       });
@@ -244,7 +260,7 @@ export function mountCampaignDrafts(root, me) {
         )
         .join("");
       el("campaign-attempt-list-status").textContent = page.attempts.length
-        ? "Your attempts (newest first)"
+        ? "Attempts (newest first)"
         : "No saved drafts for this procedure.";
       el("campaign-attempt-prev").disabled = offset === 0;
       el("campaign-attempt-next").disabled = !page.has_more;
@@ -255,11 +271,12 @@ export function mountCampaignDrafts(root, me) {
     }
   }
   async function start() {
-    if (!context || busy || !allowed) return;
+    if (!context || busy || !allowed || context.execution?.closed_at) return;
+    if (!await saveBeforeLeave()) return;
     const ctx = context;
     pendingCreate ||= {
       id: crypto.randomUUID(),
-      campaign_id: ctx.packageID,
+      [ctx.execution ? "execution_id" : "campaign_id"]: ctx.execution?.id || ctx.packageID,
       procedure_ref: ctx.scenario.definition.procedure_ref,
     };
     setBusy(true);
@@ -269,15 +286,18 @@ export function mountCampaignDrafts(root, me) {
       pendingCreate = null;
       showAttempt(row);
       listDrafts();
+      await onChanged();
     } catch (error) {
       el("campaign-attempt-list-status").textContent =
         `Could not start: ${error.message}. Retry uses the same attempt ID.`;
+      if (context?.execution) el("campaign-work-history").open = true;
     } finally {
       setBusy(false);
     }
   }
   async function resume(id) {
     if (busy) return;
+    if (!await saveBeforeLeave()) return;
     const ctx = context;
     setBusy(true);
     try {
@@ -285,6 +305,7 @@ export function mountCampaignDrafts(root, me) {
       if (context === ctx) showAttempt(row);
     } catch (error) {
       el("campaign-attempt-list-status").textContent = error.message;
+      if (context?.execution) el("campaign-work-history").open = true;
     } finally {
       setBusy(false);
     }
@@ -305,6 +326,7 @@ export function mountCampaignDrafts(root, me) {
       const row = await persistDraft(data);
       showAttempt(row);
       listDrafts();
+      await onChanged();
     } catch (error) {
       status(`Not saved: ${error.message}`);
       dirty = true;
@@ -314,13 +336,40 @@ export function mountCampaignDrafts(root, me) {
   }
 
   async function persistDraft(data) {
+    const finished = el("campaign-finished-at").value.trim();
+    if (finished) {
+      const date = new Date(finished);
+      if (Number.isNaN(date.getTime()) || !/(Z|[+-]\d{2}:\d{2})$/.test(finished)) throw new Error("Correct the finish time and include a timezone before saving.");
+      data.finished_at = finished;
+    }
     if (!pendingSave || JSON.stringify(pendingSave.data) !== JSON.stringify(data)) {
       pendingSave = {revision: attempt.revision, operation_id: crypto.randomUUID(), data};
     }
     await manual.prepare(data);
     return send(`/campaign-attempts/${attempt.id}`, "PUT", pendingSave);
   }
-  function close() {
+  async function saveBeforeLeave() {
+    if (busy || manual.pending()) { status("Wait for the current operation before navigating."); return false; }
+    if (!attempt || attempt.finalized_at || !dirty) return true;
+    setBusy(true);
+    try {
+      const row = await persistDraft(readDraftForm(form, attempt.data.answers));
+      attempt = row;
+      dirty = false;
+      pendingSave = null;
+      await onChanged();
+      status("Saved on server.");
+      return true;
+    } catch (error) {
+      status(`Not saved: ${error.message}. Your entries remain here.`);
+      return false;
+    } finally { setBusy(false); }
+  }
+  async function close() {
+    if (context?.execution) {
+      if (await saveBeforeLeave()) dismissAttempt();
+      return;
+    }
     if (manual.pending()) {
       status("Wait for pending lookups or attachments before closing.");
       return;
@@ -428,15 +477,16 @@ export function mountCampaignDrafts(root, me) {
       }
       if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
         pendingFinalize = { revision: attempt.revision, finished_at };
-      await send(
+      const finalized = await send(
           `/campaign-attempts/${attempt.id}/finalize`,
           "POST",
           pendingFinalize,
       );
-      dismissAttempt();
+      if (context.execution) showAttempt(finalized); else dismissAttempt();
       setBusy(false);
       el("campaign-attempt-start").focus();
       listDrafts();
+      await onChanged();
     } catch (error) {
       status(
         `Not finalized: ${error.message}. Retry with the same finish time if the response was lost.`,
@@ -494,12 +544,33 @@ export function mountCampaignDrafts(root, me) {
     }
   });
   return {
-    select(packageID, scenario, entry) {
-      context = { packageID, scenario, entry };
+    async select(packageID, scenario, entry, execution = null, changed = () => {}) {
+      context = { packageID, scenario, entry, execution };
+      onChanged = changed;
       pendingCreate = null;
+      if (dialog.open) dialog.close();
+      attempt = null;
+      dirty = false;
+      el("campaign-attempt-tools").hidden = !allowed && !execution;
+      el("campaign-attempt-start").hidden = !allowed;
+      dialog.classList.toggle("campaign-inline-attempt", !!execution);
+      (execution ? el("campaign-work-editor") : dialogHome).append(dialog);
+      (execution ? el("campaign-work-attempts") : toolsHome).append(el("campaign-attempt-tools"));
+      el("campaign-attempt-start").textContent = execution ? "Retry / new attempt" : "Start new attempt";
+      el("campaign-attempt-start").disabled = !!execution?.closed_at;
       listDrafts();
+      if (execution) {
+        const progress = execution.procedures.find(p => p.procedure_ref === scenario.definition.procedure_ref);
+        if (progress?.draft_id || progress?.latest_id) await resume(progress.draft_id || progress.latest_id);
+        else if (!execution.closed_at) await start();
+      }
     },
+    saveBeforeLeave,
+    updateExecution(execution) { if (context?.execution?.id === execution.id) { context.execution = execution; setBusy(busy); } },
     clear() {
+      if (dialog.open) dialog.close();
+      attempt = null;
+      dirty = false;
       context = null;
       ++listVersion;
       pendingCreate = null;
