@@ -87,7 +87,8 @@
                 <div class="campaign-toolbar"><button id="campaign-runs-prev" type="button" class="secondary outline">Previous</button><button id="campaign-runs-next" type="button" class="secondary outline">Next</button></div>
             </section>
             <section id="campaign-new-view" hidden>
-                <div class="campaign-toolbar"><button id="campaign-new-back" type="button" class="secondary outline">Back to campaigns</button><h2>Start a campaign</h2></div>
+                <nav class="campaign-back-nav" aria-label="Campaign navigation"><a id="campaign-new-back" href="#campaigns">← Back to campaigns</a></nav>
+                <h2>Start a campaign</h2>
                 <label>Find a campaign package<input id="campaign-package-search" type="search" maxlength="200" placeholder="Package name, key or source repository"></label>
                 <p id="campaign-package-picker-status" role="status"></p>
                 <ul id="campaign-package-picker" class="campaign-run-list"></ul>

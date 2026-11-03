@@ -161,7 +161,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages) {
     message("campaign-start-status", "");
     screen("campaign-new-view"); listPackages();
   });
-  el("campaign-new-back").addEventListener("click", home);
+  el("campaign-new-back").addEventListener("click", event => { event.preventDefault(); if (!creating) home(); });
   el("campaign-work-back").addEventListener("click", home);
   el("campaign-packages-back").addEventListener("click", event => { event.preventDefault(); home(); });
   el("campaign-packages").addEventListener("click", () => { screen("campaign-package-management"); packages.show(); });
@@ -200,10 +200,10 @@ export function mountCampaignWorkspace(root, me, drafts, packages) {
     if (!createRequest || JSON.stringify(createRequest.data) !== JSON.stringify(data)) createRequest = { id: crypto.randomUUID(), data };
     el("campaign-start").disabled = true;
     creating = true;
-    el("campaign-new-back").disabled = true;
+    el("campaign-new-back").setAttribute("aria-disabled", "true");
     try { const row = await request("/campaign-executions", "POST", { id: createRequest.id, ...data }); createRequest = null; await open(row.id); }
     catch (error) { message("campaign-start-status", error.message); }
-    finally { creating = false; el("campaign-start").disabled = false; el("campaign-new-back").disabled = false; }
+    finally { creating = false; el("campaign-start").disabled = false; el("campaign-new-back").removeAttribute("aria-disabled"); }
   });
   el("campaign-work-search").addEventListener("input", paint);
   el("campaign-work-procedures").addEventListener("click", event => { const item = event.target.closest("[data-procedure]"); if (item) choose(item.dataset.procedure); });
