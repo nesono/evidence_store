@@ -1,5 +1,10 @@
 # Finalizing campaign attempts
 
+For shared executions, see the [campaign workspace](campaign-workspace.md): the
+form is inline, attempts are shared, and campaign closure has a distinct SKIPPED
+disposition that preserves already-performed checks. The owner-scoped standalone
+workflow below remains available through package management.
+
 Saved [attempt drafts](campaign-attempt-drafts.md) can now be finalized as ordinary
 Evidence Store records. The evidence is searchable by actual software revision,
 procedure reference, type, tags, and result through the existing Search view.

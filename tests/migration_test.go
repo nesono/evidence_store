@@ -2,8 +2,8 @@ package tests
 
 import (
 	"context"
+	"net/url"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -38,10 +38,11 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	scratchURL := strings.Replace(testDatabaseURL, "/evidence_test?", "/"+scratchDB+"?", 1)
-	require.Contains(t, scratchURL, scratchDB, "failed to point the connection string at the scratch database")
+	scratchURL, err := url.Parse(testDatabaseURL)
+	require.NoError(t, err)
+	scratchURL.Path = "/" + scratchDB
 
-	m, err := migrate.New("file://"+testMigrationsPath, scratchURL)
+	m, err := migrate.New("file://"+testMigrationsPath, scratchURL.String())
 	require.NoError(t, err)
 	defer func() { _, _ = m.Close() }()
 

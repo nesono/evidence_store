@@ -150,10 +150,16 @@ func (s *CampaignStore) Get(ctx context.Context, id uuid.UUID) (*CampaignPackage
 	return scanCampaign(s.pool.QueryRow(ctx, `SELECT `+campaignColumns+` FROM campaign_package WHERE id = $1`, id))
 }
 
-func (s *CampaignStore) List(ctx context.Context, limit, offset int) ([]CampaignSummary, error) {
+func (s *CampaignStore) List(ctx context.Context, limit, offset int, search ...string) ([]CampaignSummary, error) {
+	query := ""
+	if len(search) > 0 {
+		query = search[0]
+	}
 	rows, err := s.pool.Query(ctx, `SELECT id, digest, archive_size, imported_at, imported_by,
 		definition->'manifest', jsonb_array_length(definition->'scenarios')
-		FROM campaign_package ORDER BY imported_at, id LIMIT $1 OFFSET $2`, limit, offset)
+		FROM campaign_package WHERE lower((definition->'manifest'->'campaign'->>'name')||' '||
+		(definition->'manifest'->'campaign'->>'id')||' '||(definition->'manifest'->'source'->>'repository')||' '||digest) LIKE $3
+		ORDER BY imported_at, id LIMIT $1 OFFSET $2`, limit, offset, fuzzyPattern(query))
 	if err != nil {
 		return nil, err
 	}

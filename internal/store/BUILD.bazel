@@ -8,6 +8,8 @@ go_library(
         "cache.go",
         "campaign.go",
         "campaign_attempt.go",
+        "campaign_close.go",
+        "campaign_execution.go",
         "campaign_finalize.go",
         "evidence.go",
         "filter.go",

@@ -30,10 +30,14 @@ func (s *CampaignStore) FinalizeAttempt(ctx context.Context, id uuid.UUID, owner
 		return nil, false, err
 	}
 	defer tx.Rollback(ctx)
+	execution, err := lockAttemptExecution(ctx, tx, id)
+	if err != nil {
+		return nil, false, err
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared($1)`, campaignSweepLock); err != nil {
 		return nil, false, err
 	}
-	a, err := scanAttempt(tx.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND owner=$2 FOR UPDATE`, id, owner))
+	a, err := scanAttempt(tx.QueryRow(ctx, `SELECT `+attemptColumns+` FROM campaign_attempt WHERE id=$1 AND (owner=$2 OR execution_id IS NOT NULL) FOR UPDATE`, id, owner))
 	if err != nil {
 		return nil, false, err
 	}
@@ -45,6 +49,9 @@ func (s *CampaignStore) FinalizeAttempt(ctx context.Context, id uuid.UUID, owner
 	}
 	if a.Revision != revision {
 		return nil, false, ErrAttemptConflict
+	}
+	if execution != nil && execution.ClosedAt != nil {
+		return nil, false, ErrCampaignConflict
 	}
 	p, err := scanCampaign(tx.QueryRow(ctx, `SELECT `+campaignColumns+` FROM campaign_package WHERE id=$1`, a.CampaignID))
 	if err != nil {
@@ -60,31 +67,54 @@ func (s *CampaignStore) FinalizeAttempt(ctx context.Context, id uuid.UUID, owner
 	if err := campaign.ValidateFinalization(scenario.Procedure, a.Data); err != nil {
 		return nil, false, &FinalizationError{err.Error()}
 	}
-	evidence, err := attemptEvidence(a, p, scenario, path, finished)
+	a, err = finalizeAttemptTx(ctx, tx, a, p, scenario, path, finished, owner, nil)
 	if err != nil {
 		return nil, false, err
 	}
+	if err := touchExecution(ctx, tx, a.ExecutionID); err != nil {
+		return nil, false, err
+	}
+	return a, true, tx.Commit(ctx)
+}
+
+func finalizeAttemptTx(ctx context.Context, tx pgx.Tx, a *CampaignAttempt, p *CampaignPackage, scenario campaign.PackagedScenario, path string, finished time.Time, actor string, closure map[string]any) (*CampaignAttempt, error) {
+	a.FinalizedBy = &actor
+	evidence, err := attemptEvidence(a, p, scenario, path, finished)
+	if err != nil {
+		return nil, err
+	}
+	if closure != nil {
+		var metadata map[string]any
+		if err := json.Unmarshal(evidence.Metadata, &metadata); err != nil {
+			return nil, err
+		}
+		metadata["campaign"].(map[string]any)["closure"] = closure
+		evidence.Metadata, err = json.Marshal(metadata)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if errs := validate.EvidenceCreate(evidence); len(errs) > 0 {
-		return nil, false, &FinalizationError{strings.Join(errs, "; ")}
+		return nil, &FinalizationError{strings.Join(errs, "; ")}
 	}
 	result, err := insertOne(ctx, tx, evidence)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if err := finalAssetRefs(ctx, tx, result.Evidence.ID, scenario.Assets); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	// Evidence now owns log attachments. Releasing the draft roots in the same
 	// transaction ensures evidence expiry can really release its media later.
 	if _, err := tx.Exec(ctx, `DELETE FROM campaign_draft_blob_ref WHERE attempt_id=$1`, a.ID); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	a, err = scanAttempt(tx.QueryRow(ctx, `UPDATE campaign_attempt SET finalized_at=now(), finished_at=$2,
-		finalized_revision=revision, revision=revision+1, updated_at=now(), evidence_id=$3 WHERE id=$1 RETURNING `+attemptColumns, a.ID, finished, result.Evidence.ID))
+		finalized_revision=revision, revision=revision+1, updated_at=now(), evidence_id=$3, finalized_by=$4 WHERE id=$1 RETURNING `+attemptColumns, a.ID, finished, result.Evidence.ID, actor))
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return a, true, tx.Commit(ctx)
+	return a, nil
 }
 
 func finalScenario(p *CampaignPackage, ref string) (campaign.PackagedScenario, string, error) {
@@ -117,6 +147,12 @@ func attemptEvidence(a *CampaignAttempt, p *CampaignPackage, scenario campaign.P
 		"campaign_key": p.Definition.Manifest.Campaign.ID, "attempt_id": a.ID,
 		"procedure_ref": a.ProcedureRef, "source": p.Definition.Manifest.Source,
 		"scenario_path": path, "procedure": scenario, "answers": a.Data.Answers,
+	}
+	if a.ExecutionID != nil {
+		metadata["campaign"].(map[string]any)["execution_id"] = a.ExecutionID
+		metadata["campaign"].(map[string]any)["created_by"] = a.Owner
+		metadata["campaign"].(map[string]any)["updated_by"] = a.UpdatedBy
+		metadata["campaign"].(map[string]any)["finalized_by"] = a.FinalizedBy
 	}
 	encoded, err := json.Marshal(metadata)
 	if err != nil {

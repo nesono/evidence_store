@@ -22,6 +22,17 @@ let httpServer, chrome, page, base;
 let role = "writer", listFails = false, uploads = 0, imageRequests = 0, downloads = 0, delayA = false;
 const attempts=new Map();
 let draftWrites = 0, failFinalResponse = false;
+const executions = new Map();
+let failDraftSave = false;
+function executionView(e) {
+  const pkg = rows.find(p => p.id === e.package_id);
+  return { ...e, procedures: pkg.definition.scenarios.map(s => {
+    const list = [...attempts.values()].filter(a => a.execution_id === e.id && a.procedure_ref === s.definition.procedure_ref).reverse();
+    const draft = list.find(a => !a.finalized_at), latest = list.find(a => a.finalized_at);
+    return { procedure_ref: s.definition.procedure_ref, title: s.definition.title, attempts: list.length,
+      draft_id: draft?.id, latest_id: latest?.id, result: latest?.data.result || "" };
+  }) };
+}
 const rows = Array.from({ length: 26 }, (_, i) => packageRow(`package-${i}`));
 // A campaign larger than one procedure page exercises incremental filtering
 // over the whole package, rather than only the visible list.
@@ -42,6 +53,32 @@ async function handle(req, res) {
   if (url.pathname === "/auth/config") return json(res, { sso_enabled: false });
   if (url.pathname === "/api/v1/me") return json(res, { authenticated: true, subject: "user:tester", permissions: role === "writer" ? permissions : permissions.slice(0, 3) });
   if (url.pathname === "/api/v1/weather") return json(res,{summary:"Rain, 8 °C",observed_at:"2026-10-24T09:00:00Z"});
+  if (url.pathname.startsWith("/api/v1/campaign-executions")) {
+    if (req.method === "POST" || req.method === "PUT") {
+      const chunks=[];for await(const chunk of req) chunks.push(chunk);
+      const body=JSON.parse(Buffer.concat(chunks));
+      if (req.method === "POST") {
+        const e={...body,revision:1}; executions.set(e.id,e); return json(res,executionView(e),201);
+      }
+      const e=executions.get(url.pathname.split("/").at(-2));
+      if (e.revision !== body.revision) return json(res,{error:"campaign changed"},409);
+      if (body.closed) {
+        for (const p of executionView(e).procedures) {
+          if (!p.draft_id && p.latest_id) continue;
+          const a=p.draft_id ? attempts.get(p.draft_id) : {id:crypto.randomUUID(),execution_id:e.id,procedure_ref:p.procedure_ref,owner:"user:tester",revision:1,data:{repo:e.repo,branch:e.branch,rcs_ref:e.rcs_ref,notes:"",answers:{}}};
+          a.data.result="SKIPPED";a.finalized_at=new Date().toISOString();a.evidence_id="skipped-evidence";
+          attempts.set(a.id,a);
+        }
+      }
+      e.closed_at=body.closed?new Date().toISOString():null;e.revision++;
+      return json(res,executionView(e));
+    }
+    if (url.pathname === "/api/v1/campaign-executions") {
+      const query=(url.searchParams.get("q")||"").toLowerCase(),state=url.searchParams.get("state");
+      return json(res,{campaigns:[...executions.values()].filter(e=>e.name.toLowerCase().includes(query) && (state==="all" || (state==="completed")==!!e.closed_at)).map(executionView),has_more:false});
+    }
+    return json(res,executionView(executions.get(url.pathname.split("/").pop())));
+  }
   if(url.pathname.startsWith("/api/v1/campaign-attempts")) {
     if(req.method==="POST" || req.method==="PUT") {
       const chunks=[];for await(const chunk of req) chunks.push(chunk);
@@ -57,15 +94,17 @@ async function handle(req, res) {
       }
       if(req.method==="POST") {
         const a={...body,owner:"user:tester",revision:1,created_at:"2026-10-24T09:15:23.123456Z",updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
+        if(body.execution_id) {const e=executions.get(body.execution_id);Object.assign(a.data,{repo:e.repo,branch:e.branch,rcs_ref:e.rcs_ref});}
         attempts.set(a.id,a);return json(res,a,201);
       }
       const a=attempts.get(url.pathname.split("/").pop());
       draftWrites++;
+      if(failDraftSave) return json(res,{error:"draft changed; reload"},409);
       if(a.finalized_at) return json(res,{error:"already finalized"},409);
       if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
       a.data=body.data;a.revision++;return json(res,a);
     }
-    if(url.pathname==="/api/v1/campaign-attempts") return json(res,{attempts:[...attempts.values()].filter(a=>a.campaign_id===url.searchParams.get("campaign_id") && a.procedure_ref===url.searchParams.get("procedure_ref")),has_more:false});
+    if(url.pathname==="/api/v1/campaign-attempts") return json(res,{attempts:[...attempts.values()].filter(a=>(url.searchParams.has("execution_id") ? a.execution_id===url.searchParams.get("execution_id") : a.campaign_id===url.searchParams.get("campaign_id")) && a.procedure_ref===url.searchParams.get("procedure_ref")),has_more:false});
     return json(res,attempts.get(url.pathname.split("/").pop()));
   }
   if (url.pathname === "/api/v1/campaigns/import") {
@@ -110,6 +149,8 @@ before(async () => {
   chrome = await launchChrome();
   page = await connect(base);
   await page.goto(`${base}/#campaigns`);
+  await page.waitFor(`document.getElementById('campaign-packages')`);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
 });
 after(async () => { page?.close(); chrome?.close(); if (httpServer) await new Promise(resolve => httpServer.close(resolve)); });
@@ -199,6 +240,7 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
       {headers:{'Content-Type':'text/javascript'}}));
   })()`);
   await page.goto(`${base}/?upgrade=1#campaigns`);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
   await page.eval(`document.querySelector('.campaign-package').click()`);
   await page.waitFor(`document.querySelector('.campaign-procedure-item')`);
@@ -249,6 +291,7 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`document.getElementById('campaign-finished-at').value`), "2026-10-24T09:15:23.123456Z", "saving must preserve the selected finish time");
   await page.eval(`document.getElementById('campaign-draft-close').click()`);
   await page.goto(`${base}/?resume=1#campaigns`);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
   await page.eval(`document.querySelector('.campaign-package').click()`);
   await page.waitFor(`document.querySelector('.campaign-procedure-item')`);
@@ -316,6 +359,7 @@ test("phone navigation opens campaigns; viewer can browse but cannot import", as
   role = "viewer";
   await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await page.goto(`${base}/?viewer=1#campaigns`);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
   assert.equal(await page.eval(`document.getElementById('campaign-import-form').hidden`), true);
   await page.eval(`document.querySelector('[data-phone=more]').click(); document.querySelector('#more-sheet [data-tab=campaigns]').click()`);
@@ -327,6 +371,88 @@ test("phone navigation opens campaigns; viewer can browse but cannot import", as
   await page.eval(`document.querySelector('.campaign-procedure-item').click()`);
   assert.equal(await page.eval(`document.getElementById('campaign-attempt-tools').hidden`),true);
   assert.equal(await page.eval(`document.documentElement.scrollWidth <= window.innerWidth`), true);
+  assert.deepEqual(page.problems, []);
+});
+
+test("shared campaign workspace starts, saves on navigation, retains conflicts and closes/reopens", async () => {
+  role = "writer";
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await page.goto(`${base}/#campaigns`);
+  await page.waitFor(`!document.getElementById('campaign-home').hidden`);
+  await page.eval(`document.getElementById('campaign-new').click()`);
+  await page.waitFor(`document.querySelector('#campaign-package-picker [data-package]')`);
+  await page.eval(`document.querySelector('#campaign-package-picker [data-package]').click()`);
+  await page.waitFor(`!document.getElementById('campaign-start-form').hidden`);
+  await page.eval(`(() => {const f=document.getElementById('campaign-start-form');f.elements.name.value='Shared field campaign';f.repo.value='org/product';f.branch.value='main';f.rcs_ref.value='deployed-build';f.requestSubmit();})()`);
+  await page.waitFor(`document.querySelectorAll('#campaign-work-procedures [data-procedure]').length===13`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').matches(':modal')`), false);
+  assert.equal(await page.eval(`document.querySelector('#campaign-draft-form [name=rcs_ref]').readOnly`), true);
+  assert.equal(await page.eval(`document.documentElement.scrollWidth <= innerWidth`), true);
+  await page.eval(`(() => {const input=document.querySelector('#campaign-draft-form [name=notes]');input.value='Keep my observations';input.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('campaign-work-next').click();})()`);
+  await page.waitFor(`document.getElementById('campaign-draft-title').textContent.includes('Equipment check 1')`);
+  const first=[...attempts.values()].find(a=>a.execution_id && a.procedure_ref==='patrol/display');
+  assert.equal(first.data.notes,'Keep my observations');
+  failDraftSave = true;
+  await page.eval(`(() => {const input=document.querySelector('#campaign-draft-form [name=notes]');input.value='Conflict stays here';input.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('campaign-work-next').click();})()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Not saved')`);
+  assert.equal(await page.eval(`document.querySelector('#campaign-draft-form [name=notes]').value`),'Conflict stays here');
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-title').textContent.includes('Equipment check 1')`),true);
+  failDraftSave = false;
+  await page.eval(`window.confirm=()=>true;document.getElementById('campaign-work-close').click()`);
+  await page.waitFor(`document.getElementById('campaign-work-close').textContent==='Reopen campaign'`);
+  assert.match(await page.eval(`document.getElementById('campaign-work-progress').textContent`),/13 skipped/);
+  await page.eval(`document.getElementById('campaign-work-close').click()`);
+  await page.waitFor(`document.getElementById('campaign-work-close').textContent==='Finish campaign'`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open && document.getElementById('campaign-draft-title').textContent.startsWith('Finalized:') && !document.getElementById('campaign-attempt-start').disabled`);
+  await page.eval(`document.getElementById('campaign-work-history').open=true;document.getElementById('campaign-attempt-start').click()`);
+  await page.waitFor(`!document.getElementById('campaign-draft-fields').disabled`);
+  assert.equal([...attempts.values()].filter(a=>a.execution_id && a.procedure_ref==='patrol/display').length,2);
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await page.eval(`document.documentElement.scrollWidth <= innerWidth`), true);
+  assert.deepEqual(page.problems, []);
+});
+
+test("starting another campaign clears setup and never reuses the earlier execution", async () => {
+  role = "writer";
+  await page.eval(`document.getElementById('campaign-work-back').click()`);
+  await page.waitFor(`!document.getElementById('campaign-home').hidden`);
+  await page.eval(`document.getElementById('campaign-new').click()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-start-form').hidden`), true);
+  await page.eval(`document.querySelector('#campaign-package-picker [data-package]').click()`);
+  await page.waitFor(`!document.getElementById('campaign-start-form').hidden`);
+  assert.equal(await page.eval(`document.getElementById('campaign-start-form').repo.value`), "");
+  const before = executions.size;
+  await page.eval(`(() => {const f=document.getElementById('campaign-start-form');f.elements.name.value='Shared field campaign';f.repo.value='org/product';f.branch.value='main';f.rcs_ref.value='deployed-build';f.requestSubmit();})()`);
+  await page.waitFor(`!document.getElementById('campaign-workspace').hidden && document.querySelectorAll('#campaign-work-procedures [data-procedure]').length===13`);
+  assert.equal(executions.size, before + 1);
+  assert.deepEqual(page.problems, []);
+});
+
+test("a colleague closing first cannot turn Finish into Reopen", async () => {
+  const id = await page.eval(`new URLSearchParams(location.search).get('campaign_execution')`);
+  const execution = executions.get(id);
+  execution.closed_at = new Date().toISOString(); execution.revision++;
+  await page.eval(`document.getElementById('campaign-work-close').click()`);
+  await page.waitFor(`document.getElementById('campaign-work-status').textContent.includes('already closed')`);
+  assert.ok(execution.closed_at);
+  assert.equal(await page.eval(`document.getElementById('campaign-work-close').textContent`), "Reopen campaign");
+  assert.deepEqual(page.problems, []);
+});
+
+test("read-only collaborators can inspect shared attempt history", async () => {
+  role = "viewer";
+  const e = [...executions.values()].find(e => [...attempts.values()].some(a => a.execution_id === e.id));
+  await page.goto(`${base}/?campaign_execution=${e.id}#campaigns`);
+  await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  assert.equal(await page.eval(`document.getElementById('campaign-attempt-tools').hidden`), false);
+  assert.equal(await page.eval(`document.getElementById('campaign-attempt-start').hidden`), true);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').disabled`), true);
+  await page.waitFor(`document.querySelectorAll('#campaign-attempt-list [data-attempt-id]').length===2`);
   assert.deepEqual(page.problems, []);
 });
 

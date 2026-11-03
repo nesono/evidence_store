@@ -3,6 +3,7 @@
 import { API_BASE, apiFetch, mayDo } from "./common.js";
 import { hydrateImages, releaseImages } from "./images.js";
 import { mountCampaignDrafts } from "./campaigndrafts.js";
+import { mountCampaignWorkspace } from "./campaignworkspace.js";
 import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
 
 export function createCampaignAPI(request = apiFetch) {
@@ -229,5 +230,6 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     const button = [...el("campaign-procedure-list").querySelectorAll("[data-procedure-ref]")].find(item => item.dataset.procedureRef === previous);
     button?.querySelector("button")?.focus();
   });
-  return { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
+  const packages = { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
+  return mountCampaignWorkspace(root, me, drafts, packages);
 }

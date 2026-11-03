@@ -46,13 +46,31 @@ func (h *CampaignHandler) CreateAttempt(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		ID           uuid.UUID `json:"id"`
 		CampaignID   uuid.UUID `json:"campaign_id"`
+		ExecutionID  uuid.UUID `json:"execution_id"`
 		ProcedureRef string    `json:"procedure_ref"`
 	}
 	if !readAttemptJSON(w, r, &req) {
 		return
 	}
-	if req.ID == uuid.Nil || req.CampaignID == uuid.Nil {
+	if req.ID == uuid.Nil || (req.CampaignID == uuid.Nil && req.ExecutionID == uuid.Nil) {
 		writeError(w, 422, "id and campaign_id must be nonzero UUIDs")
+		return
+	}
+	if req.ExecutionID != uuid.Nil {
+		if req.CampaignID != uuid.Nil {
+			writeError(w, 422, "provide execution_id or campaign_id, not both")
+			return
+		}
+		a, fresh, err := h.store.StartExecutionAttempt(r.Context(), req.ExecutionID, req.ID, req.ProcedureRef, attemptOwner(r))
+		if err != nil {
+			attemptError(w, err)
+			return
+		}
+		status := 200
+		if fresh {
+			status = 201
+		}
+		writeJSON(w, status, a)
 		return
 	}
 	initial, err := h.initialAttemptData(r, req.CampaignID, req.ProcedureRef)
@@ -131,10 +149,24 @@ func (h *CampaignHandler) ownedAttempt(w http.ResponseWriter, r *http.Request) *
 	}
 	a, err := h.store.GetAttempt(r.Context(), id, attemptOwner(r))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && !legacyAttemptAllowed(w, r) {
+			return nil
+		}
 		attemptError(w, err)
 		return nil
 	}
+	if a.ExecutionID == nil && !legacyAttemptAllowed(w, r) {
+		return nil
+	}
 	return a
+}
+
+func legacyAttemptAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if p, ok := auth.PrincipalFrom(r.Context()); ok && !p.Can(auth.PermEvidenceWrite) {
+		writeError(w, 403, "evidence:write is required for standalone drafts")
+		return false
+	}
+	return true
 }
 
 func (h *CampaignHandler) GetAttempt(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +202,9 @@ func (h *CampaignHandler) SaveAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep the same source-override permission as Add Result. Recheck again at
 	// finalization in case privileges changed after this draft was saved.
+	if a.ExecutionID != nil {
+		req.Data.Source = attemptOwner(r)
+	}
 	if _, err := auth.BindSource(r.Context(), req.Data.Source); err != nil {
 		writeError(w, 403, err.Error())
 		return
@@ -183,6 +218,32 @@ func (h *CampaignHandler) SaveAttempt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CampaignHandler) ListAttempts(w http.ResponseWriter, r *http.Request) {
+	if raw := r.URL.Query().Get("execution_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeError(w, 400, "invalid execution_id")
+			return
+		}
+		offset, err := campaignPageNumber(r, "offset", 0, 0, 1000000)
+		if err != nil {
+			writeError(w, 400, "invalid offset")
+			return
+		}
+		rows, err := h.store.ListExecutionAttempts(r.Context(), id, r.URL.Query().Get("procedure_ref"), offset)
+		if err != nil {
+			attemptError(w, err)
+			return
+		}
+		more := len(rows) > 25
+		if more {
+			rows = rows[:25]
+		}
+		writeJSON(w, 200, map[string]any{"attempts": rows, "has_more": more, "offset": offset})
+		return
+	}
+	if !legacyAttemptAllowed(w, r) {
+		return
+	}
 	id, err := uuid.Parse(r.URL.Query().Get("campaign_id"))
 	if err != nil {
 		writeError(w, 400, "campaign_id is required and must be a UUID")
@@ -211,6 +272,10 @@ func (h *CampaignHandler) ListAttempts(w http.ResponseWriter, r *http.Request) {
 }
 
 func attemptError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrCampaignConflict) {
+		writeError(w, 409, err.Error())
+		return
+	}
 	var invalid *store.FinalizationError
 	if errors.As(err, &invalid) {
 		writeError(w, 422, invalid.Error())
@@ -249,7 +314,7 @@ func (h *CampaignHandler) FinalizeAttempt(w http.ResponseWriter, r *http.Request
 		attemptError(w, err)
 		return
 	}
-	if _, err := auth.BindSource(r.Context(), owned.Data.Source); err != nil {
+	if _, err := auth.BindSource(r.Context(), owned.Data.Source); err != nil && owned.ExecutionID == nil {
 		writeError(w, 403, err.Error())
 		return
 	}

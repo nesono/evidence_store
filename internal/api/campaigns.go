@@ -116,7 +116,12 @@ func (h *CampaignHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "offset must be an integer between 0 and 1000000")
 		return
 	}
-	rows, err := h.store.List(r.Context(), limit+1, offset)
+	query := r.URL.Query().Get("q")
+	if len(query) > 200 {
+		writeError(w, 400, "search is limited to 200 bytes")
+		return
+	}
+	rows, err := h.store.List(r.Context(), limit+1, offset, query)
 	if err != nil {
 		campaignError(w, err)
 		return
