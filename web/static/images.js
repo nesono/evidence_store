@@ -1,13 +1,16 @@
 // Media attachments: paste/drop uploads and authenticated streaming playback.
 
 import { API_BASE, apiFetch } from "./common.js";
-import { describe as describeBytes } from "./blobref.js";
+import { describe as describeBytes, digestOf, refPath } from "./blobref.js";
 import { insertAtCursor as insertUndoably, replaceFirst } from "./editing.js";
 
 // Where a photo goes when there is nowhere to send it. Set by app.js once the
 // queue is open; until then, and in a browser that would not give us one,
 // attaching an image needs a connection like it always did.
 let stash = null;
+let preparedStash = null;
+
+export function usePreparedStash(store) { preparedStash = store; }
 
 export function useStash(outbox) {
   stash = outbox;
@@ -117,12 +120,12 @@ export function releaseImages() {
 // Each one is uploaded and replaced by a markdown reference to it; onStatus
 // reports what went wrong, since a silent failure would leave the tester
 // believing the photo is filed.
-export function attachImageUploads(field, onStatus) {
+export function attachImageUploads(field, onStatus, storage) {
   field.addEventListener("paste", event => {
     const files = imageFiles(event.clipboardData);
     if (files.length === 0) return; // ordinary text paste
     event.preventDefault();
-    embedAll(field, files, onStatus);
+    embedAll(field, files, onStatus, storage);
   });
 
   field.addEventListener("dragover", event => {
@@ -141,15 +144,15 @@ export function attachImageUploads(field, onStatus) {
     const files = imageFiles(event.dataTransfer);
     if (files.length === 0) return;
     event.preventDefault();
-    embedAll(field, files, onStatus);
+    embedAll(field, files, onStatus, storage);
   });
 }
 
 // embedImages attaches files chosen some other way — the phone's camera or
 // photo library, through the Add photo button (#162) — exactly as a pasted or
 // dropped one is: stashed or uploaded, then referenced in the log at the caret.
-export function embedImages(field, files, onStatus) {
-  embedAll(field, [...files].filter(file => isMediaFile(file)), onStatus);
+export function embedImages(field, files, onStatus, storage) {
+  embedAll(field, [...files].filter(file => isMediaFile(file)), onStatus, storage);
 }
 
 function hasFiles(transfer) {
@@ -165,11 +168,11 @@ function imageFiles(transfer) {
   return [...(transfer.files || [])].filter(file => isMediaFile(file));
 }
 
-function embedAll(field, files, onStatus) {
-  for (const file of files) embed(field, file, onStatus);
+function embedAll(field, files, onStatus, storage) {
+  for (const file of files) embed(field, file, onStatus, storage);
 }
 
-async function embed(field, file, onStatus) {
+async function embed(field, file, onStatus, storage) {
   // A placeholder goes in at the caret straight away, so the tester can keep
   // writing while the work runs and can see where the image will land. It is
   // replaced by text search rather than by position, because by the time it
@@ -179,7 +182,7 @@ async function embed(field, file, onStatus) {
 
   try {
     const prepared = await prepareForUpload(file);
-    const ref = await reference(prepared);
+    const ref = await reference(prepared, storage);
     replaceInField(field, token, `![${altFor(file)}](${ref})`);
   } catch (err) {
     replaceInField(field, token, "");
@@ -197,10 +200,17 @@ async function embed(field, file, onStatus) {
 // So the stash is the first answer whenever there is one, connection or not.
 // Uploading immediately when online would be a second way of doing the same
 // thing, and the second way is the one that gets less use and breaks quietly.
-async function reference(file) {
-  // Browser digest APIs buffer their input. Stream videos straight to the
-  // server instead of allocating several hundred MB in the offline queue.
+async function reference(file, storage = stash) {
+  // Browser digest APIs buffer their input. Prepared campaigns cap local video
+  // size; ordinary Add Result videos continue streaming straight to the server.
   if (file.type.startsWith("video/") || /\.(mp4|webm)$/i.test(file.name || "")) {
+    if (storage && storage === preparedStash) {
+      if (file.size > 100 * 1024 * 1024) throw new Error("Offline campaign videos must be at most 100 MiB.");
+      const ext = file.type === "video/webm" || /\.webm$/i.test(file.name || "") ? "webm" : "mp4";
+      const bytes = await file.arrayBuffer(), digest = await digestOf(bytes);
+      await storage.stashBlob({ digest, ext, contentType: `video/${ext}`, bytes });
+      return refPath(digest, ext);
+    }
     const { ref } = await uploadBlob(file);
     return ref;
   }
@@ -212,8 +222,8 @@ async function reference(file) {
     throw new Error("a test log can embed PNG, JPEG, WebP or GIF");
   }
 
-  if (stash) {
-    await stash.stashBlob({
+  if (storage) {
+    await storage.stashBlob({
       digest: described.digest,
       ext: described.ext,
       contentType: described.contentType,
@@ -230,10 +240,10 @@ async function reference(file) {
 }
 
 async function fromStash(ref) {
-  if (!stash) return null;
+  if (!stash && !preparedStash) return null;
   const digest = ref.slice(ref.lastIndexOf("/") + 1).split(".")[0];
   try {
-    const blob = await stash.getBlob(digest);
+    const blob = await preparedStash?.getBlob(digest) || await stash?.getBlob(digest);
     if (!blob) return null;
     return URL.createObjectURL(new Blob([blob.bytes], { type: blob.contentType }));
   } catch {

@@ -1,4 +1,4 @@
-// Online, explicit-save attempt drafts. A saved draft is not finalized evidence.
+// Server drafts and prepared local attempts. A saved draft is not finalized evidence.
 import { API_BASE, apiFetchNoRedirect, mayDo } from "./common.js";
 import { escapeHTML as esc, renderMarkdown } from "./markdown.js";
 import { resolveAssetImages } from "./campaignview.js";
@@ -103,7 +103,7 @@ export function readDraftForm(form, previousAnswers = {}) {
   return data;
 }
 
-export function mountCampaignDrafts(root, me) {
+export function mountCampaignDrafts(root, me, offline) {
   const el = (id) => root.querySelector(`#${id}`);
   const dialog = el("campaign-draft-dialog"),
     form = el("campaign-draft-form");
@@ -115,8 +115,10 @@ export function mountCampaignDrafts(root, me) {
     pendingSave = null,
     pendingFinalize = null,
     listVersion = 0,
-    offset = 0;
-  const finishTime = mountFinishTime(root, () => attempt?.created_at, () => { if (attempt && !attempt.finalized_at) dirty = true; refreshBlockers(); });
+    offset = 0,
+    autosaveTimer;
+  const isLocal = () => attempt?.local_version !== undefined;
+  const finishTime = mountFinishTime(root, () => attempt?.created_at, () => { if (attempt && !attempt.finalized_at) { dirty = true; scheduleLocalSave(); } refreshBlockers(); });
   const allowed = mayDo(me, "evidence:write");
   let onChanged = () => {};
   const toolsHome = el("campaign-attempt-tools").parentElement;
@@ -132,11 +134,13 @@ export function mountCampaignDrafts(root, me) {
         dirty = true;
         status("Unsaved changes — Save draft to store them.");
         refreshBlockers();
+        scheduleLocalSave();
       }
     },
     status,
+    attachmentStore: offline,
     contextID: () => attempt?.id,
-    editable: () => allowed && !!attempt && !busy && !attempt.finalized_at && !context?.execution?.closed_at,
+    editable: () => allowed && !!attempt && !busy && !attempt.finalized_at && !attempt.local_complete && !context?.execution?.closed_at,
   });
   async function request(path, options = {}) {
     const response = await apiFetchNoRedirect(API_BASE + path, options);
@@ -150,7 +154,7 @@ export function mountCampaignDrafts(root, me) {
       if (response.status === 401)
         message =
           "Sign in again, then retry. Your unsaved inputs are still in this dialog.";
-      throw new Error(message);
+      throw Object.assign(new Error(message), { status: response.status });
     }
     return response.json();
   }
@@ -163,7 +167,7 @@ export function mountCampaignDrafts(root, me) {
   function setBusy(value) {
     busy = value;
     const finalized = !!attempt?.finalized_at;
-    const readOnly = finalized || !allowed || !!context?.execution?.closed_at;
+    const readOnly = finalized || !!attempt?.local_complete || !allowed || !!context?.execution?.closed_at;
     el("campaign-draft-fields").disabled = value || readOnly;
     for (const id of [
       "campaign-draft-save",
@@ -216,8 +220,14 @@ export function mountCampaignDrafts(root, me) {
         ? row.evidence_id
           ? "Finalized as immutable evidence."
           : "Finalized evidence has expired; its answers are no longer retained."
-        : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
+        : row.local_error ? `Needs attention: ${row.local_error}`
+          : row.local_complete ? "Completed locally, waiting to synchronize. Not yet server-confirmed evidence."
+            : row.local_pending ? "Saved on this device, waiting to synchronize. This draft is not test evidence."
+              : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
     );
+    el("campaign-draft-conflict").hidden = !row.local_error;
+    el("campaign-conflict-versions").textContent = row.local_error
+      ? JSON.stringify({ local: row.data, server: row.local_conflict?.data || "Reload conflict to fetch current server answers." }, null, 2) : "";
     finishTime.set(row.finished_at || row.data.finished_at || "");
     dirty = false;
     const link = el("campaign-final-evidence");
@@ -250,13 +260,18 @@ export function mountCampaignDrafts(root, me) {
         procedure_ref: ctx.scenario.definition.procedure_ref,
         offset: String(nextOffset),
       });
-      const page = await request(`/campaign-attempts?${query}`);
+      let page;
+      const prepared = ctx.execution && await offline?.prepared(ctx.execution.id);
+      if (prepared) {
+        const rows = await offline.attempts(ctx.execution.id, ctx.scenario.definition.procedure_ref);
+        page = { attempts: rows.slice(nextOffset, nextOffset + 25), has_more: rows.length > nextOffset + 25 };
+      } else page = await request(`/campaign-attempts?${query}`);
       if (version !== listVersion) return;
       offset = nextOffset;
       el("campaign-attempt-list").innerHTML = page.attempts
         .map(
           (a) =>
-            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.finalized_at ? (a.evidence_id ? "Final: " : "Expired: ") : "Draft: "}${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
+            `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.local_error ? "Needs attention: " : a.local_complete ? "Waiting to publish: " : a.local_pending ? "Local draft: " : a.finalized_at ? (a.evidence_id ? "Final: " : "Expired: ") : "Draft: "}${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
         )
         .join("");
       el("campaign-attempt-list-status").textContent = page.attempts.length
@@ -281,7 +296,9 @@ export function mountCampaignDrafts(root, me) {
     };
     setBusy(true);
     try {
-      const row = await send("/campaign-attempts", "POST", pendingCreate);
+      const prepared = ctx.execution && await offline?.prepared(ctx.execution.id);
+      const row = prepared ? await offline.start(ctx.execution.id, pendingCreate.procedure_ref)
+        : await send("/campaign-attempts", "POST", pendingCreate);
       if (context !== ctx) return;
       pendingCreate = null;
       showAttempt(row);
@@ -301,7 +318,14 @@ export function mountCampaignDrafts(root, me) {
     const ctx = context;
     setBusy(true);
     try {
-      const row = await request(`/campaign-attempts/${encodeURIComponent(id)}`);
+      const local = await offline?.get(id);
+      let row = local;
+      if (!local?.local_pending) {
+        try {
+          row = await request(`/campaign-attempts/${encodeURIComponent(id)}`);
+          if (ctx.execution && await offline?.prepared(ctx.execution.id)) row = await offline.remember(row);
+        } catch (error) { if (!local || error.status) throw error; }
+      }
       if (context === ctx) showAttempt(row);
     } catch (error) {
       el("campaign-attempt-list-status").textContent = error.message;
@@ -342,6 +366,7 @@ export function mountCampaignDrafts(root, me) {
       if (Number.isNaN(date.getTime()) || !/(Z|[+-]\d{2}:\d{2})$/.test(finished)) throw new Error("Correct the finish time and include a timezone before saving.");
       data.finished_at = finished;
     }
+    if (isLocal()) return offline.save(attempt, data);
     if (!pendingSave || JSON.stringify(pendingSave.data) !== JSON.stringify(data)) {
       pendingSave = {revision: attempt.revision, operation_id: crypto.randomUUID(), data};
     }
@@ -358,7 +383,7 @@ export function mountCampaignDrafts(root, me) {
       dirty = false;
       pendingSave = null;
       await onChanged();
-      status("Saved on server.");
+      status(row.local_error ? `Saved locally; needs attention: ${row.local_error}` : row.local_pending ? "Saved on this device, waiting to synchronize." : "Saved on server.");
       return true;
     } catch (error) {
       status(`Not saved: ${error.message}. Your entries remain here.`);
@@ -386,6 +411,7 @@ export function mountCampaignDrafts(root, me) {
   }
 
   function dismissAttempt() {
+    clearTimeout(autosaveTimer);
     dialog.close();
     dirty = false;
     attempt = null;
@@ -477,7 +503,7 @@ export function mountCampaignDrafts(root, me) {
       }
       if (!pendingFinalize || pendingFinalize.finished_at !== finished_at)
         pendingFinalize = { revision: attempt.revision, finished_at };
-      const finalized = await send(
+      const finalized = isLocal() ? await offline.complete(attempt, finished_at) : await send(
           `/campaign-attempts/${attempt.id}/finalize`,
           "POST",
           pendingFinalize,
@@ -513,7 +539,16 @@ export function mountCampaignDrafts(root, me) {
     dirty = true;
     status("Unsaved changes — select Save draft to store them on the server.");
     refreshBlockers();
+    scheduleLocalSave();
   });
+  function scheduleLocalSave() {
+    clearTimeout(autosaveTimer);
+    if (!isLocal() || attempt.finalized_at || attempt.local_complete) return;
+    autosaveTimer = setTimeout(async () => {
+      if (!isLocal() || !dirty || busy || manual.pending()) return;
+      await saveBeforeLeave();
+    }, 350);
+  }
   form.addEventListener("submit", save);
   el("campaign-draft-close").addEventListener("click", close);
   dialog.addEventListener("cancel", (event) => {
@@ -530,12 +565,29 @@ export function mountCampaignDrafts(root, me) {
       return;
     setBusy(true);
     try {
-      showAttempt(await request(`/campaign-attempts/${attempt.id}`));
+      if (isLocal()) {
+        // Local recovery must never silently throw away a queued operation.
+        showAttempt(attempt.local_error ? await offline.reloadConflict(attempt.id) : await offline.get(attempt.id));
+      } else showAttempt(await request(`/campaign-attempts/${attempt.id}`));
     } catch (error) {
       status(error.message);
     } finally {
       setBusy(false);
     }
+  });
+  for (const choice of ["local", "remote"]) el(`campaign-conflict-${choice}`).addEventListener("click", async () => {
+    if (!attempt || busy || !confirm(choice === "local" ? "Replace the displayed server answers with your local answers? The save still checks the server revision." : "Use the server answers? Your local copy will be archived on this device.")) return;
+    setBusy(true);
+    try { showAttempt(await offline.resolve(attempt.id, choice)); await onChanged(); }
+    catch (error) { status(error.message); }
+    finally { setBusy(false); }
+  });
+  el("campaign-conflict-export").addEventListener("click", async () => {
+    if (!attempt) return;
+    const data = await offline.export(attempt.id);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = `attempt-${attempt.id}.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   window.addEventListener("beforeunload", (event) => {
     if (dirty || busy) {
@@ -545,6 +597,7 @@ export function mountCampaignDrafts(root, me) {
   });
   return {
     async select(packageID, scenario, entry, execution = null, changed = () => {}) {
+      clearTimeout(autosaveTimer);
       context = { packageID, scenario, entry, execution };
       onChanged = changed;
       pendingCreate = null;
@@ -560,14 +613,26 @@ export function mountCampaignDrafts(root, me) {
       el("campaign-attempt-start").disabled = !!execution?.closed_at;
       listDrafts();
       if (execution) {
+        const local = (await offline?.attempts(execution.id, scenario.definition.procedure_ref) || []).find(a => a.local_pending);
         const progress = execution.procedures.find(p => p.procedure_ref === scenario.definition.procedure_ref);
-        if (progress?.draft_id || progress?.latest_id) await resume(progress.draft_id || progress.latest_id);
+        if (local) await resume(local.id);
+        else if (progress?.draft_id || progress?.latest_id) await resume(progress.draft_id || progress.latest_id);
         else if (!execution.closed_at) await start();
       }
     },
     saveBeforeLeave,
+    async synchronized() {
+      if (isLocal() && !dirty && !busy) {
+        const row = await offline.get(attempt.id);
+        // A periodic empty sync must not reset focus, selection or disclosure
+        // state while somebody is reading the procedure.
+        if (row && JSON.stringify(row) !== JSON.stringify(attempt)) showAttempt(row);
+        await listDrafts();
+      }
+    },
     updateExecution(execution) { if (context?.execution?.id === execution.id) { context.execution = execution; setBusy(busy); } },
     clear() {
+      clearTimeout(autosaveTimer);
       if (dialog.open) dialog.close();
       attempt = null;
       dirty = false;

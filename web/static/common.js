@@ -54,6 +54,7 @@ export function getStoredAPIKey() {
 }
 
 export function setStoredAPIKey(key) {
+  if (key !== getStoredAPIKey()) localStorage.removeItem("campaign_identity");
   if (key) {
     localStorage.setItem(API_KEY_STORAGE, key);
   } else {
@@ -240,6 +241,7 @@ export async function apiFetch(url, options = {}) {
 // something: the row goes, so the cookie stops resolving even if a copy of it
 // survives somewhere.
 export async function logout() {
+  localStorage.removeItem("campaign_identity");
   let next = SIGNED_OUT_PATH;
   if (usingSession) {
     const resp = await fetch("/auth/logout", {

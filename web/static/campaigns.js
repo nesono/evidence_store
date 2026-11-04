@@ -1,7 +1,9 @@
 // Online campaign package management. Definitions remain immutable; execution
 // capture will use a separate draft lifecycle rather than this preview screen.
 import { API_BASE, apiFetch, mayDo } from "./common.js";
-import { hydrateImages, releaseImages } from "./images.js";
+import { hydrateImages, releaseImages, usePreparedStash } from "./images.js";
+import { createCampaignOffline } from "./campaignoffline.js";
+import { openStore } from "./outbox.js";
 import { mountCampaignDrafts } from "./campaigndrafts.js";
 import { mountCampaignWorkspace } from "./campaignworkspace.js";
 import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
@@ -38,7 +40,9 @@ export function showCampaigns() { view?.show(); }
 // Scoped DOM and injected API make request ordering testable without importing
 // app.js or coupling this tab to the Add Result form.
 export function createCampaignView(root, me, api = createCampaignAPI()) {
-  const drafts = mountCampaignDrafts(root, me);
+  const offline = createCampaignOffline({ me, fallbackBlob: async digest => (await openStore()).getBlob(digest) });
+  usePreparedStash(offline);
+  const drafts = mountCampaignDrafts(root, me, offline);
   const el = id => root.querySelector(`#${id}`);
   let rows = [], offset = 0, hasMore = false, selected = null;
   let procedureOffset = 0, selectedProcedure = null;
@@ -231,5 +235,5 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     button?.querySelector("button")?.focus();
   });
   const packages = { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
-  return mountCampaignWorkspace(root, me, drafts, packages);
+  return mountCampaignWorkspace(root, me, drafts, packages, offline);
 }

@@ -4,13 +4,16 @@ import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { connect, launchChrome } from "./driver.mjs";
 
-const digest = `sha256:${"a".repeat(64)}`;
+const imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRz8AAAAASUVORK5CYII=", "base64");
+const digest = `sha256:${createHash("sha256").update(imageBytes).digest("hex")}`;
+const archiveDigest = `sha256:${createHash("sha256").update("archive bytes").digest("hex")}`;
 function packageRow(id) {
   const entry = { procedure_ref: "patrol/display", path: "scenarios/display/scenario.yaml" };
   const definition = { title: "Display status", procedure_ref: "patrol/display", description: "procedure.md", defaults: { evidence_type: "manual_test" } };
-  return { id, digest, imported_at: "2026-10-25T10:00:00Z", imported_by: "user:tester", archive_size: 123,
+  return { id, digest: archiveDigest, imported_at: "2026-10-25T10:00:00Z", imported_by: "user:tester", archive_size: 123,
     definition: { manifest: { campaign: { id: `patrol-${id}`, name: `Patrol ${id}` }, source: { repository: "https://example.org/scenarios" }, scenarios: [entry] },
       scenarios: [{ definition, assets: { "scenarios/display/setup.png": digest }, procedure: { blocks: [
         { kind: "markdown", markdown: "# Setup\n![Setup](setup.png)\n<script>window.unsafeCampaign = true</script>" },
@@ -127,9 +130,9 @@ async function handle(req, res) {
     return json(res, row);
   }
   if (url.pathname.endsWith("/url")) { imageRequests++; return json(res, { url: `${base}/test-image.png` }); }
-  if (url.pathname === "/test-image.png") {
+  if (url.pathname.startsWith("/api/v1/blobs/") || url.pathname === "/test-image.png") {
     res.writeHead(200, { "Content-Type": "image/png" });
-    return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRz8AAAAASUVORK5CYII=", "base64"));
+    return res.end(imageBytes);
   }
   if (url.pathname === "/api/v1/evidence/distinct") return json(res, { values: [] });
   if (url.pathname.startsWith("/api/")) return json(res, { records: [], evidence: [], total: 0 });
@@ -453,6 +456,75 @@ test("read-only collaborators can inspect shared attempt history", async () => {
   assert.equal(await page.eval(`document.getElementById('campaign-attempt-start').hidden`), true);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').disabled`), true);
   await page.waitFor(`document.querySelectorAll('#campaign-attempt-list [data-attempt-id]').length===2`);
+  assert.deepEqual(page.problems, []);
+});
+
+test("prepared campaign survives offline reload, captures attachments and synchronizes completed results", async () => {
+  role = "writer";
+  const e = { id: crypto.randomUUID(), package_id: rows[0].id, name: "Offline proving ground", repo: "vehicle", branch: "main", rcs_ref: "build-offline", revision: 1 };
+  executions.set(e.id, e);
+  const url = `${base}/?campaign_execution=${e.id}#campaigns`;
+  await page.goto(url);
+  await page.waitFor(`navigator.serviceWorker.controller && document.getElementById('campaign-work-title').textContent === 'Offline proving ground'`);
+  await page.eval(`document.getElementById('campaign-work-prepare').click()`);
+  await page.waitFor(`document.getElementById('campaign-offline-status').textContent.startsWith('Prepared ')`);
+  await page.offline(true);
+  await page.goto(url);
+  await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  await page.waitFor(`document.querySelector('#campaign-draft-controls img')?.src.startsWith('blob:')`);
+  await page.eval(`(() => {
+    const form = document.getElementById('campaign-draft-form');
+    form.elements.notes.value = 'Offline notes survive reload';
+    form.elements.notes.dispatchEvent(new Event('input', {bubbles:true}));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([Uint8Array.from(atob('${imageBytes.toString("base64")}'), c => c.charCodeAt(0))], 'field.png', {type:'image/png'}));
+    const input = document.getElementById('draft-photo-input'); input.files = transfer.files; input.dispatchEvent(new Event('change'));
+  })()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Saved on this device')`);
+  await page.goto(url);
+  await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-form').elements.notes.value === 'Offline notes survive reload'`);
+  assert.match(await page.eval(`document.getElementById('campaign-draft-form').elements.observations.value`), /field.*\/api\/v1\/blobs\//);
+  await page.eval(`(() => {
+    const form = document.getElementById('campaign-draft-form');
+    form.querySelector('[data-answer="status"]').value = 'PASS';
+    form.querySelector('[data-answer="operator"]').value = 'Field tester';
+    form.querySelector('[name="result"][value="PASS"]').checked = true;
+    form.dispatchEvent(new Event('input', {bubbles:true}));
+    document.getElementById('campaign-finished-now').click();
+    document.getElementById('campaign-draft-finalize').click();
+  })()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Completed locally')`);
+  assert.equal([...attempts.values()].some(a => a.execution_id === e.id), false);
+  await page.offline(false);
+  await page.eval(`document.getElementById('campaign-work-sync').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable evidence')`);
+  const finalized = [...attempts.values()].filter(a => a.execution_id === e.id);
+  assert.equal(finalized.length, 1);
+  assert.equal(finalized[0].data.notes, 'Offline notes survive reload');
+  assert.equal(finalized[0].data.result, 'PASS');
+  assert.ok(finalized[0].evidence_id);
+  // A later shared edit must surface both versions and require a real choice.
+  await page.eval(`document.querySelectorAll('#campaign-work-procedures [data-procedure]')[1].click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-form').elements.procedure_ref.value === 'patrol/check-1'`);
+  await page.eval(`document.getElementById('campaign-work-sync').click()`);
+  await page.waitFor(`!document.getElementById('campaign-work-sync').disabled`);
+  const shared = [...attempts.values()].find(a => a.execution_id === e.id && a.procedure_ref === 'patrol/check-1');
+  shared.data.notes = 'Colleague changed this'; shared.revision++;
+  await page.eval(`(() => { const input = document.getElementById('campaign-draft-form').elements.notes; input.value = 'Local competing notes'; input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Saved on this device')`);
+  await page.eval(`document.getElementById('campaign-work-sync').click()`);
+  await page.waitFor(`!document.getElementById('campaign-draft-conflict').hidden`);
+  const versions = await page.eval(`document.getElementById('campaign-conflict-versions').textContent`);
+  assert.match(versions, /Local competing notes/); assert.match(versions, /Colleague changed this/);
+  await page.eval(`window.confirm = () => true; document.getElementById('campaign-conflict-local').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-conflict').hidden`);
+  await page.eval(`document.getElementById('campaign-work-sync').click()`);
+  await page.waitFor(`!document.getElementById('campaign-work-sync').disabled`);
+  assert.equal(shared.data.notes, 'Local competing notes');
   assert.deepEqual(page.problems, []);
 });
 

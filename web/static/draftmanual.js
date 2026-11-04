@@ -99,7 +99,7 @@ export function readManualMetadata(form) {
 export function mountDraftManual(
   root,
   me,
-  { changed, status, contextID, editable },
+  { changed, status, contextID, editable, attachmentStore },
 ) {
   const el = (id) => root.querySelector(`#${id}`);
   const form = el("campaign-draft-form"),
@@ -116,7 +116,7 @@ export function mountDraftManual(
     attachImageUploads(field("observations"), (message) => {
       status(message);
       changed();
-    });
+    }, attachmentStore);
 
   function customRow(key = "", value = "") {
     const row = document.createElement("div");
@@ -179,7 +179,7 @@ export function mountDraftManual(
     embedImages(field("observations"), event.target.files, (message) => {
       status(message);
       changed();
-    });
+    }, attachmentStore);
     event.target.value = "";
   });
 
@@ -355,6 +355,7 @@ export function mountDraftManual(
         throw new Error(
           "Wait for the location/weather lookup to finish before saving.",
         );
+      if (attachmentStore) return attachmentStore.uploadAttachments(data);
       const result = await uploadPhotosOf({ metadata: data.metadata });
       if (!result.ok)
         throw new Error(

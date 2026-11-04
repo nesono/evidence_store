@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=39">
+    <link rel="stylesheet" href="app.css?v=40">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -104,6 +104,8 @@
             </section>
             <section id="campaign-workspace" hidden>
                 <div class="campaign-toolbar"><button id="campaign-work-back" type="button" class="secondary outline">All campaigns</button><button id="campaign-work-refresh" type="button" class="secondary outline">Refresh campaign</button><button id="campaign-work-close" type="button" class="secondary outline">Finish campaign</button></div>
+                <div class="campaign-toolbar"><button id="campaign-work-prepare" type="button" class="secondary outline">Prepare offline</button><button id="campaign-work-sync" type="button" class="secondary outline">Synchronize local work</button></div>
+                <p id="campaign-offline-status" role="status"></p>
                 <h2 id="campaign-work-title"></h2><p id="campaign-work-context" class="commit-ref"></p><p id="campaign-work-progress"></p><p id="campaign-work-status" role="status"></p>
                 <div class="campaign-work-layout">
                     <aside aria-label="Campaign procedures"><label>Find a procedure<input id="campaign-work-search" type="search" placeholder="Procedure title or reference"></label><ul id="campaign-work-procedures" class="campaign-run-list"></ul></aside>
@@ -253,6 +255,14 @@
                         <p id="campaign-draft-status" role="status" aria-live="polite"></p>
                         <button id="campaign-draft-save" type="submit">Save draft</button>
                         <button id="campaign-draft-reload" type="button" class="secondary outline">Reload saved draft</button>
+                        <section id="campaign-draft-conflict" hidden aria-label="Draft conflict">
+                            <h3>Local work needs review</h3>
+                            <p>Compare your local answers with the server version. Finalized evidence cannot be overwritten.</p>
+                            <pre id="campaign-conflict-versions"></pre>
+                            <button id="campaign-conflict-export" type="button" class="secondary outline">Export local draft</button>
+                            <button id="campaign-conflict-local" type="button" class="secondary outline">Use local answers</button>
+                            <button id="campaign-conflict-remote" type="button" class="secondary outline">Use server answers</button>
+                        </section>
                     </form>
                     <section aria-label="Save and finalize attempt">
                         <h3>Save and finalize attempt</h3>
