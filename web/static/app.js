@@ -270,8 +270,18 @@ async function loadIdentity() {
     const resp = await fetch(`${API_BASE}/me`, {
       headers: key ? { Authorization: `Bearer ${key}` } : {},
     });
-    if (resp.ok) return await resp.json();
-  } catch { /* offline or mid-restart; fall through */ }
+    if (resp.ok) {
+      const identity = await resp.json();
+      try { localStorage.setItem("campaign_identity", JSON.stringify(identity)); } catch { /* storage disabled */ }
+      return identity;
+    }
+    try { localStorage.removeItem("campaign_identity"); } catch { /* storage disabled */ }
+  } catch {
+    // Only a transport failure can use the last identity, never an auth refusal.
+    if (!signedOutOnPurpose()) {
+      try { const saved = JSON.parse(localStorage.getItem("campaign_identity")); if (saved) return { ...saved, offline_identity: true }; } catch { /* unavailable */ }
+    }
+  }
   return { authenticated: false, permissions: [] };
 }
 

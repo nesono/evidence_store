@@ -9,7 +9,8 @@ Updated proposal following [#199](https://github.com/nesono/evidence_store/issue
 implemented, as is [server import with CAS persistence](campaign-import.md);
 the [Campaigns tab](campaign-browser.md) provides upload and read-only procedure
 previews, plus [online attempt drafts](campaign-attempt-drafts.md) and
-[finalization](campaign-finalization.md). Sessions and offline execution remain planned. The
+[finalization](campaign-finalization.md), [shared campaigns](campaign-workspace.md),
+and [prepared offline execution](campaign-offline.md). The
 [package format](campaign-package-format.md) documents the implemented v2 subset.
 The [first implementation plan](test-campaign-implementation-plan.md) specifies
 the proposed v1 format, field contract, delivery slices, and a worked example.

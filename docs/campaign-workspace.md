@@ -24,8 +24,9 @@ finalized result, draft indicator and secondary attempt count. Select any proced
 or use **Previous / Next procedure**. Instructions and the attempt form are inline
 in the workspace. Navigation saves changed drafts first; failed/conflicting saves
 retain the form and prevent navigation. Finish-time selections are saved with drafts.
-The app does not save on every keystroke: use Save draft or navigate through the
-workspace before leaving. Browser unload protection warns about unsaved changes.
+Online-only drafts require Save draft or workspace navigation before leaving.
+[Prepared offline campaigns](campaign-offline.md) also autosave valid inputs on
+this device after a short typing pause. Browser unload protection warns about unsaved changes.
 
 Opening a procedure resumes its shared draft or displays its latest finalized
 attempt. An untouched procedure starts a draft for a writer. **Attempts and retry**
@@ -95,7 +96,8 @@ execution links/history but retains attempts and evidence.
 
 ## Remaining follow-ups
 
-Offline preparation/synchronization, procedure edits, release-to-package automatic
+[Offline preparation/synchronization](campaign-offline.md) is available through
+**Prepare offline** and **Synchronize local work**. Procedure edits, release-to-package automatic
 associations, repository RBAC, and historical check comparison/report exports remain
 separate features. Package import/download is available through **Campaign packages**.
 

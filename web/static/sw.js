@@ -46,7 +46,8 @@
 // v37: use the verdict and procedure as the record detail heading.
 // v38: shared campaign execution workspace.
 // v39: spaced, link-style campaign package back navigation.
-const VERSION = "v39";
+// v40: prepared offline campaigns and durable attempt synchronization.
+const VERSION = "v40";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -57,7 +58,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=39",
+  "/app.css?v=40",
   "/app.js",
   "/blobref.js",
   "/access.js",
@@ -66,6 +67,7 @@ const SHELL = [
   "/common.js",
   "/campaigns.js",
   "/campaignworkspace.js",
+  "/campaignoffline.js",
   "/campaigndrafts.js",
   "/campaignresult.js",
   "/finishtime.js",

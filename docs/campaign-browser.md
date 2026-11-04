@@ -74,8 +74,8 @@ the independent Add Result form.
 
 Package listing, opening, importing, downloading, and loading setup images require
 a connection. The service worker caches the new UI modules as part of the app
-shell but does not cache campaign API responses or prepare a package for offline
-execution. An already opened definition can remain visible in the current page;
+shell but does not cache campaign API responses. For offline execution, open a
+shared campaign and use [Prepare offline](campaign-offline.md). An already opened definition can remain visible in the current page;
 that is not an offline-readiness guarantee. Refresh errors are displayed alongside
 the last loaded list, with an explicit retry instruction.
 

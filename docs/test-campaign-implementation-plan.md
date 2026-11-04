@@ -11,8 +11,8 @@ Implemented: the [procedure validator](campaign-procedure-validation.md) and
 [online attempt drafts](campaign-attempt-drafts.md), and
 [attempt finalization](campaign-finalization.md), and the
 [shared campaign workspace](campaign-workspace.md). Shared online executions,
-close-to-skip, reopening and sequential navigation are implemented. Offline execution
-remains planned. The package format document is the implemented
+close-to-skip, reopening and sequential navigation are implemented, along with
+[prepared offline execution](campaign-offline.md). The package format document is the implemented
 v2 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
 product revision associations live outside the content-addressed archive.
 
