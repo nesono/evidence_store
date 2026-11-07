@@ -22,8 +22,14 @@ export function campaignStore(scope, indexedDB = globalThis.indexedDB) {
     });
   }
   return {
+    ready: open,
     async get(kind, id) { return (await run("readonly", s => s.get([scope, kind, id])))?.value; },
-    async all(kind) { return (await run("readonly", s => s.getAll())).filter(r => r.key[0] === scope && r.key[1] === kind).map(r => r.value); },
+    async all(kind) {
+      // IDs are strings. An array upper bound sorts after every string ID,
+      // keeping other principals, record types and large blob bytes off the heap.
+      const range = IDBKeyRange.bound([scope, kind], [scope, kind, []], false, true);
+      return (await run("readonly", s => s.getAll(range))).map(r => r.value);
+    },
     async put(kind, id, value) { await run("readwrite", s => s.put({ key: [scope, kind, id], value })); },
     async remove(kind, id) { await run("readwrite", s => s.delete([scope, kind, id])); },
   };
@@ -46,7 +52,8 @@ export function localAttempt(entry) {
   const row = structuredClone(entry.row);
   if (entry.operations.length) row.data = structuredClone(entry.operations.at(-1).data);
   return { ...row, local_version: entry.version, local_pending: !!(entry.create || entry.operations.length || entry.completion),
-    local_complete: !!entry.completion, local_error: entry.error || "", local_conflict: entry.conflict || null };
+    local_complete: !!entry.completion, local_error: entry.error || "", local_conflict: entry.conflict || null,
+    local_create_failed: !!(entry.create && entry.error && !entry.conflict) };
 }
 
 export function createCampaignOffline({ me, store = campaignStore(me?.subject || "anonymous"), request = campaignRequest,
@@ -54,9 +61,23 @@ export function createCampaignOffline({ me, store = campaignStore(me?.subject ||
   fetchArchive = id => apiFetchNoRedirect(`${API_BASE}/campaigns/${id}/package`),
   uploadBlob = blob => apiFetchNoRedirect(`${API_BASE}/blobs`, { method: "POST", headers: { "Content-Type": blob.contentType }, body: blob.bytes }),
   fallbackBlob = async () => null,
-  lock = fn => globalThis.navigator?.locks ? navigator.locks.request(`campaigns:${me?.subject || "anonymous"}`, fn) : Promise.reject(new Error("Offline campaigns require browser Web Locks support.")),
+  lock,
 } = {}) {
   const subject = me?.subject || "anonymous";
+  const canLock = !!lock || !!globalThis.navigator?.locks;
+  lock ||= fn => globalThis.navigator?.locks ? navigator.locks.request(`campaigns:${subject}`, fn) : Promise.reject(new Error("Offline campaigns require browser Web Locks support."));
+  // Only initial capability/open failures disable the optional offline feature.
+  // Once storage opens, failed reads/writes must still surface to protect drafts.
+  let availability;
+  const unavailableReason = () => availability ||= (async () => {
+    if (!canLock) return "Offline campaigns require browser Web Locks support.";
+    try { await store.ready?.(); return ""; }
+    catch (error) { return `Offline storage is unavailable: ${error.message}`; }
+  })();
+  async function requireAvailable() {
+    const reason = await unavailableReason();
+    if (reason) throw new Error(reason);
+  }
   async function identity() {
     const current = await request("/me");
     if ((current.subject || "anonymous") !== subject) throw Object.assign(new Error(`Sign in as ${subject} to synchronize this work.`), { status: 401 });
@@ -108,6 +129,13 @@ export function createCampaignOffline({ me, store = campaignStore(me?.subject ||
           entry.conflict = row;
           throw Object.assign(new Error("A colleague started this procedure while you were offline. Review both attempts."), { status: 409 });
         }
+        // The create may have succeeded before its response was lost. A replay
+        // returns the current server row, not necessarily its initial revision.
+        // Never rebase queued answers onto somebody else's intervening edits.
+        if (row.revision !== 1 || row.finalized_at) {
+          entry.conflict = row;
+          throw Object.assign(new Error("This attempt changed after it was created. Review both versions before synchronizing."), { status: 409 });
+        }
         entry.row = row; delete entry.create;
         await store.put("attempt", row.id, entry);
       }
@@ -145,53 +173,69 @@ export function createCampaignOffline({ me, store = campaignStore(me?.subject ||
     }
   }
   const api = {
-    async prepared(id) { return store.get("campaign", id); },
-    async campaigns() { return store.all("campaign"); },
-    getBlob: digest => store.get("blob", digest),
+    unavailableReason,
+    async available() { return !await unavailableReason(); },
+    async prepared(id) { if (await api.available()) return store.get("campaign", id); },
+    async campaigns() { return await api.available() ? store.all("campaign") : []; },
+    async getBlob(digest) { if (await api.available()) return store.get("blob", digest); },
     async stashBlob(blob) { await store.put("blob", blob.digest, blob); },
     async uploadAttachments(data) {
       await identity();
       for (const digest of digestsInRecord(data)) {
-        const blob = await store.get("blob", digest) || await fallbackBlob(digest);
+        const blob = await api.getBlob(digest) || await fallbackBlob(digest);
         if (!blob) continue; // An online-only attachment is already on the server.
         const response = await uploadBlob(blob);
         if (!response.ok) throw new Error(`Attachment upload failed (HTTP ${response.status}).`);
       }
     },
-    async updateExecution(execution) { return lock(async () => {
-      const prepared = await api.prepared(execution.id);
-      if (prepared) await store.put("campaign", execution.id, { ...prepared, execution });
-    }); },
-    async prepare(id) { return lock(async () => {
-      await identity();
-      const execution = await request(`/campaign-executions/${id}`);
-      const pkg = await request(`/campaigns/${execution.package_id}`);
-      const archive = await verified(await fetchArchive(pkg.id), pkg.digest);
-      const digests = new Set(pkg.definition.scenarios.flatMap(s => Object.values(s.assets || {})));
-      for (const digest of digests) await store.put("blob", digest, await verified(await fetchBlob(digest), digest));
-      for (const p of execution.procedures) {
-        for (const attemptID of new Set([p.draft_id, p.latest_id].filter(Boolean))) {
-          const row = await request(`/campaign-attempts/${attemptID}`);
-          await retain(row.data, true);
-          await remember(row);
+    async updateExecution(execution) {
+      if (!await api.prepared(execution.id)) return;
+      return lock(async () => {
+        const prepared = await api.prepared(execution.id);
+        if (prepared) await store.put("campaign", execution.id, { ...prepared, execution });
+      });
+    },
+    async prepare(id) {
+      await requireAvailable();
+      return lock(async () => {
+        await identity();
+        const execution = await request(`/campaign-executions/${id}`);
+        const pkg = await request(`/campaigns/${execution.package_id}`);
+        const archive = await verified(await fetchArchive(pkg.id), pkg.digest);
+        const digests = new Set(pkg.definition.scenarios.flatMap(s => Object.values(s.assets || {})));
+        for (const digest of digests) await store.put("blob", digest, await verified(await fetchBlob(digest), digest));
+        for (const p of execution.procedures) {
+          for (const attemptID of new Set([p.draft_id, p.latest_id].filter(Boolean))) {
+            const row = await request(`/campaign-attempts/${attemptID}`);
+            await retain(row.data, true);
+            await remember(row);
+          }
         }
-      }
-      // The readiness marker is written last. Failed preparation is never ready.
-      const prepared = { execution, pkg, archive, prepared_at: new Date().toISOString() };
-      await store.put("campaign", id, prepared);
-      return prepared;
-    }); },
+        // The readiness marker is written last. Failed preparation is never ready.
+        const prepared = { execution, pkg, archive, prepared_at: new Date().toISOString() };
+        await store.put("campaign", id, prepared);
+        return prepared;
+      });
+    },
     async remember(row) { return lock(() => remember(row)); },
-    async get(id) { const entry = await getEntry(id); return entry && localAttempt(entry); },
-    async attempts(executionID, ref) { return (await store.all("attempt")).filter(e => e.row.execution_id === executionID && e.row.procedure_ref === ref).map(localAttempt).sort((a,b) => b.created_at.localeCompare(a.created_at)); },
+    async get(id) {
+      if (!await api.available()) return;
+      const entry = await getEntry(id); return entry && localAttempt(entry);
+    },
+    async attempts(executionID, ref) {
+      if (!await api.available()) return [];
+      return (await store.all("attempt")).filter(e => e.row.execution_id === executionID && (ref === undefined || e.row.procedure_ref === ref))
+        .map(localAttempt).sort((a,b) => b.created_at.localeCompare(a.created_at));
+    },
     async start(executionID, ref) { return lock(async () => {
       const prepared = await api.prepared(executionID);
       if (!prepared) throw new Error("Prepare this campaign while connected before working offline.");
       const { execution, pkg } = prepared;
       if (execution.closed_at) throw new Error("This campaign is closed.");
-      const prior = (await api.attempts(executionID, ref)).find(a => !a.finalized_at && !a.local_complete);
+      const attempts = await api.attempts(executionID, ref);
+      const prior = attempts.find(a => !a.finalized_at && !a.local_complete);
       if (prior) return prior;
-      if ((await api.attempts(executionID, ref)).some(a => a.local_complete)) throw new Error("Synchronize the completed attempt before starting a retry.");
+      if (attempts.some(a => a.local_complete)) throw new Error("Synchronize the completed attempt before starting a retry.");
       const scenario = pkg.definition.scenarios.find(s => s.definition.procedure_ref === ref);
       if (!scenario) throw new Error("Procedure is not in the prepared package.");
       const defaults = scenario.definition.defaults;
@@ -213,11 +257,34 @@ export function createCampaignOffline({ me, store = campaignStore(me?.subject ||
       await store.put("attempt", row.id, entry);
       return localAttempt(entry);
     }); },
-    async sync() { return lock(async () => {
-      const pending = (await store.all("attempt")).filter(e => localAttempt(e).local_pending);
-      if (!pending.length) return;
+    async sync() {
+      if (!await api.available()) return;
+      return lock(async () => {
+        const pending = (await store.all("attempt")).filter(e => localAttempt(e).local_pending);
+        if (!pending.length) return;
+        await identity();
+        for (const entry of pending) await synchronize(entry);
+      });
+    },
+    async retryCreate(id) { return lock(async () => {
       await identity();
-      for (const entry of pending) await synchronize(entry);
+      const entry = await getEntry(id);
+      if (!entry || !localAttempt(entry).local_create_failed) throw new Error("There is no failed creation to retry.");
+      const execution = await request(`/campaign-executions/${entry.row.execution_id}`);
+      if (execution.closed_at) throw new Error("The campaign is still closed. Reopen it before retrying, or archive this local attempt.");
+      delete entry.error;
+      entry.version++;
+      // Retain the UUID, queued answers and original completion time. Retrying
+      // creation still detects a concurrent start or an edited replayed create.
+      await store.put("attempt", id, entry);
+      await synchronize(entry);
+      return localAttempt(entry);
+    }); },
+    async archiveFailedCreate(id) { return lock(async () => {
+      const entry = await getEntry(id);
+      if (!entry || !localAttempt(entry).local_create_failed) throw new Error("There is no failed creation to archive.");
+      await store.put("archive", `${id}:${crypto.randomUUID()}`, entry);
+      await store.remove("attempt", id);
     }); },
     // Resolution is explicit and revision checked too. Preserve the local copy
     // in an archive before accepting remote data or replacing remote answers.
@@ -241,7 +308,12 @@ export function createCampaignOffline({ me, store = campaignStore(me?.subject ||
       await identity();
       const entry = await getEntry(id);
       if (!entry?.error) return entry && localAttempt(entry);
-      entry.conflict = await request(`/campaign-attempts/${entry.conflict?.id || id}`);
+      if (localAttempt(entry).local_create_failed) {
+        const execution = await request(`/campaign-executions/${entry.row.execution_id}`);
+        entry.error = execution.closed_at
+          ? "Campaign is closed. Reopen it before retrying creation, or archive this local attempt."
+          : "Campaign is open. Retry creating this attempt, or archive it on this device.";
+      } else entry.conflict = await request(`/campaign-attempts/${entry.conflict?.id || id}`);
       await store.put("attempt", id, entry);
       return localAttempt(entry);
     }); },

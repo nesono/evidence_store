@@ -148,6 +148,9 @@ func attemptEvidence(a *CampaignAttempt, p *CampaignPackage, scenario campaign.P
 		"procedure_ref": a.ProcedureRef, "source": p.Definition.Manifest.Source,
 		"scenario_path": path, "procedure": scenario, "answers": a.Data.Answers,
 	}
+	if product := p.Definition.Manifest.Product; product != nil {
+		metadata["campaign"].(map[string]any)["product"] = product
+	}
 	if a.ExecutionID != nil {
 		metadata["campaign"].(map[string]any)["execution_id"] = a.ExecutionID
 		metadata["campaign"].(map[string]any)["created_by"] = a.Owner

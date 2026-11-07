@@ -201,6 +201,7 @@ async function embed(field, file, onStatus, storage) {
 // Uploading immediately when online would be a second way of doing the same
 // thing, and the second way is the one that gets less use and breaks quietly.
 async function reference(file, storage = stash) {
+  if (storage?.available && !await storage.available()) storage = null;
   // Browser digest APIs buffer their input. Prepared campaigns cap local video
   // size; ordinary Add Result videos continue streaming straight to the server.
   if (file.type.startsWith("video/") || /\.(mp4|webm)$/i.test(file.name || "")) {

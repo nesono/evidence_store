@@ -12,23 +12,31 @@ directly. The tab requires `evidence:read`, matching the backend read endpoints.
 1. Build a `.tar.gz` using the [package tools](campaign-package-format.md).
 2. Open **Campaigns**, choose the archive, and select **Import package**.
 3. The server validates it and the page opens the imported package. Uploading
-   identical bytes opens the existing package and reports that it was already
+   equivalent parsed content opens the existing package and reports that it was already
    imported. Failed uploads keep the file selected so the same bytes can be retried.
 4. Browse imported packages with **Previous**, **Next**, and **Refresh**. The
    server's import-time order is preserved, 25 packages per page.
+   Both this list and **New campaign** use the same table with **Added**, **Name**,
+   **Procedures**, **Repository**, and **Product revision** column headers. Each single-line row
+   shows added date/time (UTC), name, procedure count, repository link, and abbreviated click-to-copy commit.
+   Package browsing starts as a full-width list. Selecting a row opens details on
+   the right on wide screens, keeping the list on the left, like Search. **Close
+   package details** restores the full-width list; narrow screens stack the details.
 5. Select a package to open its **Campaign overview**: campaign identity,
    procedure count, and nominal planning context. Expand **Package source and
    import details** for the full digest, repository, and import attribution.
    A separate **Procedures** region contains a searchable list. Select a list
    item to open its **Procedure detail**, with its parent campaign named explicitly.
-   Source identity is not a deployed
-   software version or a build-provenance claim.
+   V3 displays the product build commit. **Start an execution** offers that context
+   as defaults, but only explicit submission creates an execution. Multiple runs
+   per package are allowed; import itself never starts one.
 
 **Campaign key** is the source-authored `campaign.id` from the manifest; it may
 be reused across updated packages. **Imported package UUID**, shown under
 **Package source and import details**, identifies the server's imported record.
 The **Package digest** identifies the exact archive bytes. Importing identical
-bytes returns the same UUID; the digest is not a source commit hash.
+bytes or equivalent normalized v1/v2 content returns the same UUID and original
+archive digest. A different product commit makes v3 packages distinct.
 
 The import form requires both `evidence:write` and `blob:write`; viewers can
 browse definitions without being offered an upload they cannot perform. Files

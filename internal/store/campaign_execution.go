@@ -50,14 +50,26 @@ func scanExecution(row pgx.Row) (*CampaignExecution, error) {
 }
 
 func (s *CampaignStore) CreateExecution(ctx context.Context, e CampaignExecution) (*CampaignExecution, bool, error) {
+	p, err := s.Get(ctx, e.PackageID)
+	if err != nil {
+		return nil, false, err
+	}
+	if product := p.Definition.Manifest.Product; product != nil {
+		if e.Repo == "" {
+			e.Repo = product.Repository
+		}
+		if e.Branch == "" {
+			e.Branch = product.Branch
+		}
+		if e.RCSRef == "" {
+			e.RCSRef = product.Commit
+		}
+	}
 	if e.ID == uuid.Nil || e.PackageID == uuid.Nil || strings.TrimSpace(e.Name) == "" || len(e.Name) > 200 || strings.TrimSpace(e.Repo) == "" || strings.TrimSpace(e.Branch) == "" || strings.TrimSpace(e.RCSRef) == "" {
 		return nil, false, &FinalizationError{"campaign id, package, name (up to 200 bytes), repository, branch and revision are required"}
 	}
 	if len(e.Repo) > 1000 || len(e.Branch) > 1000 || len(e.RCSRef) > 1000 {
 		return nil, false, &FinalizationError{"product context fields must be at most 1000 bytes"}
-	}
-	if _, err := s.Get(ctx, e.PackageID); err != nil {
-		return nil, false, err
 	}
 	row, err := scanExecution(s.pool.QueryRow(ctx, `INSERT INTO campaign_execution(id,package_id,name,repo,branch,rcs_ref,created_by)
  VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING RETURNING `+executionColumns, e.ID, e.PackageID, e.Name, e.Repo, e.Branch, e.RCSRef, e.CreatedBy))

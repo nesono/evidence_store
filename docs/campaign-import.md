@@ -3,7 +3,8 @@
 Campaign archives can now be imported into the server, listed, inspected, and
 downloaded, including through the [Campaigns tab](campaign-browser.md). The
 server reuses the [package validator](campaign-package-format.md) before publishing
-anything. Execution capture and product-revision associations follow separately.
+anything. Importing never starts an execution. V3 packages carry product-build
+provenance; **Start an execution** explicitly offers that revision as the default.
 
 ## Import
 
@@ -23,9 +24,10 @@ expanded/file/control limits also apply. The existing API authentication,
 rate limiting, and session CSRF checks apply. Import requires both
 `evidence:write` and `blob:write` permissions.
 
-- **201 Created:** new archive digest imported.
-- **200 OK:** that exact archive was already imported, including concurrent
-  uploads. The response returns the original ID, import time, and importer.
+- **201 Created:** new campaign content/product provenance imported.
+- **200 OK:** equivalent parsed content was already imported, including concurrent
+  uploads and normalized v1/v2 equivalents. The response returns the original ID,
+  archive digest, import time, and importer. Transport metadata does not create duplicates.
 - **400:** interrupted/unreadable request body.
 - **413:** compressed request exceeds 16 MiB.
 - **415:** unsupported request Content-Type.
@@ -49,7 +51,10 @@ rows likewise. Original archives, digests, and imported UUIDs stay unchanged.
 Declared setup images are also stored individually by digest, so a shared image
 occupies one CAS object even across campaigns and evidence. The parsed
 definition is stored in PostgreSQL. IDs/grouping names inside the manifest do
-not deduplicate imports: new bytes produce a new immutable package row.
+alone do not deduplicate imports: equivalence includes the complete parsed
+definition and assets, excluding only the archive digest and format version.
+Different product commits remain distinct. Existing duplicate rows are collapsed
+in package listings without deleting historical IDs or executions.
 
 ## Read and list
 
@@ -94,7 +99,8 @@ upload endpoint remains media-only; archive download uses the dedicated route.
 ## Persistence and retention
 
 Migration 16 adds `campaign_package` and `campaign_blob_ref`. A unique digest
-constraint arbitrates duplicate imports. All CAS writes finish before one
+constraint arbitrates identical archives; a transaction lock serializes equivalent
+parsed-content imports. All CAS writes finish before one
 transaction commits the package metadata and references to the archive and each
 setup asset. Failed imports publish no package. Objects left behind by a failed
 write/commit are ordinary unreferenced blobs and become eligible for sweeping
@@ -113,6 +119,6 @@ multiple server/worker processes. Imports may run concurrently with each other.
 All sweep workers must run the updated code before enabling campaign uploads;
 older workers do not know about campaign references or this lock.
 
-The package digest remains separate from the product revision as agreed in #200.
-This API persists package content and import attribution; it does not claim to
-establish build provenance or software deployment identity.
+The package digest identifies retained bytes. V3 also carries declared product
+build provenance; the execution separately records the deployed revision.
+Import does not independently verify the build or deployed software.

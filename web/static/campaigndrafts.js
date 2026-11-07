@@ -103,6 +103,28 @@ export function readDraftForm(form, previousAnswers = {}) {
   return data;
 }
 
+// Server offsets stay independent of the pending local rows pinned to page one.
+// A prepared snapshot is only a fallback for transport failures, never auth errors.
+export async function attemptHistory({ request, offline, executionID, packageID, ref, offset = 0 }) {
+  const prepared = executionID && await offline?.prepared(executionID);
+  const local = prepared ? await offline.attempts(executionID, ref) : [];
+  const query = new URLSearchParams({
+    [executionID ? "execution_id" : "campaign_id"]: executionID || packageID,
+    procedure_ref: ref, offset: String(offset),
+  });
+  let page;
+  try { page = await request(`/campaign-attempts?${query}`); }
+  catch (error) {
+    if (error.status || !prepared) throw error;
+    return { attempts: local.slice(offset, offset + 25), has_more: local.length > offset + 25, local: true };
+  }
+  const pending = new Map(local.filter(a => a.local_pending).map(a => [a.id, a]));
+  return { ...page, attempts: [
+    ...(offset === 0 ? pending.values() : []),
+    ...page.attempts.filter(a => !pending.has(a.id)),
+  ] };
+}
+
 export function mountCampaignDrafts(root, me, offline) {
   const el = (id) => root.querySelector(`#${id}`);
   const dialog = el("campaign-draft-dialog"),
@@ -126,7 +148,6 @@ export function mountCampaignDrafts(root, me, offline) {
   el("campaign-attempt-tools").hidden = !allowed;
   const status = (text) => {
     el("campaign-draft-status").textContent = text;
-    el("campaign-finalize-status").textContent = text;
   };
   const manual = mountDraftManual(root, me, {
     changed: () => {
@@ -196,18 +217,14 @@ export function mountCampaignDrafts(root, me, offline) {
       form.elements.namedItem(name).value = row.data[name] || "";
     for (const radio of form.querySelectorAll('[name="result"]'))
       radio.checked = radio.value === row.data.result;
-    manual.restore(row, scenario.definition);
-    for (const name of ["repo", "branch", "rcs_ref"]) form.elements.namedItem(name).readOnly = !!context.execution;
+    manual.restore(row, scenario.definition, context.execution);
     el("draft-software-context").querySelector("p").textContent = context.execution
-      ? "Fixed for this campaign. Start a new campaign to test another product revision."
+      ? "Defaults from this campaign. Overrides apply only to this attempt; changed fields are highlighted in yellow."
       : "Reused from your last saved attempt. Confirm the actual deployed build.";
     if (context.execution && !row.finalized_at) {
       form.elements.namedItem("source").value = me.subject || "anonymous";
       form.elements.namedItem("source").readOnly = true;
     }
-    el("campaign-finalize-help").textContent = context.execution
-      ? "Save and finalize publishes this attempt as immutable evidence. Use Next procedure to continue, or Retry to run this procedure again."
-      : "Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.";
     const base = entry.path.slice(0, entry.path.lastIndexOf("/") + 1);
     el("campaign-draft-controls").innerHTML = draftControlsHTML(
       scenario.procedure,
@@ -226,8 +243,13 @@ export function mountCampaignDrafts(root, me, offline) {
               : `Saved on server · revision ${row.revision}. This draft is not test evidence.`,
     );
     el("campaign-draft-conflict").hidden = !row.local_error;
+    el("campaign-conflict-help").textContent = row.local_create_failed
+      ? "This local attempt has not been confirmed on the server. Retry after the campaign reopens, or archive it on this device to stop synchronization."
+      : "Compare your local answers with the server version. Finalized evidence cannot be overwritten.";
+    for (const choice of ["local", "remote"]) el(`campaign-conflict-${choice}`).hidden = row.local_create_failed;
+    for (const choice of ["retry", "archive"]) el(`campaign-conflict-${choice}`).hidden = !row.local_create_failed;
     el("campaign-conflict-versions").textContent = row.local_error
-      ? JSON.stringify({ local: row.data, server: row.local_conflict?.data || "Reload conflict to fetch current server answers." }, null, 2) : "";
+      ? JSON.stringify({ local: row.data, server: row.local_conflict?.data || (row.local_create_failed ? "Creation was not confirmed." : "Reload conflict to fetch current server answers.") }, null, 2) : "";
     finishTime.set(row.finished_at || row.data.finished_at || "");
     dirty = false;
     const link = el("campaign-final-evidence");
@@ -255,17 +277,10 @@ export function mountCampaignDrafts(root, me, offline) {
       ctx = context;
     el("campaign-attempt-list-status").textContent = "Loading attempts…";
     try {
-      const query = new URLSearchParams({
-        [ctx.execution ? "execution_id" : "campaign_id"]: ctx.execution?.id || ctx.packageID,
-        procedure_ref: ctx.scenario.definition.procedure_ref,
-        offset: String(nextOffset),
+      const page = await attemptHistory({
+        request, offline, executionID: ctx.execution?.id, packageID: ctx.packageID,
+        ref: ctx.scenario.definition.procedure_ref, offset: nextOffset,
       });
-      let page;
-      const prepared = ctx.execution && await offline?.prepared(ctx.execution.id);
-      if (prepared) {
-        const rows = await offline.attempts(ctx.execution.id, ctx.scenario.definition.procedure_ref);
-        page = { attempts: rows.slice(nextOffset, nextOffset + 25), has_more: rows.length > nextOffset + 25 };
-      } else page = await request(`/campaign-attempts?${query}`);
       if (version !== listVersion) return;
       offset = nextOffset;
       el("campaign-attempt-list").innerHTML = page.attempts
@@ -274,8 +289,9 @@ export function mountCampaignDrafts(root, me, offline) {
             `<li><button type="button" class="secondary outline" data-attempt-id="${esc(a.id)}">${a.local_error ? "Needs attention: " : a.local_complete ? "Waiting to publish: " : a.local_pending ? "Local draft: " : a.finalized_at ? (a.evidence_id ? "Final: " : "Expired: ") : "Draft: "}${esc(a.updated_at)} · revision ${a.revision}</button></li>`,
         )
         .join("");
-      el("campaign-attempt-list-status").textContent = page.attempts.length
-        ? "Attempts (newest first)"
+      el("campaign-attempt-list-status").textContent = page.local
+        ? "Offline: prepared attempts only. Older server history is available when connected."
+        : page.attempts.length ? "Attempts (pending local work first, then newest server attempts)"
         : "No saved drafts for this procedure.";
       el("campaign-attempt-prev").disabled = offset === 0;
       el("campaign-attempt-next").disabled = !page.has_more;
@@ -576,10 +592,28 @@ export function mountCampaignDrafts(root, me, offline) {
     }
   });
   for (const choice of ["local", "remote"]) el(`campaign-conflict-${choice}`).addEventListener("click", async () => {
-    if (!attempt || busy || !confirm(choice === "local" ? "Replace the displayed server answers with your local answers? The save still checks the server revision." : "Use the server answers? Your local copy will be archived on this device.")) return;
+    if (!attempt || busy || !await saveBeforeLeave() || !confirm(choice === "local" ? "Replace the displayed server answers with your local answers? The save still checks the server revision." : "Use the server answers? Your local copy will be archived on this device.")) return;
     setBusy(true);
     try { showAttempt(await offline.resolve(attempt.id, choice)); await onChanged(); }
     catch (error) { status(error.message); }
+    finally { setBusy(false); }
+  });
+  el("campaign-conflict-retry").addEventListener("click", async () => {
+    if (!attempt || busy || !await saveBeforeLeave()) return;
+    setBusy(true);
+    try { showAttempt(await offline.retryCreate(attempt.id)); await onChanged(); await listDrafts(); }
+    catch (error) { status(error.message); }
+    finally { setBusy(false); }
+  });
+  el("campaign-conflict-archive").addEventListener("click", async () => {
+    if (!attempt || busy || !await saveBeforeLeave() || !confirm("Archive this local attempt and stop trying to synchronize it? Its answers and attachments will remain on this device.")) return;
+    setBusy(true);
+    try {
+      await offline.archiveFailedCreate(attempt.id);
+      dismissAttempt();
+      await onChanged(); await listDrafts();
+      status("Local attempt archived on this device.");
+    } catch (error) { status(error.message); }
     finally { setBusy(false); }
   });
   el("campaign-conflict-export").addEventListener("click", async () => {

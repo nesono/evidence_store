@@ -17,7 +17,7 @@
          change that needs both halves renders half-built until they reload.
          A new query is a new cache key: bump it (and SHELL and VERSION in
          sw.js) whenever this page and a stylesheet change together. -->
-    <link rel="stylesheet" href="app.css?v=40">
+    <link rel="stylesheet" href="app.css?v=56">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <!-- iOS reads this one, and only a PNG. Installing to the Home Screen is
@@ -77,34 +77,43 @@
         <section id="tab-campaigns" class="tab-content" hidden>
             <section id="campaign-home">
                 <div class="campaign-toolbar"><h2>Campaigns</h2><button id="campaign-new" type="button">New campaign</button><button id="campaign-packages" type="button" class="secondary outline">Campaign packages</button></div>
-                <div class="campaign-toolbar">
+                <div class="campaign-toolbar campaign-filters">
                     <label class="campaign-search-label">Find a campaign<input id="campaign-search" type="search" maxlength="200" placeholder="Name, repository, branch or revision"></label>
                     <label>Show<select id="campaign-state"><option value="open">Open</option><option value="completed">Completed</option><option value="all">All</option></select></label>
                     <button id="campaign-runs-refresh" type="button" class="secondary outline">Refresh</button>
                 </div>
                 <p id="campaign-runs-status" role="status"></p>
-                <ul id="campaign-runs" class="campaign-run-list"></ul>
+                <div class="campaign-package-table-wrap">
+                    <table class="campaign-execution-table" aria-label="Campaign executions">
+                        <thead><tr><th scope="col">Name</th><th scope="col">Repo</th><th scope="col">Branch</th><th scope="col">Commit</th><th scope="col" class="campaign-progress-count">Exercised</th><th scope="col" class="campaign-progress-count">Passed</th><th scope="col" class="campaign-progress-count">Skipped</th></tr></thead>
+                        <tbody id="campaign-runs"></tbody>
+                    </table>
+                </div>
                 <div class="campaign-toolbar"><button id="campaign-runs-prev" type="button" class="secondary outline">Previous</button><button id="campaign-runs-next" type="button" class="secondary outline">Next</button></div>
             </section>
             <section id="campaign-new-view" hidden>
                 <nav class="campaign-back-nav" aria-label="Campaign navigation"><a id="campaign-new-back" href="#campaigns">← Back to campaigns</a></nav>
-                <h2>Start a campaign</h2>
+                <h2>Start a campaign execution</h2>
                 <label>Find a campaign package<input id="campaign-package-search" type="search" maxlength="200" placeholder="Package name, key or source repository"></label>
                 <p id="campaign-package-picker-status" role="status"></p>
-                <ul id="campaign-package-picker" class="campaign-run-list"></ul>
+                <div class="campaign-package-table-wrap">
+                    <table class="campaign-package-table" aria-label="Choose a campaign package">
+                        <thead><tr><th scope="col">Added</th><th scope="col">Name</th><th scope="col" class="campaign-package-count">Procedures</th><th scope="col">Repository</th><th scope="col">Product revision</th></tr></thead>
+                        <tbody id="campaign-package-picker"></tbody>
+                    </table>
+                </div>
                 <div class="campaign-toolbar"><button id="campaign-picker-prev" type="button" class="secondary outline">Previous packages</button><button id="campaign-picker-next" type="button" class="secondary outline">Next packages</button></div>
                 <form id="campaign-start-form" hidden>
                     <h3 id="campaign-start-package"></h3>
                     <label>Campaign name<input name="name" required maxlength="200"></label>
                     <div class="grid"><label>Product repository<input name="repo" required maxlength="1000" list="repos-list" placeholder="org/repo"></label><label>Branch<input name="branch" required maxlength="1000"></label><label>Deployed revision<input name="rcs_ref" required maxlength="1000" placeholder="Actual commit or release"></label></div>
-                    <p>This product revision applies to every attempt in the campaign. Confirm it matches the deployed software.</p>
+                    <p>Defaults come from the package's product build. Confirm the deployed commit; you can override it. Each start creates a separate execution of this package.</p>
                     <button id="campaign-start" type="submit">Start campaign</button>
                     <p id="campaign-start-status" role="status"></p>
                 </form>
             </section>
             <section id="campaign-workspace" hidden>
-                <div class="campaign-toolbar"><button id="campaign-work-back" type="button" class="secondary outline">All campaigns</button><button id="campaign-work-refresh" type="button" class="secondary outline">Refresh campaign</button><button id="campaign-work-close" type="button" class="secondary outline">Finish campaign</button></div>
-                <div class="campaign-toolbar"><button id="campaign-work-prepare" type="button" class="secondary outline">Prepare offline</button><button id="campaign-work-sync" type="button" class="secondary outline">Synchronize local work</button></div>
+                <div class="campaign-toolbar"><button id="campaign-work-back" type="button" class="secondary outline">← Back</button><button id="campaign-work-refresh" type="button" class="secondary outline" title="Save current edits and reload campaign status and progress from the server">Refresh campaign</button><button id="campaign-work-close" type="button" class="secondary outline">Finish campaign</button><button id="campaign-work-prepare" type="button" class="secondary outline">Prepare offline</button><button id="campaign-work-sync" type="button" class="secondary outline">Synchronize local work</button></div>
                 <p id="campaign-offline-status" role="status"></p>
                 <h2 id="campaign-work-title"></h2><p id="campaign-work-context" class="commit-ref"></p><p id="campaign-work-progress"></p><p id="campaign-work-status" role="status"></p>
                 <div class="campaign-work-layout">
@@ -120,7 +129,7 @@
             <section id="campaign-package-management" hidden>
             <nav class="campaign-back-nav" aria-label="Campaign navigation"><a id="campaign-packages-back" href="#campaigns">← Back to campaigns</a></nav>
             <h2>Campaign packages</h2>
-            <p>Import a package, review its procedures, and record observations in a draft. Save and resume drafts online, then finalize completed attempts as evidence.</p>
+            <p>Import product-built packages and review their procedures. Reimporting equivalent content opens the existing package. Start an execution explicitly when ready to test.</p>
             <form id="campaign-import-form">
                 <label for="campaign-file">Campaign archive <small>(.tar.gz, at most 16 MiB)</small></label>
                 <input id="campaign-file" type="file" accept=".tar.gz,.tgz,application/gzip">
@@ -128,24 +137,31 @@
             </form>
             <p id="campaign-import-permission" hidden>Importing packages requires evidence:write and blob:write permissions.</p>
             <p id="campaign-import-status" role="status" aria-live="polite"></p>
-            <div class="campaign-layout">
+            <div id="campaign-package-layout" class="campaign-layout">
                 <aside aria-label="Imported packages">
-                    <h3>Choose a campaign</h3>
+                    <h3>Choose a campaign package</h3>
                     <button id="campaign-refresh" type="button" class="secondary outline">Refresh</button>
                     <p id="campaign-list-status" role="status" aria-live="polite"></p>
-                    <ul id="campaign-list" class="campaign-list"></ul>
+                    <div class="campaign-package-table-wrap">
+                        <table class="campaign-package-table" aria-label="Imported campaign packages">
+                            <thead><tr><th scope="col">Added</th><th scope="col">Name</th><th scope="col" class="campaign-package-count">Procedures</th><th scope="col">Repository</th><th scope="col">Product revision</th></tr></thead>
+                            <tbody id="campaign-list"></tbody>
+                        </table>
+                    </div>
                     <div class="campaign-pagination">
                         <button id="campaign-prev" type="button" class="secondary outline" disabled>Previous</button>
                         <span id="campaign-page"></span>
                         <button id="campaign-next" type="button" class="secondary outline" disabled>Next</button>
                     </div>
                 </aside>
-                <div>
-                    <p id="campaign-detail-status" role="status" aria-live="polite">Select an imported package to view its procedures.</p>
+                <div id="campaign-package-pane" role="region" aria-label="Package details" hidden>
+                    <button id="campaign-package-close" type="button" class="secondary outline">Close package details</button>
+                    <p id="campaign-detail-status" role="status" aria-live="polite"></p>
                     <section id="campaign-detail" aria-label="Selected campaign package" hidden>
                         <section class="campaign-overview" aria-labelledby="campaign-overview-title">
                             <h2 id="campaign-overview-title" class="campaign-level-heading">Campaign overview</h2>
                             <div id="campaign-package-info"></div>
+                            <button id="campaign-package-start" type="button">Start an execution</button>
                             <button id="campaign-download" type="button" class="secondary outline">Download entire campaign package</button>
                         </section>
                         <section class="campaign-procedure-detail" aria-labelledby="campaign-procedure-title">
@@ -191,23 +207,46 @@
                 <article>
                     <header><h2 id="campaign-draft-title">Attempt draft</h2></header>
                     <p id="campaign-draft-identity"></p>
-                    <p>Save draft to continue later, or Save and finalize to publish the current entries as evidence. <span class="draft-required-key">*</span> Required to finalize; red borders indicate unmet requirements. Incomplete drafts can still be saved.</p>
                     <form id="campaign-draft-form" novalidate>
                         <fieldset id="campaign-draft-fields">
                             <details id="draft-software-context">
-                                <summary id="draft-software-summary">Software under test</summary>
+                                <summary id="draft-software-summary">Details</summary>
                                 <p>Reused from your last saved attempt in this campaign. Confirm the actual deployed build; edit these values to override. Changes apply to this attempt and seed subsequent new attempts, never existing records.</p>
                                 <div class="grid">
                                     <label>Repository <small>(required to finalize)</small><input name="repo" type="text" placeholder="org/repo" list="repos-list" aria-required="true"></label>
                                     <label>Branch <small>(required to finalize)</small><input name="branch" type="text" aria-required="true"></label>
                                     <label>Deployed revision <small>(required to finalize)</small><input name="rcs_ref" type="text" placeholder="Actual commit or release" aria-required="true"></label>
                                 </div>
+                                <div class="grid">
+                                    <label>Procedure (fixed)<input name="procedure_ref" type="text" readonly></label>
+                                    <label>Evidence type <small>(required, prefilled)</small><select name="evidence_type" aria-required="true"><option value="ci">CI</option><option value="manual_test">Manual Test</option><option value="demonstration">Demonstration</option></select></label>
+                                    <label>Username/Source-URL <small>(prefilled from your identity)</small><input name="source" type="text"></label>
+                                </div>
+                                <label>Tags<input name="tags" type="text" placeholder="regression, vehicle"></label>
+                                <h3>Custom metadata</h3>
+                                <div id="draft-custom-fields"></div>
+                                <button id="draft-custom-add" type="button" class="secondary outline">Add field</button>
                             </details>
-                            <div class="grid">
-                                <label>Procedure (fixed)<input name="procedure_ref" type="text" readonly></label>
-                                <label>Evidence type <small>(required, prefilled)</small><select name="evidence_type" aria-required="true"><option value="ci">CI</option><option value="manual_test">Manual Test</option><option value="demonstration">Demonstration</option></select></label>
-                                <label>Username/Source-URL <small>(prefilled from your identity)</small><input name="source" type="text"></label>
-                            </div>
+                            <section id="draft-environment" aria-label="Location and weather">
+                                <label>Location <small>(coordinates or place name)</small>
+                                    <span class="input-with-button"><input name="location" type="text" placeholder="52.51631, 13.37771 or Test track"><button id="draft-locate" type="button" class="secondary outline">Locate</button></span>
+                                </label>
+                                <small id="draft-location-status" role="status"></small>
+                                <label>Weather
+                                    <span class="input-with-button"><input name="weather_conditions" type="text" placeholder="Observed conditions"><button id="draft-weather-lookup" type="button" class="secondary outline">Look up</button><button id="draft-weather-write" type="button" class="secondary outline">Write it down</button></span>
+                                </label>
+                                <small id="draft-weather-status" role="status"></small>
+                                <div id="draft-weather-compose" hidden>
+                                    <div class="grid">
+                                        <input id="draft-wc-description" placeholder="Conditions" aria-label="Conditions">
+                                        <input id="draft-wc-temperature" type="number" step="0.1" placeholder="°C" aria-label="Temperature °C">
+                                        <input id="draft-wc-wind" type="number" placeholder="km/h" aria-label="Wind km/h">
+                                        <input id="draft-wc-humidity" type="number" min="0" max="100" placeholder="Humidity %" aria-label="Humidity percent">
+                                        <input id="draft-wc-precipitation" type="number" step="0.1" min="0" placeholder="Rain mm" aria-label="Precipitation mm">
+                                    </div>
+                                    <button id="draft-weather-apply" type="button" class="secondary outline">Use conditions</button>
+                                </div>
+                            </section>
                             <section class="campaign-step-results" aria-labelledby="campaign-step-results-title">
                                 <h3 id="campaign-step-results-title">Procedure steps and individual checks</h3>
                                 <p>Record what happened at each check. These outcomes are separate from the verdict for the entire procedure.</p>
@@ -221,25 +260,6 @@
                                 <label><input type="radio" name="result" value="ERROR"> <span><strong>ERROR — no meaningful overall result</strong><small>Infrastructure or preconditions prevented an assessment; explain in notes.</small></span></label>
                                 <label><input type="radio" name="result" value="SKIPPED"> <span><strong>SKIPPED — procedure not run</strong><small>The test was deliberately not executed; explain in notes.</small></span></label>
                             </fieldset>
-                            <label>Tags<input name="tags" type="text" placeholder="regression, vehicle"></label>
-                            <label>Location <small>(coordinates or place name)</small>
-                                <span class="input-with-button"><input name="location" type="text" placeholder="52.51631, 13.37771 or Test track"><button id="draft-locate" type="button" class="secondary outline">Locate</button></span>
-                            </label>
-                            <small id="draft-location-status" role="status"></small>
-                            <label>Weather
-                                <span class="input-with-button"><input name="weather_conditions" type="text" placeholder="Observed conditions"><button id="draft-weather-lookup" type="button" class="secondary outline">Look up</button><button id="draft-weather-write" type="button" class="secondary outline">Write it down</button></span>
-                            </label>
-                            <small id="draft-weather-status" role="status"></small>
-                            <div id="draft-weather-compose" hidden>
-                                <div class="grid">
-                                    <input id="draft-wc-description" placeholder="Conditions" aria-label="Conditions">
-                                    <input id="draft-wc-temperature" type="number" step="0.1" placeholder="°C" aria-label="Temperature °C">
-                                    <input id="draft-wc-wind" type="number" placeholder="km/h" aria-label="Wind km/h">
-                                    <input id="draft-wc-humidity" type="number" min="0" max="100" placeholder="Humidity %" aria-label="Humidity percent">
-                                    <input id="draft-wc-precipitation" type="number" step="0.1" min="0" placeholder="Rain mm" aria-label="Precipitation mm">
-                                </div>
-                                <button id="draft-weather-apply" type="button" class="secondary outline">Use conditions</button>
-                            </div>
                             <label>Tester notes <small>(required for ERROR/SKIPPED, missing required inputs, or FAIL without a failed check)</small><textarea name="notes" rows="3"></textarea></label>
                             <label>Test log <small>(Markdown, paste/drop images and videos)</small><textarea name="observations" rows="8" placeholder="What you observed during the test"></textarea></label>
                             <div class="test-log-tools">
@@ -248,40 +268,37 @@
                                 <button id="draft-log-preview-toggle" type="button" class="secondary outline" aria-expanded="false" aria-controls="draft-log-preview">Preview test log</button>
                             </div>
                             <div id="draft-log-preview" class="test-log" hidden></div>
-                            <h3>Custom metadata</h3>
-                            <div id="draft-custom-fields"></div>
-                            <button id="draft-custom-add" type="button" class="secondary outline">Add field</button>
                         </fieldset>
-                        <p id="campaign-draft-status" role="status" aria-live="polite"></p>
-                        <button id="campaign-draft-save" type="submit">Save draft</button>
-                        <button id="campaign-draft-reload" type="button" class="secondary outline">Reload saved draft</button>
                         <section id="campaign-draft-conflict" hidden aria-label="Draft conflict">
                             <h3>Local work needs review</h3>
-                            <p>Compare your local answers with the server version. Finalized evidence cannot be overwritten.</p>
+                            <p id="campaign-conflict-help">Compare your local answers with the server version. Finalized evidence cannot be overwritten.</p>
                             <pre id="campaign-conflict-versions"></pre>
                             <button id="campaign-conflict-export" type="button" class="secondary outline">Export local draft</button>
                             <button id="campaign-conflict-local" type="button" class="secondary outline">Use local answers</button>
                             <button id="campaign-conflict-remote" type="button" class="secondary outline">Use server answers</button>
+                            <button id="campaign-conflict-retry" type="button" class="secondary outline" hidden>Retry creation</button>
+                            <button id="campaign-conflict-archive" type="button" class="secondary outline" hidden>Archive local attempt</button>
                         </section>
                     </form>
-                    <section aria-label="Save and finalize attempt">
-                        <h3>Save and finalize attempt</h3>
-                        <p id="campaign-finalize-help">Save and finalize stores your current entries and publishes immutable evidence. The dialog closes after success.</p>
+                    <section class="campaign-attempt-actions" aria-label="Attempt actions">
                         <label for="campaign-finished-at" class="draft-required-label">Actual finish time <small>(required, RFC3339 including timezone)</small></label>
-                        <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                         <div class="campaign-finish-tools">
+                            <input id="campaign-finished-at" type="text" placeholder="2026-10-25T14:30:00Z" aria-required="true">
                             <button id="campaign-finished-now" type="button" class="secondary outline">Now</button>
                             <button id="campaign-finished-created" type="button" class="secondary outline" title="Use the original creation time of this attempt">Created</button>
-                            <button id="campaign-finished-pick" type="button" class="secondary outline" aria-expanded="false" aria-controls="campaign-finished-picker-panel">Pick date</button>
+                            <button id="campaign-finished-pick" type="button" class="secondary outline" aria-expanded="false" aria-controls="campaign-finished-picker-panel">Pick Date</button>
                             <div id="campaign-finished-picker-panel" hidden>
                                 <label for="campaign-finished-picker">Date and time (UTC)</label>
                                 <input id="campaign-finished-picker" type="datetime-local" step="0.001">
                                 <button id="campaign-finished-picker-done" type="button" class="secondary outline">Done</button>
                             </div>
                         </div>
-                        <small>Pick date uses UTC. Created uses the original attempt creation time. You can also edit or paste a timestamp above.</small>
-                        <button id="campaign-draft-finalize" type="button">Save and finalize</button>
-                        <p id="campaign-finalize-status" role="status" aria-live="polite"></p>
+                        <div class="campaign-draft-actions">
+                            <button id="campaign-draft-save" type="submit" form="campaign-draft-form" class="secondary outline">Save draft</button>
+                            <button id="campaign-draft-reload" type="button" class="secondary outline">Reload draft</button>
+                            <button id="campaign-draft-finalize" type="button">Finalize</button>
+                        </div>
+                        <p id="campaign-draft-status" role="status" aria-live="polite"></p>
                         <a id="campaign-final-evidence" target="_blank" rel="noopener noreferrer" hidden>Open evidence record</a>
                     </section>
                 </article>

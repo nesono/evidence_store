@@ -23,6 +23,7 @@ import (
 	"github.com/nesono/evidence-store/internal/blob"
 	"github.com/nesono/evidence-store/internal/campaign"
 	"github.com/nesono/evidence-store/internal/config"
+	"github.com/nesono/evidence-store/internal/model"
 	"github.com/nesono/evidence-store/internal/retention"
 	"github.com/nesono/evidence-store/internal/server"
 	"github.com/nesono/evidence-store/internal/store"
@@ -116,6 +117,107 @@ func TestCampaignImportRoundTrip(t *testing.T) {
 		resp.Body.Close()
 		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
 	}
+}
+
+func TestEquivalentCampaignImportsAndProductDefaults(t *testing.T) {
+	product := campaign.ProductRevision{Repository: "https://example.org/" + uuid.NewString(), Branch: "main", Commit: strings.Repeat("a", 40)}
+	files, err := campaign.ExamplePackage(product)
+	require.NoError(t, err)
+	archive, _, err := campaign.BuildPackage(files)
+	require.NoError(t, err)
+	row := decodeJSON[store.CampaignPackage](t, importCampaign(t, testServer.URL, "", archive))
+	cleanupCampaign(t, row.ID)
+	// Whitespace changes transport bytes but not parsed instructions/provenance.
+	files["manifest.yaml"] = append(files["manifest.yaml"], '\n')
+	equivalent, _, err := campaign.BuildPackage(files)
+	require.NoError(t, err)
+	resp := importCampaign(t, testServer.URL, "", equivalent)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, row.ID, decodeJSON[store.CampaignPackage](t, resp).ID)
+	s := store.NewCampaignStore(testPool)
+	for i := 0; i < 2; i++ {
+		e, fresh, err := s.CreateExecution(context.Background(), store.CampaignExecution{ID: uuid.New(), PackageID: row.ID, Name: "Repeated execution", CreatedBy: "tester"})
+		require.NoError(t, err)
+		require.True(t, fresh)
+		assert.Equal(t, product.Commit, e.RCSRef)
+		assert.Equal(t, product.Repository, e.Repo)
+		assert.Equal(t, product.Branch, e.Branch)
+		t.Cleanup(func() {
+			_, err := testPool.Exec(context.Background(), `DELETE FROM evidence WHERE repo=$1`, product.Repository)
+			assert.NoError(t, err)
+			_, err = testPool.Exec(context.Background(), `DELETE FROM campaign_attempt WHERE execution_id=$1`, e.ID)
+			assert.NoError(t, err)
+			_, err = testPool.Exec(context.Background(), `DELETE FROM campaign_execution WHERE id=$1`, e.ID)
+			assert.NoError(t, err)
+		})
+		if i == 0 {
+			a, _, err := s.StartExecutionAttempt(context.Background(), e.ID, uuid.New(), "feature-tour/stopping-10-loaded", "tester")
+			require.NoError(t, err)
+			data := a.Data
+			data.Result = "PASS"
+			data.Answers = map[string]json.RawMessage{"actual_speed": json.RawMessage(`10`), "stopping_distance": json.RawMessage(`4.5`), "stable_stop": json.RawMessage(`{"outcome":"PASS"}`), "within_distance": json.RawMessage(`{"outcome":"PASS"}`)}
+			a, err = s.SaveAttempt(context.Background(), a.ID, "tester", a.Revision, uuid.New(), data, testBlobStore)
+			require.NoError(t, err)
+			a, _, err = s.FinalizeAttempt(context.Background(), a.ID, "tester", a.Revision, time.Now().UTC())
+			require.NoError(t, err)
+			ev := decodeJSON[model.Evidence](t, getJSON(t, "/api/v1/evidence/"+a.EvidenceID.String()))
+			var metadata map[string]any
+			require.NoError(t, json.Unmarshal(ev.Metadata, &metadata))
+			snapshot := metadata["campaign"].(map[string]any)
+			assert.Equal(t, product.Commit, snapshot["product"].(map[string]any)["commit"])
+			parameters := snapshot["procedure"].(map[string]any)["definition"].(map[string]any)["parameters"].(map[string]any)
+			assert.Equal(t, "loaded", parameters["load"])
+			assert.Equal(t, float64(10), parameters["speed_kph"])
+		}
+	}
+	product.Commit = strings.Repeat("b", 40)
+	files, err = campaign.ExamplePackage(product)
+	require.NoError(t, err)
+	archive, _, err = campaign.BuildPackage(files)
+	require.NoError(t, err)
+	resp = importCampaign(t, testServer.URL, "", archive)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	other := decodeJSON[store.CampaignPackage](t, resp)
+	cleanupCampaign(t, other.ID)
+	assert.NotEqual(t, row.ID, other.ID)
+}
+
+func TestLegacyEquivalentPackagesAppearOnce(t *testing.T) {
+	files := map[string][]byte{
+		"manifest.yaml": []byte(fmt.Sprintf("format_version: 2\ncampaign: {id: '%s', name: Legacy equivalence}\nsource: {repository: 'https://example.org/scenarios'}\nscenarios: [{procedure_ref: patrol/display, path: scenarios/display/scenario.yaml}, {procedure_ref: patrol/recording, path: scenarios/recording/scenario.yaml}]\n", uuid.NewString())),
+	}
+	for _, name := range []string{"display", "recording"} {
+		files["scenarios/"+name+"/scenario.yaml"] = []byte("title: Check\nprocedure_ref: patrol/" + name + "\ndescription: procedure.md\ndefaults: {evidence_type: manual_test}\n")
+		files["scenarios/"+name+"/procedure.md"] = []byte("# Check\nObserve the system.\n")
+	}
+	archive, _, err := campaign.BuildPackage(files)
+	require.NoError(t, err)
+	row := decodeJSON[store.CampaignPackage](t, importCampaign(t, testServer.URL, "", archive))
+	cleanupCampaign(t, row.ID)
+	manifest := strings.Replace(string(files["manifest.yaml"]), "format_version: 2", "format_version: 1", 1)
+	for _, name := range []string{"display", "recording"} {
+		manifest = strings.Replace(manifest, "procedure_ref: patrol/"+name, "id: "+name, 1)
+		file := "scenarios/" + name + "/scenario.yaml"
+		files[file] = append([]byte("id: "+name+"\n"), files[file]...)
+	}
+	files["manifest.yaml"] = []byte(manifest)
+	legacy, p, err := campaign.BuildPackage(files)
+	require.NoError(t, err)
+	resp := importCampaign(t, testServer.URL, "", legacy)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, row.ID, decodeJSON[store.CampaignPackage](t, resp).ID)
+	// Simulate duplicates already persisted by an older deployment; listing folds
+	// them without deleting historical executions or their original archive IDs.
+	encoded, err := json.Marshal(p)
+	require.NoError(t, err)
+	id := uuid.New()
+	_, err = testPool.Exec(context.Background(), `INSERT INTO campaign_package(id,digest,archive_size,imported_by,definition) VALUES($1,$2,$3,'legacy',$4)`, id, p.Digest, len(legacy), encoded)
+	require.NoError(t, err)
+	cleanupCampaign(t, id)
+	list, err := store.NewCampaignStore(testPool).List(context.Background(), 100, 0, row.Definition.Manifest.Campaign.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, row.ID, list[0].ID)
 }
 
 func TestCampaignProcedureReferenceMigration(t *testing.T) {

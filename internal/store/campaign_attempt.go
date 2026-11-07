@@ -95,9 +95,6 @@ func (s *CampaignStore) SaveAttempt(ctx context.Context, id uuid.UUID, owner str
 		if execution.ClosedAt != nil {
 			return nil, ErrCampaignConflict
 		}
-		if data.Repo != execution.Repo || data.Branch != execution.Branch || data.RCSRef != execution.RCSRef {
-			return nil, &FinalizationError{"product revision is fixed for this campaign; start another campaign to test another revision"}
-		}
 	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared($1)`, campaignSweepLock); err != nil {
 		return nil, err

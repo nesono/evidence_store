@@ -1210,5 +1210,6 @@ The adapter module (`evidence_store_bazel`) is published to the [Bazel Central R
 - [docs/retention-rules-plan.md](docs/retention-rules-plan.md) — retention rule syntax
 - [docs/offline-support-plan.md](docs/offline-support-plan.md) — collecting evidence with no connection, and syncing it later
 - [docs/campaign-offline.md](docs/campaign-offline.md) — preparing campaigns, durable local drafts, attachment sync and conflict resolution
+- [docs/testing-campaign.md](docs/testing-campaign.md) — realistic product-stamped testing campaign with 15 scenarios and two parameter sweeps
 - [docs/lightdash-assessment.md](docs/lightdash-assessment.md) — why the store keeps its own search and analytics
 - [docs/api-reference.md](docs/api-reference.md) — every HTTP endpoint, in full

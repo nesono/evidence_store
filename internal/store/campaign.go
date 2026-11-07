@@ -70,7 +70,7 @@ func (s *CampaignStore) Import(ctx context.Context, blobs blob.Store, archive []
 	if err != nil {
 		return nil, false, err
 	}
-	if err := insertCampaignRefs(ctx, tx, row.ID, p.Digest, assets); err != nil {
+	if err := insertCampaignRefs(ctx, tx, row.ID, row.Digest, assets); err != nil {
 		return nil, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -107,7 +107,22 @@ func putCampaignObject(ctx context.Context, blobs blob.Store, expected string, d
 
 const campaignColumns = `id, digest, archive_size, imported_at, imported_by, definition`
 
+// Parsed v1 definitions normalize legacy IDs. Ignore archive digest and schema
+// version while retaining instructions, parameters, assets and product provenance.
+const campaignContent = `(definition - 'digest') #- '{manifest,format_version}'`
+
 func insertCampaign(ctx context.Context, tx pgx.Tx, digest string, size int, subject string, definition []byte) (*CampaignPackage, bool, error) {
+	// Serialize equivalent imports even if archive headers or v1/v2 differ.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended((($1::jsonb - 'digest') #- '{manifest,format_version}')::text,1))`, definition); err != nil {
+		return nil, false, err
+	}
+	existing, err := scanCampaign(tx.QueryRow(ctx, `SELECT `+campaignColumns+` FROM campaign_package WHERE `+campaignContent+` = (($1::jsonb - 'digest') #- '{manifest,format_version}') ORDER BY imported_at,id LIMIT 1`, definition))
+	if err == nil {
+		return existing, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, err
+	}
 	row, err := scanCampaign(tx.QueryRow(ctx, `
 		INSERT INTO campaign_package (digest, archive_size, imported_by, definition)
 		VALUES ($1, $2, $3, $4) ON CONFLICT (digest) DO NOTHING
@@ -157,8 +172,8 @@ func (s *CampaignStore) List(ctx context.Context, limit, offset int, search ...s
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id, digest, archive_size, imported_at, imported_by,
 		definition->'manifest', jsonb_array_length(definition->'scenarios')
-		FROM campaign_package WHERE lower((definition->'manifest'->'campaign'->>'name')||' '||
-		(definition->'manifest'->'campaign'->>'id')||' '||(definition->'manifest'->'source'->>'repository')||' '||digest) LIKE $3
+		FROM (SELECT DISTINCT ON (`+campaignContent+`) * FROM campaign_package ORDER BY `+campaignContent+`,imported_at,id) packages WHERE lower((definition->'manifest'->'campaign'->>'name')||' '||
+		(definition->'manifest'->'campaign'->>'id')||' '||(definition->'manifest'->'source'->>'repository')||' '||COALESCE(definition->'manifest'->'product'->>'commit','')||' '||digest) LIKE $3
 		ORDER BY imported_at, id LIMIT $1 OFFSET $2`, limit, offset, fuzzyPattern(query))
 	if err != nil {
 		return nil, err

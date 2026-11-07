@@ -5,7 +5,7 @@ and [#214](https://github.com/nesono/evidence_store/issues/214).
 
 - **Campaign package:** immutable reusable procedures, fields, defaults and assets.
 - **Campaign:** one shared execution of a package against a fixed product repository,
-  branch and deployed revision.
+  branch and deployed revision defaults.
 - **Attempt:** one try at one procedure. Results and previous tries are preserved.
 
 ## Workflow
@@ -13,20 +13,37 @@ and [#214](https://github.com/nesono/evidence_store/issues/214).
 The Campaigns tab opens on the shared **Open** campaign list. Search filters the
 whole server-side collection incrementally, using case-insensitive subsequence
 matching (abbreviations are supported). Select Completed or All to find past work.
+Executions appear in a table with Name, Repo, Branch, Commit, Exercised, Passed
+and Skipped columns. Each count is relative to the total number of procedures.
+A yellow outline circle identifies an open execution; a solid green circle means
+the execution was finalized (not that all procedures passed). Repository URLs
+show just the repository name, and clicking the abbreviated commit copies it in full.
 
 **New campaign** offers the same searchable listing of available packages. Select
 a package, name the campaign and enter the actual product repository, branch and
-revision. All procedures from the package are included. The package is reusable
-across campaigns and revisions; its bytes do not contain execution context.
+revision. V3 packages prefill repository, branch and commit from their product
+build; legacy packages need those fields entered manually. Operators can override
+the deployed revision. Multiple executions of the same package are allowed.
+Import (including a duplicate import) offers **Start an execution** but never starts
+one automatically. Use the [Vehicle feature tour](testing-campaign.md) for testing.
 
 Opening a campaign shows one row per procedure in package order, with the latest
-finalized result, draft indicator and secondary attempt count. Select any procedure
+state shown by a circle: grey outline for not started, yellow outline for in
+progress, solid green for PASS, solid red for FAIL, solid yellow for SKIPPED,
+and solid purple for ERROR. A pending retry takes precedence over the previous
+result; local completions remain in progress until synchronized. Hover or assistive
+technology exposes the state label. Titles and references are left-aligned on at
+most two lines; attempt history is available in the selected procedure. Select any procedure
 or use **Previous / Next procedure**. Instructions and the attempt form are inline
 in the workspace. Navigation saves changed drafts first; failed/conflicting saves
 retain the form and prevent navigation. Finish-time selections are saved with drafts.
 Online-only drafts require Save draft or workspace navigation before leaving.
 [Prepared offline campaigns](campaign-offline.md) also autosave valid inputs on
 this device after a short typing pause. Browser unload protection warns about unsaved changes.
+
+The finish-time input has Now, Created and Pick Date shortcuts on its right.
+Save draft, Reload draft and Finalize share one action row, with the current
+procedure state underneath. Finalize saves current entries before publishing evidence.
 
 Opening a procedure resumes its shared draft or displays its latest finalized
 attempt. An untouched procedure starts a draft for a writer. **Attempts and retry**
@@ -57,7 +74,7 @@ procedure. Existing finalized evidence is never rewritten. Closure-generated
 timestamps describe the closure, not an invented time at which an unrun test ran.
 
 Closed campaigns are read-only. **Reopen campaign** preserves all history and the
-fixed product context. Running a skipped/finalized procedure again creates another
+default product context. Running a skipped/finalized procedure again creates another
 attempt. An unfinished retry following a PASS becomes the latest SKIPPED result
 on closure; the previous PASS remains in history.
 
@@ -82,7 +99,12 @@ New shared executions use:
 
 Attempt save/finalize routes remain the same. Package listing also accepts `q`.
 Shared reads require `evidence:read`; mutations require `evidence:write` and normal
-session CSRF checks. Product context is checked on every shared draft save.
+session CSRF checks. Product context is copied to new attempts as defaults;
+opening **Details** allows attempt-specific overrides. Overridden fields are
+highlighted in light yellow, including after saving and reopening. Restoring a
+default removes the highlight. Overrides do not change the campaign or subsequent
+attempts. Procedure identity and source permissions remain enforced. Location and
+Weather appear first; other default metadata is grouped inside Details.
 Every attempt mutation locks its execution before the attempt; close cannot race
 with a new draft or silently discard another collaborator's saved work. Refresh
 after a lost close/reopen response to determine the authoritative state.

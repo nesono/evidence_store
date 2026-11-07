@@ -3941,11 +3941,18 @@ label > .input-with-button {
 #results-body tr:has(.empty-state),
 #results-body .empty-state { display: block; }
 
-/* Immutable campaign browsing: list and definition on desktop, stacked on a
-   phone. Digest/source strings may be long and must not widen the viewport. */
-.campaign-layout { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr); gap: 1.5rem; }
+/* Like Search: the list owns the full width until a detail is selected. */
+.campaign-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+#campaign-package-pane { min-width: 0; }
+@media (min-width: 1024px) {
+  .campaign-layout.detail-open { grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 1fr); }
+  .campaign-layout.detail-open > #campaign-package-pane { position: sticky; top: 1rem; max-height: calc(100vh - 8rem); overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 1rem; background: var(--color-ground-raised); }
+}
 .campaign-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 0.75rem; margin-block: 0.75rem; }
 .campaign-toolbar h2, .campaign-toolbar label { margin: 0; }
+#campaign-home .campaign-filters :is(input, select, button) { margin-bottom: 0; vertical-align: bottom; }
+.campaign-filters > button { width: auto; flex: none; }
+.campaign-filters > label { display: flex; flex-direction: column; }
 .campaign-back-nav { margin-bottom: 1.5rem; }
 .campaign-back-nav a { font-size: var(--text-ui); }
 .campaign-search-label { flex: 1; min-width: 12rem; }
@@ -3959,12 +3966,20 @@ label > .input-with-button {
 }
 .campaign-run:hover, .campaign-run.selected { border-color: var(--color-accent); background: var(--color-ground-sunken); }
 .campaign-run small, .campaign-run code { color: var(--color-ink-muted); font-size: var(--text-xs); }
+#campaign-work-procedures .campaign-procedure-run { display: grid; grid-template-columns: 0.8rem minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 0.65rem; text-align: left; padding: 0.5rem 0.75rem; }
+.campaign-procedure-label { min-width: 0; text-align: left; }
+.campaign-procedure-label > :is(strong, small) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; text-align: left; }
+.procedure-state { display: inline-block; width: 0.75rem; height: 0.75rem; border: 2px solid var(--procedure-state-color, #8b9099); border-radius: 50%; background: transparent; }
+.procedure-state-started, .procedure-state-skipped { --procedure-state-color: #d6a700; }
+.procedure-state-passed { --procedure-state-color: #24964d; }
+.procedure-state-failed { --procedure-state-color: #d83a42; }
+.procedure-state-error { --procedure-state-color: #9256c9; }
+.procedure-state-passed, .procedure-state-failed, .procedure-state-skipped, .procedure-state-error { background: var(--procedure-state-color); }
 .campaign-work-layout { display: grid; grid-template-columns: minmax(15rem, 1fr) minmax(0, 2.5fr); gap: 1.5rem; align-items: start; }
 .campaign-work-layout > * { min-width: 0; }
 .campaign-work-layout > aside { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
 .campaign-work-nav { justify-content: space-between; align-items: center; }
 #campaign-start-form { margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--color-line); }
-#campaign-work-history { margin-block: 1rem; }
 #campaign-work-editor .campaign-inline-attempt {
     position: static; inset: auto; display: block; width: 100%; min-width: 0;
     height: auto; min-height: 0; max-height: none; z-index: auto;
@@ -3980,9 +3995,28 @@ label > .input-with-button {
     .campaign-work-layout > aside { position: static; max-height: 18rem; }
 }
 .campaign-layout > *, .campaign-layout aside { min-width: 0; }
-.campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; }
-.campaign-list li { list-style: none; margin-bottom: 0.75rem; }
-.campaign-package { display: grid; gap: 0.25rem; width: 100%; text-align: left; }
+.campaign-list { list-style: none; padding: 0; margin: 0.75rem 0; overflow-x: auto; }
+.campaign-package-table-wrap { overflow-x: auto; margin-block: 0.75rem; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
+.campaign-package-table { width: 100%; margin: 0; font-size: var(--text-xs); }
+.campaign-package-table :is(th, td) { padding: 0.4rem 0.75rem; text-align: left; vertical-align: middle; white-space: nowrap; border-bottom: 1px solid var(--color-line); }
+.campaign-package-table th { background: var(--color-ground); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.campaign-package-table :is(th, td):first-child { width: 10rem; }
+.campaign-package-table :is(th, td):last-child { width: 9rem; }
+.campaign-package-table .campaign-package-count { text-align: right; font-variant-numeric: tabular-nums; }
+.campaign-execution-table { width: 100%; margin: 0; font-size: var(--text-xs); }
+.campaign-execution-table :is(th, td) { padding: 0.4rem 0.75rem; text-align: left; vertical-align: middle; white-space: nowrap; border-bottom: 1px solid var(--color-line); }
+.campaign-execution-table th { background: var(--color-ground); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.campaign-execution-table .campaign-progress-count { text-align: right; font-variant-numeric: tabular-nums; }
+.campaign-execution-row { cursor: pointer; }
+.campaign-execution-row:hover { background: var(--color-ground-sunken); }
+#tab-campaigns .campaign-execution-name { display: inline-flex; align-items: center; gap: 0.6rem; width: auto; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font: inherit; text-align: left; }
+.campaign-execution-name:hover { text-decoration: underline; }
+.campaign-package-row { cursor: pointer; }
+.campaign-package-row:hover, .campaign-package-row:has([aria-pressed="true"]) { background: var(--color-ground-sunken); }
+.campaign-package-row time { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.campaign-package-row .campaign-package { display: inline; width: auto; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font: inherit; text-align: left; vertical-align: baseline; white-space: nowrap; }
+.campaign-package-row .campaign-package:hover { text-decoration: underline; }
+.campaign-package-commit { font-family: var(--font-mono); }
 .campaign-procedure-table-wrap { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-block: 0.75rem; overflow: hidden; }
 .campaign-draft-frame { position: relative; width: min(56rem, calc(100vw - 4rem)); margin: 2rem; }
 .campaign-draft-frame > article { margin: 0; max-height: calc(100dvh - 5rem); overflow: auto; }
@@ -3990,7 +4024,12 @@ label > .input-with-button {
 #campaign-draft-close:hover { background: var(--color-ground-sunken); }
 #campaign-draft-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 #campaign-draft-identity { overflow-wrap: anywhere; }
-.campaign-finish-tools { position: relative; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-block: 0.5rem 1rem; }
+.campaign-finish-tools { position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: 0.5rem; margin-block: 0.5rem 1rem; }
+.campaign-finish-tools > #campaign-finished-at { width: 25ch; min-width: 0; flex: 0 1 25ch; margin: 0; }
+.campaign-finish-tools > button { width: auto; flex: none; white-space: nowrap; margin: 0; padding-inline: 0.6rem; }
+.campaign-draft-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 0.5rem; }
+.campaign-draft-actions > button { width: auto; min-width: 0; margin: 0; white-space: nowrap; padding-inline: 0.65rem; }
+#campaign-draft-status { font-size: var(--text-xs); color: var(--color-ink-muted); margin-block: 0.5rem; }
 #campaign-finished-picker-panel { position: absolute; top: calc(100% + 0.25rem); left: 0; z-index: 2; width: min(24rem, 100%); padding: 1rem; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-ground-raised); box-shadow: 0 4px 12px #0003; }
 #campaign-finished-picker { max-width: 100%; }
 #campaign-draft-dialog .draft-required-label::after { content: " *"; color: var(--color-fail); font-weight: 700; }
@@ -3999,6 +4038,12 @@ label > .input-with-button {
 #campaign-draft-dialog :is(input, select, textarea)[aria-invalid="true"],
 #campaign-draft-dialog #campaign-overall-result[aria-invalid="true"] { border: 2px solid var(--color-fail); }
 #campaign-draft-fields { min-width: 0; }
+#draft-software-context, #campaign-work-history { margin-block: 0.5rem 1rem; padding: 0.75rem 1rem; border: 0; border-radius: var(--radius-md); background: var(--color-ground-sunken); }
+:is(#draft-software-context, #campaign-work-history) > summary { display: flex; align-items: center; gap: 0.5rem; width: auto; color: var(--color-ink-muted); font-size: var(--text-ui); text-decoration: none; cursor: pointer; }
+:is(#draft-software-context, #campaign-work-history) > summary::before { content: ""; display: inline-block; width: 0.45rem; height: 0.45rem; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); flex: none; }
+:is(#draft-software-context, #campaign-work-history)[open] > summary::before { transform: rotate(45deg); }
+:is(#draft-software-context, #campaign-work-history) > summary::after { display: none; }
+#campaign-draft-form .draft-overridden { background-color: #fff4c2; color: #362c10; }
 #campaign-attempt-tools { margin-block: 1rem; }
 #campaign-procedure-table { width: 100%; table-layout: fixed; margin: 0; font-size: var(--text-ui); color: var(--color-ink); }
 #campaign-procedure-table th, #campaign-procedure-table td { padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2); border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
@@ -4014,8 +4059,7 @@ label > .input-with-button {
 #campaign-procedure-table .campaign-procedure-item:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 #campaign-procedure-inspection { margin-top: 1.5rem; }
 .campaign-package[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
-.campaign-package code, .campaign-metadata dd { overflow-wrap: anywhere; word-break: break-word; }
-.campaign-package code { font-size: var(--text-2xs); }
+.campaign-metadata dd { overflow-wrap: anywhere; word-break: break-word; }
 .campaign-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
 .campaign-metadata { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.4rem 1rem; }
 .campaign-metadata dd { margin: 0; }
@@ -4051,6 +4095,7 @@ label > .input-with-button {
   .campaign-metadata { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
   .campaign-metadata dd { margin-bottom: 0.5rem; }
   #tab-campaigns button { min-height: 44px; }
+  #tab-campaigns .campaign-package-row .campaign-package { min-height: 0; }
   /* The whole row is clickable; keep a touch-sized row without enlarging just
      the title control and throwing off the second column. */
   #campaign-procedure-table td { height: 44px; }

@@ -81,6 +81,55 @@ func TestPackageRoundTrip(t *testing.T) {
 	}
 }
 
+func TestExampleCampaign(t *testing.T) {
+	product := ProductRevision{Repository: "https://github.com/nesono/evidence_store", Branch: "main", Commit: strings.Repeat("a", 40)}
+	files, err := ExamplePackage(product)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, p, err := BuildPackage(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Manifest.FormatVersion != 3 || *p.Manifest.Product != product || len(p.Scenarios) != 15 {
+		t.Fatalf("unexpected example: %+v", p.Manifest)
+	}
+	counts := map[string]int{}
+	for _, s := range p.Scenarios {
+		counts[s.Definition.Defaults.Metadata["scenario_family"].(string)]++
+		if len(s.Assets) != 1 {
+			t.Fatal("missing setup asset")
+		}
+		if len(s.Definition.Parameters) > 0 && len(s.Procedure.Blocks) < 3 {
+			t.Fatal("sweep lacks executable controls")
+		}
+	}
+	if counts["stopping-sweep"] != 6 || counts["detection-sweep"] != 6 || counts["operator-demo"] != 1 {
+		t.Fatalf("bad expansion: %v", counts)
+	}
+	again, _, err := BuildPackage(files)
+	if err != nil || !bytes.Equal(archive, again) {
+		t.Fatal("example is not deterministic")
+	}
+	product.Commit = strings.Repeat("b", 40)
+	files, err = ExamplePackage(product)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, other, err := BuildPackage(files)
+	if err != nil || other.Digest == p.Digest {
+		t.Fatal("different product commit must identify a different package")
+	}
+	files["manifest.yaml"] = bytes.ReplaceAll(files["manifest.yaml"], []byte(product.Commit), []byte("main"))
+	if _, _, err := BuildPackage(files); err == nil {
+		t.Fatal("moving branch accepted as product commit")
+	}
+	files["manifest.yaml"] = []byte(`{"format_version":3,"campaign":{"id":"demo","name":"Demo"},"source":{"repository":"https://example.org/repo"},"scenarios":[]}`)
+	if _, _, err := BuildPackage(files); err == nil || !strings.Contains(err.Error(), "requires product") {
+		t.Fatalf("missing provenance accepted: %v", err)
+	}
+}
+
 func TestDeterministicHeaders(t *testing.T) {
 	data, _, err := BuildPackage(fixtureFiles(t))
 	if err != nil {

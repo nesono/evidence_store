@@ -107,6 +107,28 @@ export function mountDraftManual(
   let generation = 0,
     operations = 0;
   const requests = new Map();
+  let restoredID = null, defaultValues = {}, metadataDefaults = {};
+  const softwareDefaults = new Map();
+  function highlightOverrides() {
+    for (const [name, value] of Object.entries(defaultValues)) {
+      const input = field(name);
+      input.classList.toggle("draft-overridden", input.value !== value);
+    }
+    for (const row of el("draft-custom-fields").querySelectorAll(".draft-custom-row")) {
+      const key = row.querySelector(".draft-custom-key").value.trim();
+      const input = row.querySelector(".draft-custom-value");
+      const original = metadataDefaults[key];
+      const display = typeof original === "string" ? original : JSON.stringify(original);
+      input.classList.toggle("draft-overridden", Object.hasOwn(metadataDefaults, key) ? input.value !== display : input.value !== "");
+    }
+  }
+  function lockDefaults() {
+    const open = el("draft-software-context").open;
+    for (const name of ["repo", "branch", "rcs_ref", "tags"]) field(name).readOnly = !open;
+    for (const name of ["location", "weather_conditions"]) field(name).readOnly = Object.hasOwn(metadataDefaults, name) && !open;
+  }
+  form.addEventListener("input", highlightOverrides);
+  el("draft-software-context").addEventListener("toggle", lockDefaults);
   const canAttach = mayDo(me, "blob:write");
   const canSource = !me?.authenticated || mayDo(me, "source:any");
   field("source").readOnly = !canSource;
@@ -141,10 +163,12 @@ export function mountDraftManual(
     remove.setAttribute("aria-label", "Remove metadata field");
     remove.addEventListener("click", () => {
       row.remove();
+      highlightOverrides();
       changed();
     });
     row.append(keyInput, valueInput, remove);
     el("draft-custom-fields").append(row);
+    highlightOverrides();
   }
 
   function preview() {
@@ -155,7 +179,9 @@ export function mountDraftManual(
       hydrateImages(el("draft-log-preview"));
   }
   function write(input, value) {
+    if (input.readOnly) { status("Open Details to override this default."); return; }
     setValue(input, value);
+    highlightOverrides();
     changed();
   }
   el("draft-log-preview-toggle").addEventListener("click", (event) => {
@@ -213,6 +239,7 @@ export function mountDraftManual(
     }
   }
   el("draft-locate").addEventListener("click", (event) => {
+    if (field("location").readOnly) { status("Open Details to override the default location."); return; }
     const before = field("location").value;
     const target = el("draft-location-status");
     lookup(event.currentTarget, target, "Locating this device…", requestPosition, (fix) => {
@@ -228,6 +255,7 @@ export function mountDraftManual(
     });
   });
   el("draft-weather-lookup").addEventListener("click", (event) => {
+    if (field("weather_conditions").readOnly) { status("Open Details to override the default weather."); return; }
     const location = field("location").value,
       weather = field("weather_conditions").value,
       finished = el("campaign-finished-at").value;
@@ -285,6 +313,7 @@ export function mountDraftManual(
     el("draft-weather-status").textContent = "";
   });
   el("draft-weather-write").addEventListener("click", () => {
+    if (field("weather_conditions").readOnly) { status("Open Details to override the default weather."); return; }
     el("draft-weather-compose").hidden = !el("draft-weather-compose").hidden;
   });
   el("draft-weather-apply").addEventListener("click", () => {
@@ -301,8 +330,22 @@ export function mountDraftManual(
     el("draft-weather-compose").hidden = true;
   });
   return {
-    restore(row, definition) {
+    restore(row, definition, execution = null) {
       ++generation;
+      if (!softwareDefaults.has(row.id)) softwareDefaults.set(row.id, {
+        repo: row.data.repo || "", branch: row.data.branch || "", rcs_ref: row.data.rcs_ref || "",
+      });
+      const software = execution || softwareDefaults.get(row.id);
+      metadataDefaults = definition.defaults.metadata || {};
+      defaultValues = {
+        repo: software.repo, branch: software.branch, rcs_ref: software.rcs_ref,
+        evidence_type: definition.defaults.evidence_type,
+        source: execution && !row.finalized_at ? (me.subject || "anonymous") : row.owner,
+        tags: (definition.defaults.tags || []).join(", "),
+      };
+      for (const name of ["location", "weather_conditions"]) {
+        if (Object.hasOwn(metadataDefaults, name)) defaultValues[name] = metadataDefaults[name];
+      }
       const m = row.data.metadata ?? {
         ...definition.defaults.metadata,
         tags: definition.defaults.tags || [],
@@ -342,12 +385,11 @@ export function mountDraftManual(
       el("draft-custom-fields").replaceChildren();
       for (const [key, value] of Object.entries(m))
         if (!managed.has(key)) customRow(key, value);
-      el("draft-software-context").open =
-        !row.data.repo || !row.data.branch || !row.data.rcs_ref;
-      el("draft-software-summary").textContent =
-        row.data.repo && row.data.rcs_ref
-          ? `Software under test: ${row.data.repo} · ${row.data.branch} · ${row.data.rcs_ref} — expand to override`
-          : "Software under test — set once for this campaign";
+      if (restoredID !== row.id) el("draft-software-context").open = false;
+      restoredID = row.id;
+      el("draft-software-summary").textContent = "Details";
+      lockDefaults();
+      highlightOverrides();
       preview();
     },
     async prepare(data) {

@@ -6,7 +6,7 @@ import { createCampaignOffline } from "./campaignoffline.js";
 import { openStore } from "./outbox.js";
 import { mountCampaignDrafts } from "./campaigndrafts.js";
 import { mountCampaignWorkspace } from "./campaignworkspace.js";
-import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem } from "./campaignview.js";
+import { PROCEDURE_PAGE_SIZE, procedurePage, procedureListHTML, packageInfoHTML, packageListHTML, procedureHTML, uploadProblem, copyPackageCommit } from "./campaignview.js";
 
 export function createCampaignAPI(request = apiFetch) {
   async function checked(path, options) {
@@ -40,15 +40,19 @@ export function showCampaigns() { view?.show(); }
 // Scoped DOM and injected API make request ordering testable without importing
 // app.js or coupling this tab to the Add Result form.
 export function createCampaignView(root, me, api = createCampaignAPI()) {
-  const offline = createCampaignOffline({ me, fallbackBlob: async digest => (await openStore()).getBlob(digest) });
+  const offline = createCampaignOffline({ me, fallbackBlob: async digest => {
+    try { return await (await openStore()).getBlob(digest); }
+    catch { return null; } // Online attachments may already be on the server.
+  } });
   usePreparedStash(offline);
   const drafts = mountCampaignDrafts(root, me, offline);
   const el = id => root.querySelector(`#${id}`);
-  let rows = [], offset = 0, hasMore = false, selected = null;
+  let rows = [], offset = 0, hasMore = false, selected = null, selectedID = null;
   let procedureOffset = 0, selectedProcedure = null;
   let listVersion = 0, detailVersion = 0, loaded = false, loading = false, importing = false;
   const canImport = mayDo(me, "evidence:write") && mayDo(me, "blob:write");
   const canReadBlobs = mayDo(me, "blob:read");
+  el("campaign-package-start").hidden = !mayDo(me, "evidence:write");
   el("campaign-import-form").hidden = !canImport;
   el("campaign-import-permission").hidden = canImport;
 
@@ -59,7 +63,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   }
 
   function paintList() {
-    el("campaign-list").innerHTML = packageListHTML(rows, selected?.id);
+    el("campaign-list").innerHTML = packageListHTML(rows, selectedID);
     el("campaign-prev").disabled = loading || offset === 0;
     el("campaign-next").disabled = loading || !hasMore;
     el("campaign-refresh").disabled = loading;
@@ -125,6 +129,8 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
 
   function displayPackage(row) {
     selected = row;
+    selectedID = row.id;
+    showPackagePane(true);
     el("campaign-detail").hidden = false;
     el("campaign-package-info").innerHTML = packageInfoHTML(row);
     el("campaign-procedure-context").textContent = `Procedures in campaign: ${row.definition.manifest.campaign.name}. Select a procedure to inspect its instructions and fields.`;
@@ -140,6 +146,8 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   async function openPackage(id) {
     const version = ++detailVersion;
     selected = null;
+    selectedID = id;
+    showPackagePane(true);
     el("campaign-detail").hidden = true;
     closeProcedure();
     paintList();
@@ -150,6 +158,24 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     } catch (error) {
       if (version === detailVersion) status("campaign-detail-status", `Could not open package: ${error.message}`, true);
     }
+  }
+
+  function showPackagePane(open) {
+    el("campaign-package-pane").hidden = !open;
+    el("campaign-package-layout").classList.toggle("detail-open", open);
+  }
+
+  function closePackage() {
+    const previous = selectedID;
+    ++detailVersion; // An outstanding detail request must not reopen the pane.
+    selected = null;
+    selectedID = null;
+    closeProcedure();
+    el("campaign-detail").hidden = true;
+    showPackagePane(false);
+    status("campaign-detail-status", "");
+    paintList();
+    [...el("campaign-list").querySelectorAll("[data-campaign-id]")].find(button => button.dataset.campaignId === previous)?.focus();
   }
 
   async function importPackage(event) {
@@ -166,7 +192,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
       const { row, duplicate } = await api.upload(input.files[0]);
       ++detailVersion; // A previous selection response must not replace this import.
       displayPackage(row);
-      status("campaign-import-status", duplicate ? "This exact package was already imported. Opened the existing package." : "Package imported. Select a procedure below to preview it.");
+      status("campaign-import-status", duplicate ? "This campaign package was already imported. Opened the existing package; no execution was started." : "Package imported. No execution was started. Review it below or select Start an execution.");
       input.value = "";
       await loadList(0);
     } catch (error) {
@@ -198,9 +224,13 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
   el("campaign-prev").addEventListener("click", () => loadList(Math.max(0, offset - 25)));
   el("campaign-next").addEventListener("click", () => loadList(offset + 25));
   el("campaign-list").addEventListener("click", event => {
-    const button = event.target.closest("[data-campaign-id]");
+    const copy = event.target.closest("[data-copy-commit]");
+    if (copy) { event.preventDefault(); copyPackageCommit(copy, text => status("campaign-list-status", text)); return; }
+    if (event.target.closest("a")) return;
+    const button = event.target.closest(".campaign-package-row")?.querySelector("[data-campaign-id]");
     if (button) openPackage(button.dataset.campaignId);
   });
+  el("campaign-package-close").addEventListener("click", closePackage);
   el("campaign-import-form").addEventListener("submit", importPackage);
   el("campaign-download").addEventListener("click", downloadPackage);
   el("campaign-procedure-search").addEventListener("input", () => {
@@ -235,5 +265,7 @@ export function createCampaignView(root, me, api = createCampaignAPI()) {
     button?.querySelector("button")?.focus();
   });
   const packages = { show() { if (!loaded && !loading && mayDo(me, "evidence:read")) loadList(); } };
-  return mountCampaignWorkspace(root, me, drafts, packages, offline);
+  const workspace = mountCampaignWorkspace(root, me, drafts, packages, offline);
+  el("campaign-package-start").addEventListener("click", () => { if (selected) workspace.startPackage(selected.id); });
+  return workspace;
 }
