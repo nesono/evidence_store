@@ -1,5 +1,6 @@
-import { API_BASE, apiFetchNoRedirect, esc, mayDo, resultBadge } from "./common.js";
+import { API_BASE, apiFetchNoRedirect, esc, mayDo } from "./common.js";
 import { ONLINE, onConnectionChange } from "./offline.js";
+import { packageListHTML, copyPackageCommit, campaignRepositoryHTML, campaignCommitHTML } from "./campaignview.js";
 
 export function campaignProgress(procedures = []) {
   const passed = procedures.filter(p => p.result === "PASS").length;
@@ -8,6 +9,27 @@ export function campaignProgress(procedures = []) {
   const drafts = procedures.filter(p => p.draft_id).length;
   return { total: procedures.length, passed, exercised, skipped, drafts,
     unfinished: procedures.filter(p => p.draft_id || !p.latest_id).length };
+}
+
+export function procedureState(procedure, local) {
+  if (local?.local_pending || procedure.draft_id) return { kind: "started", label: local?.local_complete ? "Completed locally, waiting to synchronize" : "In progress" };
+  const results = { PASS: ["passed", "Passed"], FAIL: ["failed", "Failed"], SKIPPED: ["skipped", "Skipped"], ERROR: ["error", "Error"] };
+  if (results[procedure.result]) {
+    const [kind, label] = results[procedure.result];
+    return { kind, label };
+  }
+  return { kind: "not-started", label: procedure.latest_id ? "Result expired" : "Not started" };
+}
+
+export function campaignExecutionRows(campaigns) {
+  if (!campaigns.length) return '<tr><td colspan="7" class="empty-state">No matching campaigns.</td></tr>';
+  return campaigns.map(c => {
+    const p = campaignProgress(c.procedures);
+    const state = c.closed_at ? "Finalized" : "In progress";
+    return `<tr class="campaign-execution-row"><td><button type="button" class="campaign-execution-name" data-execution="${esc(c.id)}"><span class="procedure-state procedure-state-${c.closed_at ? "passed" : "started"}" role="img" aria-label="${state}" title="${state}"></span><span>${esc(c.name)}</span></button></td>
+      <td>${campaignRepositoryHTML(c.repo)}</td><td>${esc(c.branch)}</td><td>${campaignCommitHTML(c.rcs_ref)}</td>
+      <td class="campaign-progress-count">${p.exercised}/${p.total}</td><td class="campaign-progress-count">${p.passed}/${p.total}</td><td class="campaign-progress-count">${p.skipped}/${p.total}</td></tr>`;
+  }).join("");
 }
 
 export function fuzzyMatch(text, query) {
@@ -33,6 +55,8 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
   let runVersion = 0, packageVersion = 0, openVersion = 0, loaded = false, switching = false;
   let selectedPackage = null, createRequest = null, creating = false;
   let syncing = false, localView = false;
+  let offlineUnavailable = "";
+  let localAttempts = new Map();
   const message = (id, text) => { el(id).textContent = text; };
   async function request(path, method = "GET", data) {
     const response = await apiFetchNoRedirect(API_BASE + path, {
@@ -49,6 +73,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     for (const view of ["campaign-home", "campaign-new-view", "campaign-workspace", "campaign-package-management"]) el(view).hidden = view !== id;
   }
   function clearWorkspace() {
+    localAttempts = new Map();
     drafts.clear(); selected = null; execution = null; definition = null;
     for (const id of ["campaign-work-title", "campaign-work-context", "campaign-work-progress", "campaign-work-position", "campaign-work-empty"]) message(id, "");
     el("campaign-work-procedures").replaceChildren();
@@ -76,7 +101,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
       }
       if (version !== runVersion) return;
       runOffset = offset;
-      el("campaign-runs").innerHTML = page.campaigns.map(c => `<li><button type="button" class="campaign-run" data-execution="${esc(c.id)}"><strong>${esc(c.name)}</strong><span>${c.closed_at ? "Completed" : "Open"} · ${esc(c.repo)} · ${esc(c.branch)} · ${esc(c.rcs_ref)}</span><small>${progressText(c.procedures)}</small></button></li>`).join("");
+      el("campaign-runs").innerHTML = campaignExecutionRows(page.campaigns);
       message("campaign-runs-status", page.local ? "Prepared campaigns on this device. Progress reflects the last server snapshot." : page.campaigns.length ? "" : "No matching campaigns. Start a new campaign from a package.");
       el("campaign-runs-prev").disabled = offset === 0;
       el("campaign-runs-next").disabled = !page.has_more;
@@ -90,7 +115,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
       const page = await request(`/campaigns?${query}`);
       if (version !== packageVersion) return;
       packageOffset = offset;
-      el("campaign-package-picker").innerHTML = page.campaigns.map(p => `<li><button type="button" class="campaign-run" data-package="${esc(p.id)}"><strong>${esc(p.manifest.campaign.name)}</strong><span>${p.scenario_count} procedures · ${esc(p.manifest.campaign.id)}</span><small>${esc(p.manifest.source.repository)}</small><code>${esc(p.digest)}</code></button></li>`).join("");
+      el("campaign-package-picker").innerHTML = packageListHTML(page.campaigns, selectedPackage, true);
       message("campaign-package-picker-status", page.campaigns.length ? "" : "No matching packages. Use Campaign packages to import one.");
       el("campaign-picker-prev").disabled = offset === 0;
       el("campaign-picker-next").disabled = !page.has_more;
@@ -104,8 +129,12 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     el("campaign-work-close").textContent = execution.closed_at ? "Reopen campaign" : "Finish campaign";
     el("campaign-work-close").hidden = !writable;
     el("campaign-work-close").disabled = switching || localView;
-    el("campaign-work-prepare").disabled = switching || syncing || !execution;
-    el("campaign-work-procedures").innerHTML = execution.procedures.filter(p => fuzzyMatch(`${p.title} ${p.procedure_ref}`, el("campaign-work-search").value)).map(p => `<li><button type="button" class="campaign-run${selected === p.procedure_ref ? " selected" : ""}" data-procedure="${esc(p.procedure_ref)}" aria-pressed="${selected === p.procedure_ref}"><strong>${esc(p.title)}</strong><small>${esc(p.procedure_ref)}</small><span>${p.result ? resultBadge(p.result) : p.latest_id ? "Expired result" : "Not run"}${p.draft_id ? " · In progress" : ""}${p.attempts > 1 ? ` <small>· ${p.attempts} tries</small>` : ""}</span></button></li>`).join("");
+    el("campaign-work-prepare").disabled = switching || syncing || !execution || !!offlineUnavailable;
+    el("campaign-work-sync").disabled = syncing || !!offlineUnavailable;
+    el("campaign-work-procedures").innerHTML = execution.procedures.filter(p => fuzzyMatch(`${p.title} ${p.procedure_ref}`, el("campaign-work-search").value)).map(p => {
+      const state = procedureState(p, localAttempts.get(p.procedure_ref));
+      return `<li><button type="button" class="campaign-run campaign-procedure-run${selected === p.procedure_ref ? " selected" : ""}" data-procedure="${esc(p.procedure_ref)}" aria-pressed="${selected === p.procedure_ref}" title="${esc(p.title)} · ${esc(state.label)}${p.attempts > 1 ? ` · ${p.attempts} attempts` : ""}"><span class="procedure-state procedure-state-${state.kind}" role="img" aria-label="${esc(state.label)}"></span><span class="campaign-procedure-label"><strong>${esc(p.title)}</strong><small>${esc(p.procedure_ref)}</small></span></button></li>`;
+    }).join("");
     const index = execution.procedures.findIndex(p => p.procedure_ref === selected);
     el("campaign-work-prev").disabled = switching || index <= 0;
     el("campaign-work-next").disabled = switching || index >= execution.procedures.length - 1;
@@ -120,7 +149,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     try { current = await request(`/campaign-executions/${id}`); localView = false; }
     catch (error) {
       if (error.status || !await offline.prepared(id)) throw error;
-      localView = true; paint(); return;
+      localView = true; await offlineStatus(); paint(); return;
     }
     if (execution?.id !== id) return;
     execution = current; paint();
@@ -173,13 +202,17 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
   }
   async function offlineStatus() {
     if (!execution) return;
-    const id = execution.id, prepared = await offline.prepared(id);
-    const rows = prepared ? (await Promise.all(execution.procedures.map(p => offline.attempts(id, p.procedure_ref)))).flat() : [];
+    const id = execution.id;
+    offlineUnavailable = await offline.unavailableReason();
+    const prepared = await offline.prepared(id);
+    const rows = prepared ? await offline.attempts(id) : [];
     if (execution?.id !== id) return;
+    localAttempts = new Map(rows.filter(a => a.local_pending).map(a => [a.procedure_ref, a]));
+    paint();
     const waiting = rows.filter(a => a.local_pending).length, blocked = rows.filter(a => a.local_error).length;
-    message("campaign-offline-status", prepared
+    message("campaign-offline-status", offlineUnavailable || (prepared
       ? `${localView ? "Offline snapshot · " : ""}Prepared ${prepared.prepared_at} · ${waiting} attempts waiting to synchronize${blocked ? ` · ${blocked} need conflict review` : ""}.`
-      : "Prepare this campaign while connected to keep its procedures, assets and drafts on this device.");
+      : "Prepare this campaign while connected to keep its procedures, assets and drafts on this device."));
   }
   async function synchronize() {
     if (syncing || switching) return;
@@ -192,7 +225,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
       await refresh();
       await offlineStatus();
     } catch (error) { message("campaign-offline-status", `Synchronization paused: ${error.message}. Local work is retained.`); }
-    finally { syncing = false; el("campaign-work-sync").disabled = false; }
+    finally { syncing = false; el("campaign-work-sync").disabled = false; paint(); }
   }
   el("campaign-work-sync").addEventListener("click", synchronize);
   onConnectionChange(state => { if (state === ONLINE) synchronize(); });
@@ -248,11 +281,15 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
   el("campaign-runs-next").addEventListener("click", () => listRuns(runOffset + 25));
   el("campaign-picker-prev").addEventListener("click", () => listPackages(Math.max(0, packageOffset - 25)));
   el("campaign-picker-next").addEventListener("click", () => listPackages(packageOffset + 25));
-  el("campaign-runs").addEventListener("click", event => { const item = event.target.closest("[data-execution]"); if (item) open(item.dataset.execution); });
-  el("campaign-package-picker").addEventListener("click", async event => {
+  el("campaign-runs").addEventListener("click", event => {
+    const copy = event.target.closest("[data-copy-commit]");
+    if (copy) { event.preventDefault(); copyPackageCommit(copy, text => message("campaign-runs-status", text)); return; }
+    if (event.target.closest("a")) return;
+    const item = event.target.closest(".campaign-execution-row")?.querySelector("[data-execution]");
+    if (item) open(item.dataset.execution);
+  });
+  async function selectPackage(id) {
     if (creating) return;
-    const item = event.target.closest("[data-package]"); if (!item) return;
-    const id = item.dataset.package;
     selectedPackage = id;
     el("campaign-start-form").hidden = true;
     message("campaign-package-picker-status", "Loading selected package…");
@@ -260,12 +297,23 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
       const pkg = await request(`/campaigns/${id}`);
       if (selectedPackage !== id) return;
       el("campaign-start-form").hidden = false;
-      el("campaign-start-form").elements.namedItem("name").value = pkg.definition.manifest.campaign.name;
+      const form = el("campaign-start-form"), manifest = pkg.definition.manifest;
+      form.reset();
+      form.elements.namedItem("name").value = `${new Date().toISOString().slice(0, 10)} ${manifest.campaign.name}`;
+      form.elements.namedItem("repo").value = manifest.product?.repository || "";
+      form.elements.namedItem("branch").value = manifest.product?.branch || "";
+      form.elements.namedItem("rcs_ref").value = manifest.product?.commit || "";
       message("campaign-start-package", pkg.definition.manifest.campaign.name);
       createRequest = null;
       message("campaign-package-picker-status", "");
       el("campaign-start-form").elements.namedItem("name").focus();
     } catch (error) { if (selectedPackage === id) { selectedPackage = null; message("campaign-package-picker-status", error.message); } }
+  }
+  el("campaign-package-picker").addEventListener("click", event => {
+    const copy = event.target.closest("[data-copy-commit]");
+    if (copy) { event.preventDefault(); copyPackageCommit(copy, text => message("campaign-package-picker-status", text)); return; }
+    if (event.target.closest("a")) return;
+    const item = event.target.closest(".campaign-package-row")?.querySelector("[data-package]"); if (item) selectPackage(item.dataset.package);
   });
   el("campaign-start-form").addEventListener("submit", async event => {
     event.preventDefault();
@@ -297,9 +345,13 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     switching = true; el("campaign-work-close").disabled = true;
     try {
       if (!await drafts.saveBeforeLeave()) return;
-      await offline.sync();
-      const waiting = (await Promise.all(execution.procedures.map(p => offline.attempts(execution.id, p.procedure_ref)))).flat().some(a => a.local_pending);
-      if (waiting) throw new Error("Resolve and synchronize local attempts before changing campaign state.");
+      // Reopening must remain possible when closure rejected an offline create.
+      // It changes campaign state only; the user still explicitly retries it.
+      if (closed) {
+        await offline.sync();
+        const waiting = (await offline.attempts(execution.id)).some(a => a.local_pending);
+        if (waiting) throw new Error("Resolve and synchronize local attempts before finishing the campaign.");
+      }
       await refresh();
       if (!!execution.closed_at === closed) {
         message("campaign-work-status", `A colleague already ${closed ? "closed" : "reopened"} this campaign. Refreshed its state.`);
@@ -314,7 +366,12 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     } catch (error) { message("campaign-work-status", `Could not confirm campaign state: ${error.message}. Refresh to check before retrying.`); }
     finally { switching = false; el("campaign-work-close").disabled = false; paint(); }
   });
-  return { show() {
+  return { async startPackage(id) {
+    if (!writable || creating || !await drafts.saveBeforeLeave()) return;
+    drafts.clear(); createRequest = null;
+    screen("campaign-new-view");
+    await selectPackage(id);
+  }, show() {
     if (loaded) return;
     loaded = true;
     const id = new URLSearchParams(location.search).get("campaign_execution");

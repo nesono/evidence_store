@@ -11,7 +11,8 @@ the [Campaigns tab](campaign-browser.md) provides upload and read-only procedure
 previews, plus [online attempt drafts](campaign-attempt-drafts.md) and
 [finalization](campaign-finalization.md), [shared campaigns](campaign-workspace.md),
 and [prepared offline execution](campaign-offline.md). The
-[package format](campaign-package-format.md) documents the implemented v2 subset.
+[package format](campaign-package-format.md) documents the implemented v3 contract,
+including product-build provenance (superseding the external-only proposal below).
 The [first implementation plan](test-campaign-implementation-plan.md) specifies
 the proposed v1 format, field contract, delivery slices, and a worked example.
 These refinements supersede the earlier separate `observations.yaml` proposal.

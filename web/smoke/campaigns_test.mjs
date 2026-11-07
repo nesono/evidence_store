@@ -25,6 +25,7 @@ let httpServer, chrome, page, base;
 let role = "writer", listFails = false, uploads = 0, imageRequests = 0, downloads = 0, delayA = false;
 const attempts=new Map();
 let draftWrites = 0, failFinalResponse = false;
+let blobUploads = 0;
 const executions = new Map();
 let failDraftSave = false;
 function executionView(e) {
@@ -96,6 +97,12 @@ async function handle(req, res) {
         return json(res,a,201);
       }
       if(req.method==="POST") {
+        if (attempts.has(body.id)) return json(res, attempts.get(body.id));
+        if (body.execution_id) {
+          if (executions.get(body.execution_id).closed_at) return json(res, {error:"campaign changed or is closed"}, 409);
+          const prior = [...attempts.values()].find(a => a.execution_id === body.execution_id && a.procedure_ref === body.procedure_ref && !a.finalized_at);
+          if (prior) return json(res, prior);
+        }
         const a={...body,owner:"user:tester",revision:1,created_at:"2026-10-24T09:15:23.123456Z",updated_at:new Date().toISOString(),data:{repo:"",branch:"",rcs_ref:"",notes:"",result:"",answers:{}}};
         if(body.execution_id) {const e=executions.get(body.execution_id);Object.assign(a.data,{repo:e.repo,branch:e.branch,rcs_ref:e.rcs_ref});}
         attempts.set(a.id,a);return json(res,a,201);
@@ -107,8 +114,13 @@ async function handle(req, res) {
       if(a.revision!==body.revision) return json(res,{error:"draft changed"},409);
       a.data=body.data;a.revision++;return json(res,a);
     }
-    if(url.pathname==="/api/v1/campaign-attempts") return json(res,{attempts:[...attempts.values()].filter(a=>(url.searchParams.has("execution_id") ? a.execution_id===url.searchParams.get("execution_id") : a.campaign_id===url.searchParams.get("campaign_id")) && a.procedure_ref===url.searchParams.get("procedure_ref")),has_more:false});
-    return json(res,attempts.get(url.pathname.split("/").pop()));
+    if(url.pathname==="/api/v1/campaign-attempts") {
+      const rows = [...attempts.values()].filter(a=>(url.searchParams.has("execution_id") ? a.execution_id===url.searchParams.get("execution_id") : a.campaign_id===url.searchParams.get("campaign_id")) && a.procedure_ref===url.searchParams.get("procedure_ref")).reverse();
+      const offset = Number(url.searchParams.get("offset"));
+      return json(res,{attempts:rows.slice(offset, offset + 25),has_more:rows.length > offset + 25});
+    }
+    const row = attempts.get(url.pathname.split("/").pop());
+    return row ? json(res, row) : json(res, {error:"attempt or campaign not found"}, 404);
   }
   if (url.pathname === "/api/v1/campaigns/import") {
     const chunks = [];
@@ -130,6 +142,12 @@ async function handle(req, res) {
     return json(res, row);
   }
   if (url.pathname.endsWith("/url")) { imageRequests++; return json(res, { url: `${base}/test-image.png` }); }
+  if (url.pathname === "/api/v1/blobs" && req.method === "POST") {
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const digest = `sha256:${createHash("sha256").update(Buffer.concat(chunks)).digest("hex")}`;
+    blobUploads++;
+    return json(res, { digest, ref: `/api/v1/blobs/${digest}.png` });
+  }
   if (url.pathname.startsWith("/api/v1/blobs/") || url.pathname === "/test-image.png") {
     res.writeHead(200, { "Content-Type": "image/png" });
     return res.end(imageBytes);
@@ -152,7 +170,7 @@ before(async () => {
   chrome = await launchChrome();
   page = await connect(base);
   await page.goto(`${base}/#campaigns`);
-  await page.waitFor(`document.getElementById('campaign-packages')`);
+  await page.waitFor(`document.getElementById('tab-campaigns')?.hidden === false`);
   await page.eval(`document.getElementById('campaign-packages').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 25`);
 });
@@ -169,6 +187,7 @@ async function upload(content) {
 
 test("campaign browser paginates, previews controls/images, filters, and ignores late selections", async () => {
   assert.equal(await page.eval(`document.getElementById('tab-campaigns').hidden`), false);
+  await assertPackageLayout(false);
   await page.eval(`document.getElementById('campaign-next').click()`);
   await page.waitFor(`document.querySelectorAll('.campaign-package').length === 1`);
   await page.eval(`document.getElementById('campaign-prev').click()`);
@@ -178,6 +197,7 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   await page.waitFor(`document.querySelector('#campaign-package-info h3')?.textContent === 'Patrol package-1'`);
   await new Promise(resolve => setTimeout(resolve, 350));
   assert.equal(await page.eval(`document.querySelector('#campaign-package-info h3').textContent`), "Patrol package-1");
+  await assertPackageLayout(true);
   assert.equal(await page.eval(`document.getElementById('campaign-procedure-context').textContent.includes('Patrol package-1')`), true);
   assert.equal(await page.eval(`document.querySelector('.campaign-overview #campaign-procedure-search') === null`), true);
   assert.equal(await page.eval(`document.querySelector('.campaign-procedure-detail #campaign-procedure-search') !== null`), true);
@@ -210,6 +230,16 @@ test("campaign browser paginates, previews controls/images, filters, and ignores
   await page.waitFor(`!document.getElementById('campaign-download').disabled`);
   assert.equal(downloads, 1, "download must use the API rather than an unauthenticated link");
   assert.deepEqual(page.problems, []);
+});
+
+test("closing package details restores the full list and ignores an outstanding selection", async () => {
+  await page.eval(`document.getElementById('campaign-package-close').click()`);
+  await assertPackageLayout(false);
+  assert.equal(await page.eval(`document.activeElement.dataset.campaignId`), rows[1].id);
+  await page.eval(`document.querySelector('#campaign-list .campaign-package-row time').click(); document.getElementById('campaign-package-close').click()`);
+  await new Promise(resolve => setTimeout(resolve, 350));
+  await assertPackageLayout(false);
+  assert.equal(await page.eval(`document.querySelector('#campaign-list [aria-pressed="true"]') === null`), true);
 });
 
 test("uploads report validation failures and duplicates, and list errors allow retry", async () => {
@@ -320,7 +350,7 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   assert.equal(await page.eval(`getComputedStyle(document.getElementById('campaign-draft-form').elements.rcs_ref).borderTopWidth`),"2px");
   assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').open`),true);
   await page.eval(`(() => {const f=document.getElementById('campaign-draft-form');f.elements.branch.value='main';f.elements.rcs_ref.value='deployed-build';f.dispatchEvent(new Event('input'));document.getElementById('campaign-draft-finalize').click();})()`);
-  assert.match(await page.eval(`document.getElementById('campaign-finalize-status').textContent`), /overall Result/);
+  assert.match(await page.eval(`document.getElementById('campaign-draft-status').textContent`), /overall Result/);
   assert.equal(await page.eval(`document.getElementById('campaign-overall-result').getAttribute('aria-invalid')`),"true");
   await page.eval(`document.querySelector('#campaign-draft-form [name=result][value=FAIL]').click()`);
   assert.equal(await page.eval(`document.getElementById('campaign-overall-result').hasAttribute('aria-invalid')`),false);
@@ -336,7 +366,7 @@ test("attempts save typed answers, survive reload, and keep unsaved edits on con
   const writesBefore = draftWrites;
   failFinalResponse = true;
   await page.eval(`document.getElementById('campaign-draft-finalize').click()`);
-  await page.waitFor(`document.getElementById('campaign-finalize-status').textContent.includes('response interrupted')`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('response interrupted')`);
   assert.equal(await page.eval(`document.getElementById('campaign-draft-dialog').open`),true);
   assert.equal(draftWrites,writesBefore+1,"current edits must be saved automatically");
   assert.equal([...attempts.values()][0].data.rcs_ref,"deployed-build");
@@ -459,13 +489,122 @@ test("read-only collaborators can inspect shared attempt history", async () => {
   assert.deepEqual(page.problems, []);
 });
 
+test("import offers an explicit execution start with product commit defaults, including duplicates", async () => {
+  role = "writer";
+  rows[0].definition.manifest.product = {repository: "https://example.org/product", branch: "release", commit: "a".repeat(40)};
+  const count = executions.size;
+  await page.goto(`${base}/#campaigns`);
+  await page.eval(`document.getElementById('campaign-new').click()`);
+  await page.waitFor(`document.querySelectorAll('#campaign-package-picker .campaign-package-row').length === 25`);
+  const pickerRows = await page.eval(`[...document.querySelectorAll('#campaign-package-picker .campaign-package-row')].map(row => [...row.children].map(el => el.textContent))`);
+  await page.eval(`document.getElementById('campaign-new-back').click()`);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
+  await page.waitFor(`document.querySelectorAll('#campaign-list .campaign-package').length === 25`);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll('#campaign-list .campaign-package-row')].map(row => [...row.children].map(el => el.textContent))`), pickerRows);
+  await upload("good");
+  await page.waitFor(`document.getElementById('campaign-import-status').textContent.includes('already imported')`);
+  assert.equal(executions.size, count, "import must not start an execution");
+  const listing = await page.eval(`(() => {
+    const row = document.querySelector('#campaign-list .campaign-package-row');
+    const children = [...row.children];
+    return { text: children.map(el => el.textContent), repo: row.querySelector('a').href,
+      tops: children.map(el => el.getBoundingClientRect().top), nowrap: getComputedStyle(children[0]).whiteSpace };
+  })()`);
+  assert.deepEqual(listing.text, ['2026-10-25 10:00', 'Patrol package-0', '1', 'product', 'aaaaaaaa']);
+  assert.equal(listing.repo, 'https://example.org/product');
+  assert.equal(listing.nowrap, 'nowrap');
+  assert.ok(Math.max(...listing.tops) - Math.min(...listing.tops) < 4, 'all five fields share one line');
+  for (const id of ['campaign-list', 'campaign-package-picker']) {
+    const table = await page.eval(`(() => {
+      const body = document.getElementById('${id}');
+      const table = body.closest('table');
+      return { headers: [...table.querySelectorAll('th')].map(h => h.textContent),
+        columns: [...table.querySelectorAll('th')].map(h => h.getBoundingClientRect().left),
+        rows: [...body.querySelectorAll('tr')].slice(0, 3).map(row => [...row.cells].map(cell => cell.getBoundingClientRect().left)) };
+    })()`);
+    assert.deepEqual(table.headers, ['Added', 'Name', 'Procedures', 'Repository', 'Product revision']);
+    for (const cells of table.rows) assert.deepEqual(cells, table.columns, 'each cell aligns with its column header');
+  }
+  await page.eval(`navigator.clipboard.writeText = async value => { window.copiedPackageCommit = value; }; document.querySelector('#campaign-list [data-copy-commit]').click()`);
+  assert.equal(await page.eval(`window.copiedPackageCommit`), 'a'.repeat(40));
+  assert.equal(await page.eval(`document.getElementById('campaign-new-view').hidden`), true);
+  await page.eval(`document.getElementById('campaign-package-start').click()`);
+  await page.waitFor(`!document.getElementById('campaign-start-form').hidden`);
+  assert.deepEqual(await page.eval(`['repo','branch','rcs_ref'].map(n => document.getElementById('campaign-start-form').elements[n].value)`),
+    ["https://example.org/product", "release", "a".repeat(40)]);
+  assert.equal(executions.size, count, "offering start must not submit it");
+  await page.eval(`document.getElementById('campaign-start').click()`);
+  await page.waitFor(`!document.getElementById('campaign-workspace').hidden && document.getElementById('campaign-work-context').textContent.includes('${"a".repeat(40)}')`);
+  assert.equal(executions.size, count + 1);
+  assert.deepEqual(page.problems, []);
+});
+
+test("Details deliberately unlocks defaults and keeps overridden fields highlighted after saving", async () => {
+  const e = [...executions.values()].at(-1);
+  await page.eval(`document.getElementById('campaign-work-back').click()`);
+  await page.waitFor(`document.querySelector('#campaign-runs [data-execution="${e.id}"]')`);
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  const filterBottoms = await page.eval(`['campaign-search','campaign-state','campaign-runs-refresh'].map(id => document.getElementById(id).getBoundingClientRect().bottom)`);
+  assert.ok(Math.max(...filterBottoms) - Math.min(...filterBottoms) < 2, `campaign filters and Refresh share a baseline: ${filterBottoms}`);
+  const table = await page.eval(`(() => {
+    const row = document.querySelector('#campaign-runs [data-execution="${e.id}"]').closest('tr');
+    return { headers: [...row.closest('table').querySelectorAll('th')].map(el => el.textContent),
+      cells: [...row.cells].map(el => el.textContent.trim()), href: row.cells[1].querySelector('a').href,
+      state: row.querySelector('.procedure-state').getAttribute('aria-label') };
+  })()`);
+  assert.deepEqual(table.headers, ['Name','Repo','Branch','Commit','Exercised','Passed','Skipped']);
+  assert.deepEqual(table.cells.slice(1), ['product','release','aaaaaaaa','0/13','0/13','0/13']);
+  assert.equal(table.href, 'https://example.org/product');
+  assert.equal(table.state, 'In progress');
+  await page.eval(`document.querySelector('#campaign-runs [data-execution="${e.id}"]').closest('tr').querySelector('[data-copy-commit]').click()`);
+  assert.equal(await page.eval(`window.copiedPackageCommit`), e.rcs_ref);
+  assert.equal(await page.eval(`document.getElementById('campaign-home').hidden`), false);
+  await page.eval(`document.querySelector('#campaign-runs [data-execution="${e.id}"]').click()`);
+  await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+  const layout = await page.eval(`(() => {
+    const actions = [...document.querySelectorAll('.campaign-draft-actions > button')];
+    const time = [...document.querySelectorAll('.campaign-finish-tools > input, .campaign-finish-tools > button')];
+    const procedure = document.querySelector('#campaign-work-procedures .campaign-procedure-run');
+    return { labels: actions.map(b => b.textContent), actionTops: actions.map(b => b.getBoundingClientRect().top),
+      timeTops: time.map(b => b.getBoundingClientRect().top),
+      statusTop: document.getElementById('campaign-draft-status').getBoundingClientRect().top,
+      actionBottom: actions[0].getBoundingClientRect().bottom,
+      lines: [...procedure.querySelectorAll('strong,small')].map(el => ({align:getComputedStyle(el).textAlign, nowrap:getComputedStyle(el).whiteSpace})),
+      state: procedure.querySelector('.procedure-state').getAttribute('aria-label') };
+  })()`);
+  assert.deepEqual(layout.labels, ['Save draft', 'Reload draft', 'Finalize']);
+  assert.ok(Math.max(...layout.actionTops) - Math.min(...layout.actionTops) < 2);
+  assert.ok(Math.max(...layout.timeTops) - Math.min(...layout.timeTops) < 5);
+  assert.ok(layout.statusTop >= layout.actionBottom);
+  assert.deepEqual(layout.lines, [{align:'left',nowrap:'nowrap'},{align:'left',nowrap:'nowrap'}]);
+  assert.equal(layout.state, 'In progress');
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-fields').firstElementChild.id`), 'draft-software-context');
+  assert.equal(await page.eval(`document.getElementById('draft-software-context').nextElementSibling.id`), 'draft-environment');
+  assert.equal(await page.eval(`document.getElementById('draft-software-context').open`), false);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.rcs_ref.readOnly`), true);
+  await page.eval(`document.getElementById('draft-software-summary').click()`);
+  await page.waitFor(`!document.getElementById('campaign-draft-form').elements.rcs_ref.readOnly`);
+  await page.eval(`(() => { const input = document.getElementById('campaign-draft-form').elements.rcs_ref; input.value = 'deliberate-override'; input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.rcs_ref.classList.contains('draft-overridden')`), true);
+  await page.eval(`document.getElementById('campaign-draft-save').click()`);
+  await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Saved on server')`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.rcs_ref.classList.contains('draft-overridden')`), true);
+  assert.notEqual(e.rcs_ref, 'deliberate-override', 'override must not modify the shared execution');
+  await page.eval(`(() => { const input = document.getElementById('campaign-draft-form').elements.rcs_ref; input.value = '${e.rcs_ref}'; input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  assert.equal(await page.eval(`document.getElementById('campaign-draft-form').elements.rcs_ref.classList.contains('draft-overridden')`), false);
+  await page.eval(`document.getElementById('campaign-draft-save').click()`);
+  await page.waitFor(`!document.getElementById('campaign-draft-save').disabled`);
+});
+
 test("prepared campaign survives offline reload, captures attachments and synchronizes completed results", async () => {
   role = "writer";
   const e = { id: crypto.randomUUID(), package_id: rows[0].id, name: "Offline proving ground", repo: "vehicle", branch: "main", rcs_ref: "build-offline", revision: 1 };
   executions.set(e.id, e);
   const url = `${base}/?campaign_execution=${e.id}#campaigns`;
   await page.goto(url);
-  await page.waitFor(`navigator.serviceWorker.controller && document.getElementById('campaign-work-title').textContent === 'Offline proving ground'`);
+  await page.waitFor(`navigator.serviceWorker.controller && document.getElementById('campaign-work-title').textContent === 'Offline proving ground' && !document.getElementById('campaign-work-prepare').disabled`);
   await page.eval(`document.getElementById('campaign-work-prepare').click()`);
   await page.waitFor(`document.getElementById('campaign-offline-status').textContent.startsWith('Prepared ')`);
   await page.offline(true);
@@ -527,6 +666,164 @@ test("prepared campaign survives offline reload, captures attachments and synchr
   assert.equal(shared.data.notes, 'Local competing notes');
   assert.deepEqual(page.problems, []);
 });
+
+test("failed offline creations can be retried after reopening or archived from the conflict panel", async () => {
+  for (const action of ["retry", "archive"]) {
+    const e = { id: crypto.randomUUID(), package_id: rows[0].id, name: `Recover ${action}`, repo: "vehicle", branch: "main", rcs_ref: "build", revision: 1 };
+    executions.set(e.id, e);
+    await page.goto(`${base}/?campaign_execution=${e.id}#campaigns`);
+    await page.waitFor(`document.getElementById('campaign-work-title').textContent === '${e.name}' && !document.getElementById('campaign-work-prepare').disabled`);
+    await page.eval(`document.getElementById('campaign-work-prepare').click()`);
+    await page.waitFor(`document.getElementById('campaign-offline-status').textContent.startsWith('Prepared ')`);
+    await page.offline(true);
+    await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+    await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+    await page.eval(`(() => { const input = document.getElementById('campaign-draft-form').elements.notes; input.value = 'Keep these offline answers'; input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+    await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Saved on this device')`);
+    const id = await page.eval(`document.querySelector('#campaign-attempt-list [data-attempt-id]').dataset.attemptId`);
+    e.closed_at = new Date().toISOString(); e.revision++;
+    await page.offline(false);
+    await page.eval(`document.getElementById('campaign-work-sync').click()`);
+    await page.waitFor(`!document.getElementById('campaign-draft-conflict').hidden && document.getElementById('campaign-work-close').textContent === 'Reopen campaign'`);
+    assert.equal(await page.eval(`document.getElementById('campaign-conflict-local').hidden`), true);
+    assert.equal(await page.eval(`document.getElementById('campaign-conflict-${action}').hidden`), false);
+    assert.equal(attempts.has(id), false);
+    if (action === "retry") {
+      await page.eval(`document.getElementById('campaign-conflict-retry').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('still closed')`);
+      await page.eval(`document.getElementById('campaign-work-close').click()`);
+      await page.waitFor(`document.getElementById('campaign-work-close').textContent === 'Finish campaign'`);
+      await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-dialog').open && !document.getElementById('campaign-conflict-retry').hidden`);
+      await page.eval(`document.getElementById('campaign-conflict-retry').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-conflict').hidden && document.getElementById('campaign-draft-status').textContent.includes('Saved on server')`);
+      assert.equal(attempts.get(id).data.notes, "Keep these offline answers");
+    } else {
+      await page.eval(`window.confirm = () => true; document.getElementById('campaign-conflict-archive').click()`);
+      await page.waitFor(`!document.getElementById('campaign-draft-dialog').open && document.getElementById('campaign-offline-status').textContent.includes('0 attempts waiting')`);
+      const archived = await page.eval(`(async () => { const {campaignStore} = await import('./campaignoffline.js'); return (await campaignStore('user:tester').all('archive')).find(e => e.row.id === '${id}'); })()`);
+      assert.equal(archived.operations.at(-1).data.notes, "Keep these offline answers");
+      assert.equal(attempts.has(id), false);
+    }
+  }
+  assert.deepEqual(page.problems, []);
+});
+
+test("prepared campaigns expose full paginated history online and label the offline subset", async () => {
+  const e = { id: crypto.randomUUID(), package_id: rows[0].id, name: "Historical attempts", repo: "vehicle", branch: "main", rcs_ref: "build", revision: 1 };
+  executions.set(e.id, e);
+  for (let i = 0; i < 30; i++) {
+    const id = crypto.randomUUID();
+    attempts.set(id, { id, execution_id: e.id, campaign_id: e.package_id, procedure_ref: "patrol/display", owner: "user:tester", revision: 2,
+      created_at: "2026-11-04T10:00:00Z", updated_at: "2026-11-04T10:00:00Z", finalized_at: "2026-11-04T10:00:00Z", evidence_id: `evidence-${i}`,
+      data: { repo: e.repo, branch: e.branch, rcs_ref: e.rcs_ref, answers: {}, notes: `Historical attempt ${i}`, result: "PASS" } });
+  }
+  const url = `${base}/?campaign_execution=${e.id}#campaigns`;
+  await page.goto(url);
+  await page.waitFor(`document.getElementById('campaign-work-title').textContent === '${e.name}' && !document.getElementById('campaign-work-prepare').disabled`);
+  await page.eval(`document.getElementById('campaign-work-prepare').click()`);
+  await page.waitFor(`document.getElementById('campaign-offline-status').textContent.startsWith('Prepared ')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.querySelectorAll('#campaign-attempt-list [data-attempt-id]').length === 25`);
+  await page.eval(`document.getElementById('campaign-attempt-next').click()`);
+  await page.waitFor(`document.querySelectorAll('#campaign-attempt-list [data-attempt-id]').length === 5`);
+  assert.equal(await page.eval(`document.getElementById('campaign-attempt-next').disabled`), true);
+  await page.offline(true);
+  await page.goto(url);
+  await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]')`);
+  await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+  await page.waitFor(`document.getElementById('campaign-attempt-list-status').textContent.startsWith('Offline:')`);
+  assert.equal(await page.eval(`document.querySelectorAll('#campaign-attempt-list [data-attempt-id]').length`), 1);
+  await page.offline(false);
+  assert.deepEqual(page.problems, []);
+});
+
+test("IndexedDB enumeration bounds the query before reading media or another principal's data", async () => {
+  const result = await page.eval(`(async () => {
+    const {campaignStore} = await import('./campaignoffline.js');
+    const scope = crypto.randomUUID(), own = campaignStore(scope), other = campaignStore(scope + '-other');
+    await own.put('attempt', 'one', {id:'one'});
+    await own.put('blob', 'large', {bytes:new Uint8Array(1024 * 1024).buffer});
+    await other.put('attempt', 'two', {id:'two'});
+    const original = IDBObjectStore.prototype.getAll;
+    let bounded = false;
+    IDBObjectStore.prototype.getAll = function(range, ...args) {
+      // Reconnection may also be syncing the application's own principal.
+      if (!range || range.lower?.[0] === scope) {
+        bounded = range instanceof IDBKeyRange && range.includes([scope, 'attempt', 'one'])
+          && !range.includes([scope, 'blob', 'large']) && !range.includes([scope + '-other', 'attempt', 'two']);
+        if (!bounded) throw new Error('Unbounded campaign query');
+      }
+      return original.call(this, range, ...args);
+    };
+    try { return {rows:await own.all('attempt'), bounded}; }
+    finally {
+      IDBObjectStore.prototype.getAll = original;
+      await own.remove('attempt', 'one'); await own.remove('blob', 'large'); await other.remove('attempt', 'two');
+    }
+  })()`);
+  assert.deepEqual(result, { rows: [{ id: "one" }], bounded: true });
+});
+
+test("online capture, attachments and campaign lifecycle work without offline browser capabilities", async () => {
+  const overrides = [
+    `Object.defineProperty(navigator, 'locks', {value:undefined});`,
+    `Object.defineProperty(window, 'indexedDB', {value:undefined});`,
+    `indexedDB.open = () => { throw new DOMException('Storage denied', 'SecurityError'); };`,
+  ];
+  for (const source of overrides) {
+    const { identifier } = await page.send("Page.addScriptToEvaluateOnNewDocument", { source });
+    try {
+      const e = { id: crypto.randomUUID(), package_id: rows[0].id, name: "Online only", repo: "vehicle", branch: "main", rcs_ref: "build", revision: 1 };
+      executions.set(e.id, e);
+      await page.goto(`${base}/?campaign_execution=${e.id}#campaigns`);
+      await page.waitFor(`document.querySelector('#campaign-work-procedures [data-procedure]') && document.getElementById('campaign-work-prepare').disabled`);
+      await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-dialog').open`);
+      const before = blobUploads;
+      await page.eval(`(() => {
+        const form = document.getElementById('campaign-draft-form');
+        form.elements.notes.value = 'Online-only notes';
+        form.querySelector('[data-answer="status"]').value = 'PASS';
+        form.querySelector('[data-answer="operator"]').value = 'Online tester';
+        form.querySelector('[name="result"][value="PASS"]').checked = true;
+        form.dispatchEvent(new Event('input', {bubbles:true}));
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([Uint8Array.from(atob('${imageBytes.toString("base64")}'), c => c.charCodeAt(0))], 'online.png', {type:'image/png'}));
+        const input = document.getElementById('draft-photo-input'); input.files = transfer.files; input.dispatchEvent(new Event('change'));
+      })()`);
+      await page.waitFor(`document.getElementById('campaign-draft-form').elements.observations.value.includes('/api/v1/blobs/')`);
+      assert.ok(blobUploads > before);
+      await page.eval(`document.getElementById('campaign-draft-save').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Saved on server') && !document.getElementById('campaign-draft-save').disabled`);
+      await page.eval(`document.getElementById('campaign-finished-now').click(); document.getElementById('campaign-draft-finalize').click()`);
+      await page.waitFor(`document.getElementById('campaign-draft-status').textContent.includes('Finalized as immutable evidence') && !document.getElementById('campaign-work-close').disabled`);
+      const attempt = [...attempts.values()].find(a => a.execution_id === e.id);
+      assert.equal(attempt.data.notes, "Online-only notes");
+      assert.ok(attempt.evidence_id);
+      await page.eval(`window.confirm = () => true; document.getElementById('campaign-work-close').click()`);
+      await page.waitFor(`document.getElementById('campaign-work-close').textContent === 'Reopen campaign'`);
+      await page.eval(`document.getElementById('campaign-work-close').click()`);
+      await page.waitFor(`document.getElementById('campaign-work-close').textContent === 'Finish campaign'`);
+    } finally { await page.send("Page.removeScriptToEvaluateOnNewDocument", { identifier }); }
+  }
+  assert.deepEqual(page.problems, []);
+});
+
+async function assertPackageLayout(open) {
+  const layout = await page.eval(`(() => {
+    const root = document.getElementById('campaign-package-layout');
+    const list = root.querySelector('aside').getBoundingClientRect();
+    const pane = document.getElementById('campaign-package-pane');
+    const rect = pane.getBoundingClientRect();
+    return {width:root.getBoundingClientRect().width, listWidth:list.width, listRight:list.right,
+      paneLeft:rect.left, hidden:pane.hidden, split:root.classList.contains('detail-open'), screen:innerWidth};
+  })()`);
+  assert.equal(layout.hidden, !open);
+  assert.equal(layout.split, open);
+  if (!open || layout.screen < 1024) assert.ok(Math.abs(layout.width-layout.listWidth) < 2, 'plain listing uses full available width');
+  else assert.ok(layout.paneLeft > layout.listRight && layout.listWidth < layout.width, 'selected package details appear to the right of the list');
+}
 
 async function assertTableGeometry(phone) {
   const geometry = await page.eval(`(() => {

@@ -32,22 +32,48 @@ export function procedureListHTML(rows, selectedID) {
   </tr>`).join("");
 }
 
-export function packageListHTML(rows, selectedID) {
-  if (!rows.length) return '<li class="empty-state">No campaign packages imported yet.</li>';
-  return rows.map(row => `<li><button type="button" class="secondary outline campaign-package" data-campaign-id="${esc(row.id)}" aria-pressed="${row.id === selectedID}">
-    <strong>${esc(row.manifest.campaign.name)}</strong>
-    <span>Campaign key: ${esc(row.manifest.campaign.id)} · ${row.scenario_count} procedures</span>
-    <small>Imported ${esc(formatTime(row.imported_at))}</small>
-    <code>${esc(row.digest)}</code>
-  </button></li>`).join("");
+export function campaignRepositoryHTML(repo = "") {
+  const name = repo.split("/").filter(Boolean).at(-1)?.replace(/\.git$/, "") || "—";
+  try {
+    const url = new URL(repo);
+    if (url.protocol === "https:" && !url.username && !url.password)
+      return `<a href="${esc(url.href)}" target="_blank" rel="noopener noreferrer" title="${esc(repo)}">${esc(name)}</a>`;
+  } catch { /* Free-text repository identities do not identify a host. */ }
+  return `<span title="${esc(repo)}">${esc(name)}</span>`;
+}
+
+export function campaignCommitHTML(commit = "") {
+  return commit ? `<a href="#" class="campaign-package-commit" data-copy-commit="${esc(commit)}" title="Copy full commit: ${esc(commit)}" aria-label="Copy full product commit ${esc(commit)}">${esc(commit.slice(0, 8))}</a>` : '<span title="Product revision not recorded">—</span>';
+}
+
+export function packageListHTML(rows, selectedID, picker = false) {
+  if (!rows.length) return '<tr><td colspan="5" class="empty-state">No campaign packages imported yet.</td></tr>';
+  return rows.map(row => {
+    const repo = row.manifest.product?.repository || row.manifest.source?.repository || "";
+    const commit = row.manifest.product?.commit || "";
+    return `<tr class="campaign-package-row"><td><time datetime="${esc(row.imported_at)}" title="Added (UTC)">${esc(formatTime(row.imported_at).slice(0, 16))}</time></td>
+      <td><button type="button" class="campaign-package" ${picker ? "data-package" : "data-campaign-id"}="${esc(row.id)}" aria-pressed="${row.id === selectedID}">${esc(row.manifest.campaign.name)}</button></td>
+      <td class="campaign-package-count">${esc(String(row.scenario_count ?? row.manifest.scenarios?.length ?? 0))}</td>
+      <td>${campaignRepositoryHTML(repo)}</td>
+      <td>${campaignCommitHTML(commit)}</td>
+    </tr>`;
+  }).join("");
+}
+
+export async function copyPackageCommit(link, report) {
+  try {
+    await navigator.clipboard.writeText(link.dataset.copyCommit);
+    report("Product commit copied to clipboard.");
+  } catch { report("Could not copy the product commit. Clipboard access requires HTTPS or localhost and browser permission."); }
 }
 
 export function packageInfoHTML(row) {
   const m = row.definition.manifest;
   return `<h3>${esc(m.campaign.name)}</h3>
-    <p class="campaign-scope">${row.definition.scenarios.length} procedures in this campaign. Planning information below applies to the whole package.</p>
+    <p class="campaign-scope">${row.definition.scenarios.length} procedures in this package. Importing does not start an execution.</p>
     <dl class="campaign-metadata">
       <dt>Campaign key</dt><dd>${esc(m.campaign.id)}</dd>
+      ${m.product ? `<dt>Product repository</dt><dd>${esc(m.product.repository)}</dd><dt>Build branch</dt><dd>${esc(m.product.branch)}</dd><dt>Product commit</dt><dd><code>${esc(m.product.commit)}</code></dd>` : '<dt>Product commit</dt><dd>Not recorded in this legacy package. Set the deployed revision when starting an execution.</dd>'}
       ${m.campaign.planned_location ? `<dt>Planned location</dt><dd>${esc(m.campaign.planned_location)}</dd>` : ""}
       ${m.campaign.planned_start ? `<dt>Planned start</dt><dd>${esc(m.campaign.planned_start)}</dd>` : ""}
       ${m.campaign.planned_end ? `<dt>Planned end</dt><dd>${esc(m.campaign.planned_end)}</dd>` : ""}

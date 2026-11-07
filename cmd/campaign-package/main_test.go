@@ -69,3 +69,26 @@ func TestFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestExampleCommand(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "feature-tour.tar.gz")
+	args := []string{"example", "--repository", "https://example.org/product", "--branch", "main", "--commit", strings.Repeat("a", 40), "--output", file}
+	var output, diagnostics bytes.Buffer
+	if code := run(args, nil, &output, &diagnostics); code != 0 {
+		t.Fatal(diagnostics.String())
+	}
+	if err := validate(file, nil, &output); err != nil {
+		t.Fatal(err)
+	}
+	var p campaign.Package
+	if err := json.Unmarshal(output.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Scenarios) != 15 || p.Manifest.Product.Commit != strings.Repeat("a", 40) {
+		t.Fatal("missing example cases or commit")
+	}
+	output.Reset()
+	if code := run([]string{"example"}, nil, &output, &diagnostics); code == 0 || output.Len() != 0 {
+		t.Fatal("example must require product provenance")
+	}
+}

@@ -13,8 +13,9 @@ Implemented: the [procedure validator](campaign-procedure-validation.md) and
 [shared campaign workspace](campaign-workspace.md). Shared online executions,
 close-to-skip, reopening and sequential navigation are implemented, along with
 [prepared offline execution](campaign-offline.md). The package format document is the implemented
-v2 contract; following [#200](https://github.com/nesono/evidence_store/issues/200),
-product revision associations live outside the content-addressed archive.
+v3 contract with product-build commit provenance and explicit execution defaults.
+This supersedes the external-only revision association discussed below. The
+[testing campaign](testing-campaign.md) demonstrates checks and expanded sweeps.
 
 ## Recommendation
 

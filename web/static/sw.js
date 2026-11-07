@@ -47,7 +47,23 @@
 // v38: shared campaign execution workspace.
 // v39: spaced, link-style campaign package back navigation.
 // v40: prepared offline campaigns and durable attempt synchronization.
-const VERSION = "v40";
+// v41: product-built packages and explicit execution start after import.
+// v42: single-line package listings with repository and copy-commit links.
+// v43: full-width package list with selection-driven detail pane.
+// v44: aligned package tables with column headers in both package views.
+// v45: procedure counts in package tables.
+// v46: one campaign workspace toolbar with explicit Back navigation.
+// v47: separate attempt defaults behind a concise Details disclosure.
+// v48: location/weather first, deliberate attempt overrides in Details.
+// v49: compact attempt actions and two-line procedure status icons.
+// v50: right-aligned attempt actions with Finalize as the primary action.
+// v51: subdued Details disclosure above location and weather.
+// v52: campaign execution table with progress counts and lifecycle circles.
+// v53: align campaign filter controls and Refresh.
+// v54: bordered attempt Details disclosure.
+// v55: matching shaded disclosure boxes with chevrons.
+// v56: recover failed offline creations and preserve online campaign history.
+const VERSION = "v56";
 const SHELL_CACHE = `evidence-shell-${VERSION}`;
 
 // Everything the page needs before it can render anything at all. Adding a
@@ -58,7 +74,7 @@ const SHELL = [
   "/",
   "/index.html",
   // Queried to match index.html, which says why.
-  "/app.css?v=40",
+  "/app.css?v=56",
   "/app.js",
   "/blobref.js",
   "/access.js",

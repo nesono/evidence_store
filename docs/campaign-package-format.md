@@ -2,13 +2,22 @@
 
 The package builder and validator extend the
 [procedure validator](campaign-procedure-validation.md) with an offline,
-deterministic archive format. This is the implemented v2 authoring contract.
-[Server import and CAS storage](campaign-import.md) are available. Execution
-screens follow separately.
+deterministic archive format. V3 is the product-built authoring contract; v1/v2
+remain readable. [Import](campaign-import.md), [executions](campaign-workspace.md)
+and [offline capture](campaign-offline.md) are available.
 
 ## Build and inspect a package
 
-From the repository root:
+For realistic manual testing, use the [Vehicle feature tour](testing-campaign.md):
+
+```sh
+go run ./cmd/campaign-package example \
+  --repository https://github.com/nesono/evidence_store \
+  --branch "$(git branch --show-current)" --commit "$(git rev-parse HEAD)" \
+  --output /tmp/vehicle-feature-tour.tar.gz
+```
+
+To build the minimal legacy parser fixture instead:
 
 ```sh
 go run ./cmd/campaign-package build internal/campaign/testdata/package > /tmp/campaign.tar.gz
@@ -38,12 +47,16 @@ run directory differs from the invoking shell's directory.
 `manifest.yaml` is at the archive root:
 
 ```yaml
-format_version: 2
+format_version: 3
 campaign:
   id: equipment-patrol
   name: Equipment patrol
 source:
   repository: https://example.org/team/scenarios
+product:
+  repository: https://example.org/team/product
+  branch: main
+  commit: "0123456789abcdef0123456789abcdef01234567"
 scenarios:
   - procedure_ref: patrol/display
     path: scenarios/display/scenario.yaml
@@ -78,21 +91,24 @@ references in manifest entries. `format_version` still describes the original
 archive. Migration 17 applies the same normalization to existing stored definitions;
 it does not change their original CAS bytes, digest, UUID, or import attribution.
 Reimporting an existing v1 archive remains idempotent. Building v1 source inputs
-is retained for compatibility; new examples and authoring use v2. Older server
-versions reject v2, so upgrade the server before uploading newly authored packages.
+is retained for compatibility; new product-built examples use v3. Upgrade the
+server before uploading v3 packages. Legacy packages have no build commit and
+require explicit execution context.
 
-### Product revision association lives outside the archive
+### Product build provenance and execution defaults
 
-Following [#200](https://github.com/nesono/evidence_store/issues/200),
-`source.revision` is rejected. The build/release system records an association
-between the actual product revision and the generated package digest separately.
-Two product revisions can then refer to byte-identical scenario packages.
-Importer-side persistence of that association is a later implementation slice.
+V3 requires `product.repository` (HTTPS URL), `product.branch` and `product.commit`
+(full lowercase 40- or 64-character Git hash). `source.repository` still identifies
+procedure authorship; `source.revision` remains unsupported. This replaces the
+earlier external-only build-association proposal: the product-built artifact now
+carries the commit it was produced for. Different commits produce different
+packages even when the procedures are identical.
 
-This supersedes the older embedded-revision examples in the original proposal.
-The archive digest describes content; it does not prove who built it, which build
-produced it, or which software was deployed. Those are separate provenance and
-execution facts. The tools do not infer any of them from the current checkout.
+Import never starts an execution. The optional **Start an execution** action
+prefills the product context; an operator can explicitly override the deployed
+revision. Multiple executions per package are valid. Build provenance is retained
+in evidence separately from the actual execution context. Neither the archive hash
+nor the declared commit proves which software was deployed.
 
 ## Scenario definition
 

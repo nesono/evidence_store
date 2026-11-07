@@ -126,6 +126,30 @@ func TestSharedCampaignCloseReopenPreservesWork(t *testing.T) {
 	assert.Equal(t, 3, e.Procedures[0].Attempts)
 }
 
+func TestSharedCampaignAttemptContextOverride(t *testing.T) {
+	ctx := context.Background()
+	s, e := executionFixture(t)
+	a, _, err := s.StartExecutionAttempt(ctx, e.ID, uuid.New(), "patrol/display", "alice")
+	require.NoError(t, err)
+	data := a.Data
+	data.Branch, data.RCSRef = "hotfix", "actually-deployed-override"
+	data.Result = "PASS"
+	data.Answers["visible"] = json.RawMessage(`{"outcome":"PASS"}`)
+	a, err = s.SaveAttempt(ctx, a.ID, "alice", a.Revision, uuid.New(), data, testBlobStore)
+	require.NoError(t, err)
+	a, _, err = s.FinalizeAttempt(ctx, a.ID, "alice", a.Revision, time.Now().UTC())
+	require.NoError(t, err)
+	ev := decodeJSON[model.Evidence](t, getJSON(t, "/api/v1/evidence/"+a.EvidenceID.String()))
+	assert.Equal(t, data.RCSRef, ev.RCSRef)
+	assert.Equal(t, data.Branch, ev.Branch)
+	current, err := s.GetExecution(ctx, e.ID)
+	require.NoError(t, err)
+	assert.Equal(t, e.RCSRef, current.RCSRef)
+	retry, _, err := s.StartExecutionAttempt(ctx, e.ID, uuid.New(), "patrol/display", "alice")
+	require.NoError(t, err)
+	assert.Equal(t, e.RCSRef, retry.Data.RCSRef)
+}
+
 func TestSharedCampaignUnrunSkipAndSearch(t *testing.T) {
 	ctx := context.Background()
 	s, e := executionFixture(t)
@@ -209,7 +233,7 @@ func TestSharedCampaignConcurrentStartAndClosure(t *testing.T) {
 	assert.Equal(t, 1, e.Procedures[0].Attempts)
 }
 
-func TestSharedCampaignAPIAndFixedRevision(t *testing.T) {
+func TestSharedCampaignAPIAndRevisionOverride(t *testing.T) {
 	ctx := context.Background()
 	s, e := executionFixture(t)
 	a, _, err := s.StartExecutionAttempt(ctx, e.ID, uuid.New(), "patrol/display", "alice")
@@ -222,8 +246,9 @@ func TestSharedCampaignAPIAndFixedRevision(t *testing.T) {
 	data := a.Data
 	data.RCSRef = "other"
 	resp = draftRequest(t, ts.URL, token, "PUT", "/api/v1/campaign-attempts/"+a.ID.String(), map[string]any{"revision": a.Revision, "operation_id": uuid.New(), "data": data})
-	assert.Equal(t, 422, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, 200, resp.StatusCode)
+	saved := decodeJSON[store.CampaignAttempt](t, resp)
+	assert.Equal(t, "other", saved.Data.RCSRef)
 	resp = draftRequest(t, ts.URL, token, "GET", "/api/v1/campaign-executions/"+e.ID.String(), nil)
 	assert.Equal(t, 200, resp.StatusCode)
 	resp.Body.Close()

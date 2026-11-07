@@ -18,13 +18,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Manifest describes reusable content. Build/release provenance (including the
-// product revision) is associated with the archive digest outside this payload.
+// Manifest describes product-built content. V3 carries the product commit as
+// the default execution context; v1/v2 remain readable legacy content.
 type Manifest struct {
-	FormatVersion int             `json:"format_version"`
-	Campaign      CampaignInfo    `json:"campaign"`
-	Source        PackageSource   `json:"source"`
-	Scenarios     []ScenarioEntry `json:"scenarios"`
+	FormatVersion int              `json:"format_version"`
+	Campaign      CampaignInfo     `json:"campaign"`
+	Source        PackageSource    `json:"source"`
+	Product       *ProductRevision `json:"product,omitempty"`
+	Scenarios     []ScenarioEntry  `json:"scenarios"`
 }
 
 type CampaignInfo struct {
@@ -37,6 +38,24 @@ type CampaignInfo struct {
 
 type PackageSource struct {
 	Repository string `json:"repository"`
+}
+
+type ProductRevision struct {
+	Repository string `json:"repository"`
+	Branch     string `json:"branch"`
+	Commit     string `json:"commit"`
+}
+
+var productCommit = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+func (p ProductRevision) Validate() error {
+	if !repositoryURL(p.Repository) || strings.TrimSpace(p.Branch) == "" || len(p.Branch) > 1000 || strings.IndexFunc(p.Branch, unicode.IsControl) >= 0 {
+		return fmt.Errorf("product requires an HTTPS repository and nonempty branch")
+	}
+	if !productCommit.MatchString(p.Commit) {
+		return fmt.Errorf("product.commit must be a full lowercase Git commit hash (40 or 64 hex characters)")
+	}
+	return nil
 }
 
 type ScenarioEntry struct {
@@ -147,8 +166,18 @@ func parseManifest(data []byte) (Manifest, error) {
 	if err := decodePackageYAML(data, "manifest.yaml", &m); err != nil {
 		return m, err
 	}
-	if m.FormatVersion != 1 && m.FormatVersion != 2 {
+	if m.FormatVersion != 1 && m.FormatVersion != 2 && m.FormatVersion != 3 {
 		return m, fmt.Errorf("unsupported package format_version %d", m.FormatVersion)
+	}
+	if m.FormatVersion == 3 {
+		if m.Product == nil {
+			return m, fmt.Errorf("v3 campaign requires product repository, branch and commit")
+		}
+		if err := m.Product.Validate(); err != nil {
+			return m, err
+		}
+	} else if m.Product != nil {
+		return m, fmt.Errorf("product provenance requires format_version 3")
 	}
 	if !packageID.MatchString(m.Campaign.ID) || strings.TrimSpace(m.Campaign.Name) == "" {
 		return m, fmt.Errorf("campaign requires a portable id and nonempty name")

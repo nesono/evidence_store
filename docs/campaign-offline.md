@@ -15,6 +15,8 @@ while connected and prepare again. Offline operation needs HTTPS (or localhost),
 IndexedDB, and Web Locks. Storage failures are surfaced, with no page-memory
 fallback. The browser is asked for persistent storage; if refused, the status
 explains that storage can be evicted. Deleting site data removes local work.
+Online campaign browsing, capture, attachments and lifecycle actions remain usable
+when IndexedDB or Web Locks is unavailable; only offline preparation is disabled.
 
 Offline, Campaigns lists prepared campaigns. Their fixed software context,
 procedures, instructions and assets survive reloads. Progress is the last server
@@ -54,6 +56,9 @@ same operation ID/payload; later edits wait behind it. Lost finalization respons
 replay the same revision/time. Network/server errors retain work; explicit server
 refusals stop automatic retries for that attempt. Web Locks serialize writes/sync
 across tabs, and stale local editors must reload.
+If a creation response is lost, its retry keeps the original UUID. An attempt
+edited or finalized in the meantime requires conflict review before local answers
+can replace server answers.
 
 Conflicting shared edits, a colleague starting the same procedure, and remote
 closure/finalization never silently replace local answers. Open the affected
@@ -66,16 +71,29 @@ procedure's **Local work needs review** display to compare local/server JSON:
 - **Use server answers** accepts the server copy. The local journal is archived
   on this device before replacement.
 
+If creation was refused before a server attempt existed, the panel instead offers:
+
+- **Retry creation** checks that the campaign is open and retries the same UUID,
+  retaining the queued answers, attachments and original completion time. A
+  colleague's concurrent start still requires conflict review.
+- **Archive local attempt** retains its journal and attachments on this device
+  and removes it from pending synchronization. It needs no server connection.
+- **Reload draft** checks the campaign's state rather than fetching a nonexistent
+  attempt. A closed campaign can be reopened from this workspace before retrying.
+
 Finalized evidence cannot be overwritten. Export local work, accept the server
 version, then start a new attempt if needed. Choosing local answers returns a
-draft: review and finalize it again explicitly. Campaign close/reopen needs a
+draft: review and finalize it again explicitly. Finishing a campaign needs a
 connection and blocks until local work has synchronized or been resolved.
+Reopening needs a connection but does not publish or discard pending local work.
 
 ## Scope and verification
 
 Import, new campaign creation, and full historical attempt browsing remain online.
 Preparation includes only current drafts/latest results; prepare again to collect
-new remote attachments before disconnecting. Prepared packages, attachments and
+new remote attachments before disconnecting. Connected history remains paginated
+server history, with pending local attempts pinned to the first page. Offline
+history is explicitly labeled as the prepared subset. Prepared packages, attachments and
 resolution archives are retained locally; this version has no automatic eviction
 or per-campaign cleanup. Procedure editing, package/revision associations and
 cross-run reporting remain separate.
@@ -86,6 +104,7 @@ CHROME=/path/to/chrome node --test web/smoke/campaigns_test.mjs
 ```
 
 Queue tests cover digest failures, reload recovery, attachment ordering, lost
-responses, changed principals, conflicts, stale tabs and failed disk writes.
-The browser test prepares, disconnects, reloads, captures a photo/draft, reloads
-again, completes locally and reconnects to obtain a server-confirmed result.
+responses, changed principals, conflicts, stale tabs, failed creations and failed
+disk writes. Browser tests cover offline reload and completion, recovery after
+remote closure, paginated history, bounded IndexedDB queries and online workflows
+with unavailable offline capabilities.
