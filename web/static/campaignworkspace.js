@@ -219,7 +219,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     syncing = true;
     el("campaign-work-sync").disabled = true;
     try {
-      if (!await drafts.saveBeforeLeave()) return;
+      if (!await drafts.saveBeforeLeave({ background: true })) return;
       await offline.sync();
       await drafts.synchronized();
       await refresh();
