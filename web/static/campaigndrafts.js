@@ -562,7 +562,29 @@ export function mountCampaignDrafts(root, me, offline) {
     if (!isLocal() || attempt.finalized_at || attempt.local_complete) return;
     autosaveTimer = setTimeout(async () => {
       if (!isLocal() || !dirty || busy || manual.pending()) return;
-      await saveBeforeLeave();
+      // Save without setBusy: disabling the fieldset would steal focus from
+      // the field the tester is typing in.
+      const current = attempt;
+      let data;
+      try { data = readDraftForm(form, current.data.answers); } catch { return; }
+      const snapshot = JSON.stringify(data);
+      busy = true;
+      try {
+        const row = await persistDraft(data);
+        if (attempt !== current) return;
+        attempt = row;
+        pendingSave = null;
+        let now;
+        try { now = JSON.stringify(readDraftForm(form, row.data.answers)); } catch { now = null; }
+        dirty = now !== snapshot;
+        if (!dirty) status(row.local_error ? `Saved locally; needs attention: ${row.local_error}` : "Saved on this device, waiting to synchronize.");
+        await onChanged();
+      } catch (error) {
+        status(`Not saved: ${error.message}. Your entries remain here.`);
+      } finally {
+        busy = false;
+        if (dirty && attempt === current) scheduleLocalSave();
+      }
     }, 350);
   }
   form.addEventListener("submit", save);
