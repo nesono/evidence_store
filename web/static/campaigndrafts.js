@@ -203,6 +203,18 @@ export function mountCampaignDrafts(root, me, offline) {
     el("campaign-attempt-start").textContent = context?.execution
       ? (attempt?.finalized_at ? "Retry procedure" : "Continue / start attempt") : "Start new attempt";
   }
+  function keepFocus(render) {
+    const active = document.activeElement;
+    if (!active || !dialog.contains(active)) return render();
+    const { id, name } = active;
+    let start, end;
+    try { start = active.selectionStart; end = active.selectionEnd; } catch { /* no selection */ }
+    render();
+    const target = (id && el(id)) || (name && form.elements.namedItem(name));
+    if (!(target instanceof HTMLElement) || target.disabled) return;
+    target.focus({ preventScroll: true });
+    if (start != null) try { target.setSelectionRange(start, end); } catch { /* not a text field */ }
+  }
   function showAttempt(row) {
     attempt = row;
     pendingSave = null;
@@ -389,22 +401,45 @@ export function mountCampaignDrafts(root, me, offline) {
     await manual.prepare(data);
     return send(`/campaign-attempts/${attempt.id}`, "PUT", pendingSave);
   }
-  async function saveBeforeLeave() {
-    if (busy || manual.pending()) { status("Wait for the current operation before navigating."); return false; }
+  // A background save (autosave, periodic sync) must not disable the
+  // fieldset: the browser would drop focus from the field being edited.
+  async function saveBeforeLeave({ background = false } = {}) {
+    if (busy || manual.pending()) {
+      if (!background) status("Wait for the current operation before navigating.");
+      return false;
+    }
     if (!attempt || attempt.finalized_at || !dirty) return true;
-    setBusy(true);
+    const current = attempt;
+    let data;
     try {
-      const row = await persistDraft(readDraftForm(form, attempt.data.answers));
-      attempt = row;
-      dirty = false;
-      pendingSave = null;
-      await onChanged();
-      status(row.local_error ? `Saved locally; needs attention: ${row.local_error}` : row.local_pending ? "Saved on this device, waiting to synchronize." : "Saved on server.");
-      return true;
+      data = readDraftForm(form, current.data.answers);
     } catch (error) {
       status(`Not saved: ${error.message}. Your entries remain here.`);
       return false;
-    } finally { setBusy(false); }
+    }
+    const snapshot = JSON.stringify(data);
+    if (background) busy = true;
+    else setBusy(true);
+    let row;
+    try {
+      row = await persistDraft(data);
+    } catch (error) {
+      status(`Not saved: ${error.message}. Your entries remain here.`);
+      return false;
+    } finally {
+      if (background) busy = false;
+      else setBusy(false);
+    }
+    if (attempt !== current) return true;
+    attempt = row;
+    pendingSave = null;
+    let now = null;
+    try { now = JSON.stringify(readDraftForm(form, current.data.answers)); } catch { /* still dirty */ }
+    dirty = now !== snapshot;
+    if (dirty) scheduleLocalSave();
+    else status(row.local_error ? `Saved locally; needs attention: ${row.local_error}` : row.local_pending ? "Saved on this device, waiting to synchronize." : "Saved on server.");
+    await onChanged();
+    return true;
   }
   async function close() {
     if (context?.execution) {
@@ -562,7 +597,7 @@ export function mountCampaignDrafts(root, me, offline) {
     if (!isLocal() || attempt.finalized_at || attempt.local_complete) return;
     autosaveTimer = setTimeout(async () => {
       if (!isLocal() || !dirty || busy || manual.pending()) return;
-      await saveBeforeLeave();
+      await saveBeforeLeave({ background: true });
     }, 350);
   }
   form.addEventListener("submit", save);
@@ -660,7 +695,7 @@ export function mountCampaignDrafts(root, me, offline) {
         const row = await offline.get(attempt.id);
         // A periodic empty sync must not reset focus, selection or disclosure
         // state while somebody is reading the procedure.
-        if (row && JSON.stringify(row) !== JSON.stringify(attempt)) showAttempt(row);
+        if (row && JSON.stringify(row) !== JSON.stringify(attempt)) keepFocus(() => showAttempt(row));
         await listDrafts();
       }
     },
