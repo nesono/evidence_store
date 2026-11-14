@@ -43,9 +43,38 @@ export function fuzzyMatch(text, query) {
   return true;
 }
 
-function progressText(procedures) {
-  const p = campaignProgress(procedures);
-  return `${p.exercised}/${p.total} exercised · ${p.passed}/${p.total} passed · ${p.skipped} skipped${p.drafts ? ` · ${p.drafts} in progress` : ""}`;
+const progressCategories = [
+  ["exercised", "Exercised"], ["passed", "Passed"], ["skipped", "Skipped"], ["drafts", "In progress"],
+];
+
+export function matchesProgress(procedure, category, local) {
+  if (category === "drafts") return !!(procedure.draft_id || local?.local_pending);
+  if (category === "exercised") return ["PASS", "FAIL", "ERROR"].includes(procedure.result);
+  if (category === "passed") return procedure.result === "PASS";
+  if (category === "skipped") return procedure.result === "SKIPPED";
+  return true;
+}
+
+export function toggleProgressFilter(current, category, inverted = false) {
+  return current?.category === category ? null : { category, inverted };
+}
+
+export function filteredProcedures(procedures, query, filter, localAttempts = new Map()) {
+  return procedures.filter(p => fuzzyMatch(`${p.title} ${p.procedure_ref}`, query) &&
+    (filter
+      ? matchesProgress(p, filter.category, localAttempts.get(p.procedure_ref)) !== filter.inverted
+      : (!matchesProgress(p, "exercised") && !matchesProgress(p, "skipped")) || matchesProgress(p, "drafts", localAttempts.get(p.procedure_ref))));
+}
+
+export function campaignProgressHTML(execution, filter, localAttempts = new Map()) {
+  const p = campaignProgress(execution.procedures);
+  p.drafts = execution.procedures.filter(row => matchesProgress(row, "drafts", localAttempts.get(row.procedure_ref))).length;
+  return `<span class="campaign-progress-controls" role="group" aria-label="Filter procedures by progress">${progressCategories.map(([key, label]) => {
+      const active = filter?.category === key;
+      const excluded = active && filter.inverted;
+      return `<button type="button" class="campaign-progress-chip campaign-progress-${key}" style="--progress: ${p.total ? p[key] / p.total * 100 : 0}%" data-progress-filter="${key}" aria-pressed="${active}" aria-label="${label}: ${p[key]} of ${p.total}${active ? excluded ? ", excluded" : ", included" : ""}" title="Click to filter; Alt-click to exclude; click again to clear"><strong>${p[key]}/${p.total}</strong> ${label}${excluded ? ' <span>· Excluding</span>' : ""}</button>`;
+    }).join("")}</span>
+    `;
 }
 
 export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
@@ -57,6 +86,7 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
   let syncing = false, localView = false;
   let offlineUnavailable = "";
   let localAttempts = new Map();
+  let progressFilter = null;
   const message = (id, text) => { el(id).textContent = text; };
   async function request(path, method = "GET", data) {
     const response = await apiFetchNoRedirect(API_BASE + path, {
@@ -73,9 +103,10 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     for (const view of ["campaign-home", "campaign-new-view", "campaign-workspace", "campaign-package-management"]) el(view).hidden = view !== id;
   }
   function clearWorkspace() {
+    progressFilter = null;
     localAttempts = new Map();
     drafts.clear(); selected = null; execution = null; definition = null;
-    for (const id of ["campaign-work-title", "campaign-work-context", "campaign-work-progress", "campaign-work-position", "campaign-work-empty"]) message(id, "");
+    for (const id of ["campaign-work-title", "campaign-work-state", "campaign-work-context", "campaign-work-progress", "campaign-work-position", "campaign-work-empty"]) message(id, "");
     el("campaign-work-procedures").replaceChildren();
     el("campaign-work-history").hidden = true;
     for (const id of ["campaign-work-close", "campaign-work-prev", "campaign-work-next"]) el(id).disabled = true;
@@ -121,24 +152,29 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
       el("campaign-picker-next").disabled = !page.has_more;
     } catch (error) { if (version === packageVersion) message("campaign-package-picker-status", error.message); }
   }
+  function visibleProcedures() {
+    return filteredProcedures(execution.procedures, el("campaign-work-search").value, progressFilter, localAttempts);
+  }
   function paint() {
     if (!execution) return;
     message("campaign-work-title", execution.name);
+    message("campaign-work-state", execution.closed_at ? "Completed" : "Open");
     message("campaign-work-context", `${execution.repo} · ${execution.branch} · ${execution.rcs_ref}`);
-    message("campaign-work-progress", `${execution.closed_at ? "Completed" : "Open"} · ${progressText(execution.procedures)}`);
+    el("campaign-work-progress").innerHTML = campaignProgressHTML(execution, progressFilter, localAttempts);
     el("campaign-work-close").textContent = execution.closed_at ? "Reopen campaign" : "Finish campaign";
     el("campaign-work-close").hidden = !writable;
     el("campaign-work-close").disabled = switching || localView;
     el("campaign-work-prepare").disabled = switching || syncing || !execution || !!offlineUnavailable;
     el("campaign-work-sync").disabled = syncing || !!offlineUnavailable;
-    el("campaign-work-procedures").innerHTML = execution.procedures.filter(p => fuzzyMatch(`${p.title} ${p.procedure_ref}`, el("campaign-work-search").value)).map(p => {
+    el("campaign-work-procedures").innerHTML = visibleProcedures().map(p => {
       const state = procedureState(p, localAttempts.get(p.procedure_ref));
       return `<li><button type="button" class="campaign-run campaign-procedure-run${selected === p.procedure_ref ? " selected" : ""}" data-procedure="${esc(p.procedure_ref)}" aria-pressed="${selected === p.procedure_ref}" title="${esc(p.title)} · ${esc(state.label)}${p.attempts > 1 ? ` · ${p.attempts} attempts` : ""}"><span class="procedure-state procedure-state-${state.kind}" role="img" aria-label="${esc(state.label)}"></span><span class="campaign-procedure-label"><strong>${esc(p.title)}</strong><small>${esc(p.procedure_ref)}</small></span></button></li>`;
-    }).join("");
-    const index = execution.procedures.findIndex(p => p.procedure_ref === selected);
+    }).join("") || '<li class="empty-state">No matching procedures.</li>';
+    const visible = visibleProcedures();
+    const index = visible.findIndex(p => p.procedure_ref === selected);
     el("campaign-work-prev").disabled = switching || index <= 0;
-    el("campaign-work-next").disabled = switching || index >= execution.procedures.length - 1;
-    message("campaign-work-position", index >= 0 ? `${index + 1} / ${execution.procedures.length}` : "");
+    el("campaign-work-next").disabled = switching || index < 0 || index >= visible.length - 1;
+    message("campaign-work-position", index >= 0 ? `${index + 1} / ${visible.length}` : "");
     el("campaign-work-history").hidden = !selected;
     drafts.updateExecution(execution);
   }
@@ -328,12 +364,21 @@ export function mountCampaignWorkspace(root, me, drafts, packages, offline) {
     catch (error) { message("campaign-start-status", error.message); }
     finally { creating = false; el("campaign-start").disabled = false; el("campaign-new-back").removeAttribute("aria-disabled"); }
   });
+  el("campaign-work-progress").addEventListener("click", event => {
+    const button = event.target.closest("[data-progress-filter]");
+    if (!button || !execution) return;
+    progressFilter = toggleProgressFilter(progressFilter, button.dataset.progressFilter, event.altKey);
+    const category = button.dataset.progressFilter;
+    paint();
+    el("campaign-work-progress").querySelector(`[data-progress-filter="${category}"]`).focus();
+  });
   el("campaign-work-search").addEventListener("input", paint);
   el("campaign-work-procedures").addEventListener("click", event => { const item = event.target.closest("[data-procedure]"); if (item) choose(item.dataset.procedure); });
   for (const [id, delta] of [["campaign-work-prev", -1], ["campaign-work-next", 1]]) el(id).addEventListener("click", () => {
     if (!execution) return;
-    const index = execution.procedures.findIndex(p => p.procedure_ref === selected);
-    const next = execution.procedures[index + delta]; if (next) choose(next.procedure_ref);
+    const visible = visibleProcedures();
+    const index = visible.findIndex(p => p.procedure_ref === selected);
+    const next = visible[index + delta]; if (next) choose(next.procedure_ref);
   });
   el("campaign-work-refresh").addEventListener("click", async () => {
     try { if (await drafts.saveBeforeLeave()) { await refresh(); if (selected) await choose(selected); } }

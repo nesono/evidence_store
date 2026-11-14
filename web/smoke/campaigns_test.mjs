@@ -449,7 +449,7 @@ test("shared campaign workspace starts, saves on navigation, retains conflicts a
   failDraftSave = false;
   await page.eval(`window.confirm=()=>true;document.getElementById('campaign-work-close').click()`);
   await page.waitFor(`document.getElementById('campaign-work-close').textContent==='Reopen campaign'`);
-  assert.match(await page.eval(`document.getElementById('campaign-work-progress').textContent`),/13 skipped/);
+  assert.match(await page.eval(`document.getElementById('campaign-work-progress').textContent`),/13\/13 Skipped/);
   await page.eval(`document.getElementById('campaign-work-close').click()`);
   await page.waitFor(`document.getElementById('campaign-work-close').textContent==='Finish campaign'`);
   await page.eval(`document.querySelector('#campaign-work-procedures [data-procedure]').click()`);
