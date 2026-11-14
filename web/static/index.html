@@ -115,7 +115,7 @@
             <section id="campaign-workspace" hidden>
                 <div class="campaign-toolbar"><button id="campaign-work-back" type="button" class="secondary outline">← Back</button><button id="campaign-work-refresh" type="button" class="secondary outline" title="Save current edits and reload campaign status and progress from the server">Refresh campaign</button><button id="campaign-work-close" type="button" class="secondary outline">Finish campaign</button><button id="campaign-work-prepare" type="button" class="secondary outline">Prepare offline</button><button id="campaign-work-sync" type="button" class="secondary outline">Synchronize local work</button></div>
                 <p id="campaign-offline-status" role="status"></p>
-                <h2 id="campaign-work-title"></h2><p id="campaign-work-context" class="commit-ref"></p><p id="campaign-work-progress"></p><p id="campaign-work-status" role="status"></p>
+                <div class="campaign-work-heading"><h2 id="campaign-work-title"></h2><span id="campaign-work-state" class="campaign-state-badge"></span></div><p id="campaign-work-context" class="commit-ref"></p><div id="campaign-work-progress"></div><p id="campaign-work-status" role="status"></p>
                 <div class="campaign-work-layout">
                     <aside aria-label="Campaign procedures"><label>Find a procedure<input id="campaign-work-search" type="search" placeholder="Procedure title or reference"></label><ul id="campaign-work-procedures" class="campaign-run-list"></ul></aside>
                     <section>

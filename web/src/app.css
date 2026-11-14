@@ -4100,3 +4100,19 @@ label > .input-with-button {
      the title control and throwing off the second column. */
   #campaign-procedure-table td { height: 44px; }
 }
+
+/* Campaign overview doubles as a procedure filter. */
+#campaign-work-progress { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.5rem; margin-block: 0.75rem; padding: 0.25rem; overflow-x: auto; }
+.campaign-state-badge { flex: none; padding: 0.35rem 0.65rem; border-radius: 0.35rem; background: #6b7078; color: #fff; font-size: var(--text-ui); line-height: 1.4; }
+.campaign-progress-controls { display: flex; flex-wrap: nowrap; gap: 0.5rem; }
+#tab-campaigns .campaign-progress-chip { --progress-fill: #626871; --progress-track: #a1a6ae; display: inline-flex; align-items: center; gap: 0.3rem; flex: none; width: auto; min-height: 0; margin: 0; padding: 0.35rem 0.65rem; border: 1px solid transparent; border-radius: 0.35rem; background: linear-gradient(to right, var(--progress-fill) 0 var(--progress), var(--progress-track) var(--progress) 100%); color: #fff; font-size: var(--text-ui); line-height: 1.4; white-space: nowrap; box-shadow: none; }
+#tab-campaigns .campaign-progress-passed { --progress-fill: #24763b; --progress-track: #73a780; }
+#tab-campaigns .campaign-progress-skipped { background: #e5b825; color: #302600; }
+#tab-campaigns .campaign-progress-drafts { background: transparent; border-color: #d5a819; color: #957000; }
+.campaign-progress-chip strong { color: inherit; font-weight: 500; font-variant-numeric: tabular-nums; }
+#tab-campaigns .campaign-progress-chip:hover { filter: brightness(1.08); }
+#tab-campaigns .campaign-progress-chip[aria-pressed="true"] { outline: 2px solid var(--color-ink); outline-offset: 1px; }
+#tab-campaigns .campaign-progress-chip:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.campaign-work-heading { display: flex; align-items: center; gap: 0.75rem; margin-block-end: 0.75rem; }
+.campaign-work-heading > h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
