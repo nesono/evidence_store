@@ -185,6 +185,20 @@ async function upload(content) {
   })()`);
 }
 
+test("campaign search updates while typing and clearing restores the list", async () => {
+  const id = crypto.randomUUID();
+  executions.set(id, { id, package_id: rows[0].id, name: "Search regression campaign", repo: "example", branch: "main", rcs_ref: "abc", revision: 1 });
+  await page.eval(`document.getElementById('campaign-packages-back').click()`);
+  await page.waitFor(`document.querySelector('#campaign-runs [data-execution="${id}"]')`);
+  await page.eval(`document.getElementById('campaign-search').value = 'zzzzzzzz'; document.getElementById('campaign-search').dispatchEvent(new Event('input', { bubbles: true }))`);
+  await page.waitFor(`document.getElementById('campaign-runs-status').textContent.includes('No matching campaigns')`);
+  assert.equal(await page.eval(`document.querySelectorAll('#campaign-runs [data-execution]').length`), 0);
+  await page.eval(`document.getElementById('campaign-search').value = ''; document.getElementById('campaign-search').dispatchEvent(new Event('input', { bubbles: true }))`);
+  await page.waitFor(`document.querySelector('#campaign-runs [data-execution="${id}"]')`);
+  executions.delete(id);
+  await page.eval(`document.getElementById('campaign-packages').click()`);
+});
+
 test("campaign browser paginates, previews controls/images, filters, and ignores late selections", async () => {
   assert.equal(await page.eval(`document.getElementById('tab-campaigns').hidden`), false);
   await assertPackageLayout(false);
