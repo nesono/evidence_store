@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -165,6 +166,13 @@ func (s *CampaignStore) Get(ctx context.Context, id uuid.UUID) (*CampaignPackage
 	return scanCampaign(s.pool.QueryRow(ctx, `SELECT `+campaignColumns+` FROM campaign_package WHERE id = $1`, id))
 }
 
+// Package search matches literal text in the fields displayed by the picker.
+// Hidden package keys remain stable when a package is retitled.
+func campaignSearchPattern(query string) string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	return "%" + strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(query) + "%"
+}
+
 func (s *CampaignStore) List(ctx context.Context, limit, offset int, search ...string) ([]CampaignSummary, error) {
 	query := ""
 	if len(search) > 0 {
@@ -173,8 +181,8 @@ func (s *CampaignStore) List(ctx context.Context, limit, offset int, search ...s
 	rows, err := s.pool.Query(ctx, `SELECT id, digest, archive_size, imported_at, imported_by,
 		definition->'manifest', jsonb_array_length(definition->'scenarios')
 		FROM (SELECT DISTINCT ON (`+campaignContent+`) * FROM campaign_package ORDER BY `+campaignContent+`,imported_at,id) packages WHERE lower((definition->'manifest'->'campaign'->>'name')||' '||
-		(definition->'manifest'->'campaign'->>'id')||' '||(definition->'manifest'->'source'->>'repository')||' '||COALESCE(definition->'manifest'->'product'->>'commit','')||' '||digest) LIKE $3
-		ORDER BY imported_at, id LIMIT $1 OFFSET $2`, limit, offset, fuzzyPattern(query))
+		(definition->'manifest'->'source'->>'repository')||' '||COALESCE(definition->'manifest'->'product'->>'commit','')) LIKE $3
+		ORDER BY imported_at, id LIMIT $1 OFFSET $2`, limit, offset, campaignSearchPattern(query))
 	if err != nil {
 		return nil, err
 	}

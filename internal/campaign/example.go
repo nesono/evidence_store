@@ -13,12 +13,15 @@ import (
 // ExamplePackage expands two small product-side matrices into concrete cases.
 // The runtime receives ordinary scenarios: every combination has a stable ref,
 // fixed parameters, its own answers and independent attempts/results.
-func ExamplePackage(product ProductRevision) (map[string][]byte, error) {
+func ExamplePackage(product ProductRevision, title ...string) (map[string][]byte, error) {
 	if err := product.Validate(); err != nil {
 		return nil, err
 	}
 	files := map[string][]byte{}
 	manifest := Manifest{FormatVersion: 3, Campaign: CampaignInfo{ID: "vehicle-feature-tour", Name: "Vehicle feature tour"}, Source: PackageSource{Repository: product.Repository}, Product: &product}
+	if len(title) > 0 {
+		manifest.Campaign.Name = title[0]
+	}
 	add := func(key, title, evidenceType, group, instructions string, parameters map[string]any) error {
 		ref := "feature-tour/" + key
 		base := "scenarios/" + key + "/"

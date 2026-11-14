@@ -214,10 +214,40 @@ func TestLegacyEquivalentPackagesAppearOnce(t *testing.T) {
 	_, err = testPool.Exec(context.Background(), `INSERT INTO campaign_package(id,digest,archive_size,imported_by,definition) VALUES($1,$2,$3,'legacy',$4)`, id, p.Digest, len(legacy), encoded)
 	require.NoError(t, err)
 	cleanupCampaign(t, id)
-	list, err := store.NewCampaignStore(testPool).List(context.Background(), 100, 0, row.Definition.Manifest.Campaign.ID)
+	list, err := store.NewCampaignStore(testPool).List(context.Background(), 100, 0, row.Definition.Manifest.Campaign.Name)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, row.ID, list[0].ID)
+}
+
+func TestCampaignPackageTitleSearch(t *testing.T) {
+	ctx := context.Background()
+	s := store.NewCampaignStore(testPool)
+	ids := map[string]uuid.UUID{}
+	for _, title := range []string{"Vehicle feature tour", "My custom campaign"} {
+		files, err := campaign.ExamplePackage(campaign.ProductRevision{Repository: "https://github.com/nesono/evidence_store", Branch: "main", Commit: strings.Repeat("a", 40)}, title)
+		require.NoError(t, err)
+		archive, _, err := campaign.BuildPackage(files)
+		require.NoError(t, err)
+		row := decodeJSON[store.CampaignPackage](t, importCampaign(t, testServer.URL, "", archive))
+		cleanupCampaign(t, row.ID)
+		ids[title] = row.ID
+	}
+	for query, title := range map[string]string{"my": "My custom campaign", "CUSTOM": "My custom campaign", "tour": "Vehicle feature tour", "zzzzzzzz": "", "%": "", "___": ""} {
+		rows, err := s.List(ctx, 100, 0, query)
+		require.NoError(t, err)
+		var matched []uuid.UUID
+		for _, row := range rows {
+			if row.ID == ids["Vehicle feature tour"] || row.ID == ids["My custom campaign"] {
+				matched = append(matched, row.ID)
+			}
+		}
+		if title == "" {
+			assert.Empty(t, matched, query)
+		} else {
+			assert.Equal(t, []uuid.UUID{ids[title]}, matched, query)
+		}
+	}
 }
 
 func TestCampaignProcedureReferenceMigration(t *testing.T) {

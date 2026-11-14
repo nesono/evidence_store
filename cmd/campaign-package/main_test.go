@@ -92,3 +92,32 @@ func TestExampleCommand(t *testing.T) {
 		t.Fatal("example must require product provenance")
 	}
 }
+
+func TestExampleTitle(t *testing.T) {
+	for _, title := range []string{"Vehicle feature tour", "Release: \"Berlin\" – checks", "  "} {
+		t.Run(title, func(t *testing.T) {
+			args := []string{"example", "--repository", "https://example.org/product", "--branch", "main", "--commit", strings.Repeat("a", 40)}
+			if title != "Vehicle feature tour" {
+				args = append(args, "--title", title)
+			}
+			var output, diagnostics bytes.Buffer
+			code := run(args, nil, &output, &diagnostics)
+			if strings.TrimSpace(title) == "" {
+				if code == 0 || output.Len() != 0 {
+					t.Fatal("blank title must fail before writing archive bytes")
+				}
+				return
+			}
+			if code != 0 {
+				t.Fatal(diagnostics.String())
+			}
+			p, err := campaign.ReadPackage(&output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.Manifest.Campaign.Name != title {
+				t.Fatalf("title = %q, want %q", p.Manifest.Campaign.Name, title)
+			}
+		})
+	}
+}

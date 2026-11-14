@@ -17,6 +17,8 @@ go run ./cmd/campaign-package example \
   --output /tmp/vehicle-feature-tour.tar.gz
 ```
 
+Add `--title "My campaign"` to override the default campaign title, “Vehicle feature tour”.
+
 To build the minimal legacy parser fixture instead:
 
 ```sh

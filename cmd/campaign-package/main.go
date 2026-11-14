@@ -18,7 +18,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return example(args[1:], stdout, stderr)
 	}
 	if len(args) != 2 || (args[0] != "build" && args[0] != "validate") {
-		_, _ = fmt.Fprintln(stderr, "Usage: campaign-package build <directory> | validate <archive.tar.gz|-> | example --repository URL --branch BRANCH --commit HASH [--output FILE]")
+		_, _ = fmt.Fprintln(stderr, "Usage: campaign-package build <directory> | validate <archive.tar.gz|-> | example --repository URL --branch BRANCH --commit HASH [--title TITLE] [--output FILE]")
 		return 2
 	}
 	var err error
@@ -62,6 +62,7 @@ func example(args []string, stdout, stderr io.Writer) int {
 	flags.StringVar(&product.Branch, "branch", "", "Product build branch")
 	flags.StringVar(&product.Commit, "commit", "", "Full product Git commit hash")
 	output := flags.String("output", "", "Archive destination (default stdout)")
+	title := flags.String("title", "Vehicle feature tour", "Campaign title")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -69,7 +70,7 @@ func example(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "example takes flags only")
 		return 2
 	}
-	files, err := campaign.ExamplePackage(product)
+	files, err := campaign.ExamplePackage(product, *title)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return 1
