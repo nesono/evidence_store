@@ -43,7 +43,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, blobs blob.Store, sso SSO) *Ser
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(func(next http.Handler) http.Handler {
 		timed := middleware.Timeout(30 * time.Second)(next)

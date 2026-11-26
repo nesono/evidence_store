@@ -1,0 +1,104 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # New advisories land against code that has not changed, so a quiet repo has
+  # to be rescanned on a timer or it goes stale without anyone noticing.
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=go depName=golang.org/x/vuln
+  GOVULNCHECK_VERSION: v1.10.0
+  # renovate: datasource=docker depName=aquasec/trivy
+  TRIVY_VERSION: 0.69.3
+
+jobs:
+  # govulncheck only reports vulnerabilities in code paths the module actually
+  # calls, so a finding here is real rather than a transitive false positive.
+  govulncheck:
+    name: Go Vulnerabilities
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: "."
+            go-version-file: go.mod
+          # The adapter is a library: its go directive is the minimum it
+          # supports, not the toolchain it runs on. Scan it against current Go
+          # so only findings in its own code and deps fail the job.
+          - module: adapters/bazel
+            go-version: stable
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ matrix.go-version-file }}
+          go-version: ${{ matrix.go-version }}
+      - name: govulncheck
+        working-directory: ${{ matrix.module }}
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+  npm-audit:
+    name: npm Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm audit --audit-level=high
+
+  # The image we ship, built exactly as a release would build it.
+  image-scan:
+    name: Image Scan (evidence-store)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -t evidence-store:scan .
+      - name: Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            "aquasec/trivy:${TRIVY_VERSION}" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            evidence-store:scan
+
+  # Third-party images from the compose files, used only for local development
+  # and SSO testing. Read from the compose files rather than listed here, so a
+  # Renovate bump is scanned without anyone having to remember to update this
+  # workflow. Report-only: their findings are upstream's to fix (and Renovate's
+  # to pick up), so they raise warnings instead of blocking unrelated PRs.
+  compose-image-scan:
+    name: Image Scan (compose, report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Trivy
+        run: |
+          grep -hoP '^\s*image:\s*\K\S+' docker-compose*.yml | sort -u | while read -r image; do
+            echo "::group::$image"
+            if ! docker run --rm < /dev/null \
+              "aquasec/trivy:${TRIVY_VERSION}" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$image"; then
+              echo "::warning title=Vulnerable compose image::$image has HIGH/CRITICAL findings"
+            fi
+            echo "::endgroup::"
+          done

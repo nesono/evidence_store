@@ -11,6 +11,17 @@
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
   "postUpdateOptions": ["gomodTidy"],
+  "osvVulnerabilityAlerts": true,
+  "customManagers": [
+    {
+      "description": "Tool versions pinned in workflows via '# renovate:' comments",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\w+: (?<currentValue>\\S+)"
+      ]
+    }
+  ],
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "patch"],
@@ -35,6 +46,17 @@
       "matchManagers": ["bazel-module"],
       "groupName": "Bazel minor + patch",
       "automerge": false
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm minor + patch",
+      "automerge": false
+    },
+    {
+      "description": "Pin images to digests so a re-pushed tag cannot change what we build or run unnoticed, and so Renovate picks up rebuilt base images carrying security fixes.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "pinDigests": true
     },
     {
       "matchUpdateTypes": ["major"],
