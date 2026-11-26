@@ -23,7 +23,7 @@ jobs:
       # built against an older Go and silently refused to load this module at
       # all, so nobody was running static analysis anywhere (#125).
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
 
@@ -121,7 +121,7 @@ jobs:
           go-version-file: adapters/bazel/go.mod
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
           working-directory: adapters/bazel
