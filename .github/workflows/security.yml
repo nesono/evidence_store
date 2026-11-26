@@ -16,7 +16,7 @@ permissions:
 
 env:
   # renovate: datasource=go depName=golang.org/x/vuln
-  GOVULNCHECK_VERSION: v1.1.4
+  GOVULNCHECK_VERSION: v1.10.0
   # renovate: datasource=docker depName=aquasec/trivy
   TRIVY_VERSION: 0.69.3
 
