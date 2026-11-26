@@ -44,7 +44,7 @@ jobs:
           sha256sum "${PREFIX}.tar.gz"
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: evidence_store_bazel ${{ steps.vars.outputs.version }}
