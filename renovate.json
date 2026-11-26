@@ -24,6 +24,13 @@
   ],
   "packageRules": [
     {
+      "description": "The go directive is the minimum Go version we promise (consumers of adapters/bazel build against it). The global rangeStrategy=bump would raise it with every Go minor release; raise it by hand instead. Security fixes still arrive through the toolchain directive, which is not matched here.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "enabled": false
+    },
+    {
       "matchUpdateTypes": ["minor", "patch"],
       "matchManagers": ["gomod"],
       "groupName": "Go minor + patch",
