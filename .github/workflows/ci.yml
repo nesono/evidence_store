@@ -25,7 +25,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.15.0
 
   unit-tests:
     name: Unit Tests
@@ -123,7 +123,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.15.0
           working-directory: adapters/bazel
       - name: Verify consumer-facing build resolves without dev dependencies
         run: bazel build --ignore_dev_dependency //cmd/evidence-bazel
