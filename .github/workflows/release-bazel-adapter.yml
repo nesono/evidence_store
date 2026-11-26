@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.vars.outputs.version }}
       prefix: ${{ steps.vars.outputs.prefix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Compute version vars
         id: vars

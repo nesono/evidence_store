@@ -38,7 +38,7 @@ jobs:
           - module: adapters/bazel
             go-version: stable
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.go-version-file }}
@@ -51,7 +51,7 @@ jobs:
     name: npm Vulnerabilities
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "26.13.1"
@@ -62,7 +62,7 @@ jobs:
     name: Image Scan (evidence-store)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build -t evidence-store:scan .
       - name: Trivy
@@ -86,7 +86,7 @@ jobs:
     name: Image Scan (compose, report-only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Trivy
         run: |
           grep -hoP '^\s*image:\s*\K\S+' docker-compose*.yml | sort -u | while read -r image; do
