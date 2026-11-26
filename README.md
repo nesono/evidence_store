@@ -56,7 +56,8 @@ curl http://localhost:8000/healthz
 ```
 
 This starts PostgreSQL 16, the Evidence Store server on port 8000, and (for the
-`s3` blob backend) a local MinIO. The web UI is served from the same port —
+`s3` blob backend) a local S3-compatible store ([versitygw](https://github.com/versity/versitygw),
+with its own web UI on `http://localhost:9001`). The web UI is served from the same port —
 open `http://localhost:8000`.
 
 ### Configuration
