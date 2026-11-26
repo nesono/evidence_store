@@ -1,0 +1,19 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+ignore:
+  # CVE-2026-37236 in grpc-gateway (fixed in 2.29.0). grpc-gateway is not
+  # compiled into anything here: it is absent from go.sum and `go mod why`
+  # reports it unneeded. Snyk sees it only because golang-migrate v4.20.1 lists
+  # grpc-gateway/v2 v2.27.1 in its own go.mod for database drivers we do not
+  # import. The expiry forces a re-check; drop this once golang-migrate
+  # requires grpc-gateway >= 2.29.0.
+  SNYK-GOLANG-GITHUBCOMGRPCECOSYSTEMGRPCGATEWAYRUNTIME-19432130:
+    - '*':
+        reason: 'Not in the build; only in golang-migrate''s module graph (unused drivers). See comment in .snyk.'
+        expires: '2027-02-26T00:00:00.000Z'
+        created: '2026-11-26T00:00:00.000Z'
+  SNYK-GOLANG-GITHUBCOMGRPCECOSYSTEMGRPCGATEWAYV2RUNTIME-19432132:
+    - '*':
+        reason: 'Not in the build; only in golang-migrate''s module graph (unused drivers). See comment in .snyk.'
+        expires: '2027-02-26T00:00:00.000Z'
+        created: '2026-11-26T00:00:00.000Z'
