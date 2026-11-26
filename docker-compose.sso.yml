@@ -20,7 +20,7 @@
 
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4
+    image: quay.io/keycloak/keycloak:26.8
     command: ["start-dev", "--import-realm"]
     environment:
       # Development credentials, and they look it. This compose file is for a
