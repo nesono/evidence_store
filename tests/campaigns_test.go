@@ -528,8 +528,8 @@ func TestCampaignSweepWaitsForImport(t *testing.T) {
 	select {
 	case err := <-sweepDone:
 		close(paused.proceed)
-		<-done
-		t.Fatalf("sweep completed during import: %v", err)
+		importErr := <-done
+		t.Fatalf("sweep completed during import: sweep=%v import=%v", err, importErr)
 	case <-time.After(100 * time.Millisecond):
 	}
 	close(paused.proceed)
