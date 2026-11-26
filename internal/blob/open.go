@@ -18,7 +18,7 @@ type Options struct {
 //
 // The default is the filesystem so that a checkout runs without an object
 // store; a deployment that wants blobs to outlive one machine's disk sets the
-// backend to s3, which is what docker-compose does with MinIO.
+// backend to s3, which is what docker-compose does with versitygw.
 func Open(ctx context.Context, opts Options) (Store, error) {
 	switch opts.Backend {
 	case "", "fs":

@@ -14,7 +14,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// newS3 brings up MinIO and returns a store pointed at a fresh bucket.
+// newS3 brings up an S3-compatible gateway (versitygw over a plain directory)
+// and returns a store pointed at a fresh bucket.
 //
 // The suite skips rather than fails when no container runtime is reachable, so
 // that `go test ./...` still works on a machine without Docker; the Bazel target
@@ -25,20 +26,23 @@ func newS3(t *testing.T) *S3 {
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "minio/minio:RELEASE.2025-04-22T22-12-26Z",
+			Image:        "versity/versitygw:v1.11.0",
 			ExposedPorts: []string{"9000/tcp"},
 			Env: map[string]string{
-				"MINIO_ROOT_USER":     "minioadmin",
-				"MINIO_ROOT_PASSWORD": "minioadmin",
+				"ROOT_ACCESS_KEY": "evidence",
+				"ROOT_SECRET_KEY": "evidence-secret",
+				"VGW_BACKEND":     "posix",
+				"VGW_BACKEND_ARG": "/tmp",
+				"VGW_PORT":        ":9000",
+				"VGW_HEALTH":      "/health",
 			},
-			Cmd: []string{"server", "/data"},
-			// MinIO binds the port before it will answer on it, so waiting for
-			// a listening socket returns while the first request still gets a
-			// connection reset. Its own readiness endpoint is the thing worth
+			// The server binds the port before it will answer on it, so waiting
+			// for a listening socket returns while the first request still gets
+			// a connection reset. Its own health endpoint is the thing worth
 			// waiting for. Same class of bug as the double bind the Postgres
 			// harness works around in tests/integration_test.go, and it made
 			// this suite fail on CI about one run in ten.
-			WaitingFor: wait.ForHTTP("/minio/health/ready").
+			WaitingFor: wait.ForHTTP("/health").
 				WithPort("9000/tcp").
 				WithStartupTimeout(60 * time.Second),
 		},
@@ -57,15 +61,16 @@ func newS3(t *testing.T) *S3 {
 	cfg := S3Config{
 		Endpoint:  fmt.Sprintf("%s:%s", host, port.Port()),
 		Bucket:    "evidence-blobs",
-		AccessKey: "minioadmin",
-		SecretKey: "minioadmin",
+		AccessKey: "evidence",
+		SecretKey: "evidence-secret",
 	}
 
-	// The readiness probe above is necessary and not sufficient: MinIO answers
-	// it before the object layer behind it is registered, so the first S3 call
-	// can still come back "Server not initialized yet, please try again". That
-	// is what this suite hit on CI — a bucket check failing a few milliseconds
-	// after the container reported itself ready.
+	// The health probe above is necessary and not sufficient: with MinIO, the
+	// previous backend here, it answered before the object layer behind it was
+	// registered, so the first S3 call could still come back "Server not
+	// initialized yet, please try again". That is what this suite hit on CI — a
+	// bucket check failing a few milliseconds after the container reported
+	// itself ready.
 	//
 	// Reaching for a better endpoint is how the probe above was arrived at the
 	// first time, and it moved the race rather than closing it. So this waits

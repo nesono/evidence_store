@@ -11,8 +11,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// S3 is a Store backed by any S3-compatible object store. MinIO is what
-// docker-compose runs locally and what the tests exercise; the same code talks
+// S3 is a Store backed by any S3-compatible object store. versitygw is
+// what docker-compose runs locally and what the tests exercise; the same code talks
 // to S3 in a deployment, which is the point of choosing this client.
 type S3 struct {
 	client *minio.Client

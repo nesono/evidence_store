@@ -244,7 +244,7 @@ as an embed, so reading a log never fetches from a third party.
 
 **Where the bytes live.** `fs` (the default) keeps them in a directory, which is
 enough to run the server from a checkout. `s3` stores them in any S3-compatible
-object store; `docker compose up` runs MinIO and points the app at it. Select the
+object store; `docker compose up` runs versitygw and points the app at it. Select the
 backend with `EVIDENCE_BLOB_BACKEND` — see
 [Configuration](../README.md#configuration) in the README.
 
