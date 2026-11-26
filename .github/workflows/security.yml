@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "26.13.1"
       - run: npm audit --audit-level=high
 
   # The image we ship, built exactly as a release would build it.
